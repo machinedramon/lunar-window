@@ -116,7 +116,7 @@ export function createPlan(app: App, planner: Planner): View {
       row(blackOn.el, blackIn, unit(T.hours)),
       row(lab(T.margin, T.marginTip), marginSeg),
     ),
-    h('div', { class: 'req-group' }, row(h('span', { class: 'eyebrow', title: S.explore.heightTip }, T.height), heightSeg)),
+    h('div', { class: 'req-group' }, h('div', { class: 'field' }, h('span', { title: S.explore.heightTip }, T.height), heightSeg)),
     copyBtn,
   );
 

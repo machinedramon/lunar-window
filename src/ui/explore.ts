@@ -138,7 +138,7 @@ export function createExplore(app: App): View {
     h('div', { class: 'field site-field' }, h('label', { for: 'site' }, T.site), siteSelect),
     siteMeta,
     customField,
-    h('div', { class: 'hud-row' }, h('span', { class: 'eyebrow', title: T.heightTip }, T.height), heightSeg),
+    h('div', { class: 'field' }, h('span', { title: T.heightTip }, T.height), heightSeg),
     h('div', { class: 'hud-actions' }, factsBtn, replayBtn),
     factsSheet,
     replaySheet,
@@ -162,7 +162,10 @@ export function createExplore(app: App): View {
   // ----- hero: panorama
   const stripCanvas = h('canvas', { role: 'img', 'aria-label': T.panorama });
   const readout = h('div', { class: 'readout', hidden: true });
-  const heroNote = h('p', { class: 'stage-note' });
+  // Two short lines over the sky; each is one piece and is never broken inside.
+  const noteA = h('span');
+  const noteB = h('span');
+  const heroNote = h('p', { class: 'stage-note' }, noteA, noteB);
   const three = createHero3D();
   const viewSeg = h('div', { class: 'seg', role: 'group', 'aria-label': T.three.viewTip, title: T.three.viewTip });
   const view3dBtn = h('button', { type: 'button', onclick: () => store.set({ hero: '3d' }) }, T.three.view3d);
@@ -479,8 +482,10 @@ export function createExplore(app: App): View {
     const mast = store.state.req.mast;
     const [elMin, elMax] = elevationRange(loaded, mast);
     if (use3d()) {
-      const sphere = loaded.site.horizon === 'sphere';
-      setText(heroNote, sphere ? T.three.legendSphere : T.three.legend);
+      const kind = loaded.site.horizon;
+      const sphere = kind === 'sphere';
+      setText(noteA, sphere ? T.three.realSphere : kind === 'lola-5m-80m-240m' ? T.three.realFine : T.three.realCoarse);
+      setText(noteB, sphere ? T.three.illustrativeSphere : T.three.illustrative);
       heroNote.title = sphere ? T.three.noteSphere : T.three.note;
       three.redraw();
     } else stripGeo = drawStrip(
@@ -504,7 +509,8 @@ export function createExplore(app: App): View {
     );
     if (!use3d() && stripGeo) {
       const stretch = stripGeo.plotH / (elMax - elMin) / (stripGeo.plotW / 360);
-      setText(heroNote, stretch > 1.5 ? T.panoramaNote(stretch.toFixed(0)) : T.panoramaNoteFlat);
+      setText(noteA, stretch > 1.5 ? T.panoramaNote(stretch.toFixed(0)) : T.panoramaNoteFlat);
+      setText(noteB, stretch > 1.5 ? T.panoramaNote2 : '');
       heroNote.title = '';
     }
     if (!use3d()) drawCloseup(sunCanvas, { horizon: loaded.horizon, mast, body: moment.sun, span: 3.2, inner: '#ffffff', outer: '#ececee', glow: 'rgba(255,255,255,0.4)', scaleLabel: T.oneDegree }, CLOSE_H);

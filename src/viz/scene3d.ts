@@ -59,7 +59,7 @@ function starLook(mag: number): { size: number; gain: number; halo: number } {
   const halo = Math.max(0, Math.min(1, (1.6 - mag) / 2.4));
   return {
     size: Math.max(2.4, 7.4 - 1.25 * (mag + 1.5)) * (1 + 0.9 * halo),
-    gain: Math.max(0.1, Math.min(3.2, 1.7 * Math.pow(10, -0.4 * mag * 0.6))),
+    gain: Math.max(0.17, Math.min(3.2, 1.8 * Math.pow(10, -0.4 * mag * 0.55))),
     halo,
   };
 }
@@ -573,6 +573,18 @@ void main() {
 }
 `;
 
+// One invalid or absurdly bright pixel (a mirror-like facet of the vehicle catching the Sun) would be
+// spread by the bloom over a whole block of the picture, which then turns black for a frame. Every
+// pixel is brought back to a number the rest of the chain can deal with.
+const CLEAN_FRAG = /* glsl */ `
+uniform sampler2D tDiffuse;
+varying vec2 vUv;
+void main() {
+  // max() then min(): an invalid number falls to zero, an infinite one to the ceiling.
+  vec3 c = min(max(texture2D(tDiffuse, vUv).rgb, vec3(0.0)), vec3(64.0));
+  gl_FragColor = vec4(c, 1.0);
+}`;
+
 const FINISH_FRAG = /* glsl */ `
 uniform sampler2D tDiffuse;
 uniform float uAspect;
@@ -584,35 +596,13 @@ float h(vec2 p) {
   p3 += dot(p3, p3.yzx + 33.33);
   return fract((p3.x + p3.y) * p3.z);
 }
-float ghost(vec2 uv, vec2 at, float radius, float ring) {
-  float r = length((uv - at) * vec2(uAspect, 1.0)) / radius;
-  float disc = smoothstep(1.0, 0.82, r);
-  return disc * mix(1.0, smoothstep(0.55, 1.0, r), ring);
-}
-// What a real lens does with a point as bright as the Sun: diffraction spikes from the
-// aperture blades, a horizontal streak, and faint reflections between the glass elements.
-vec3 flare(vec2 uv) {
-  vec2 d = (uv - uSunAt) * vec2(uAspect, 1.0);
-  float r = length(d);
-  float a = atan(d.y, d.x);
-  float spikes = 0.6 * pow(abs(cos(a * 4.0 + 0.35)), 70.0) + 0.3 * pow(abs(cos(a * 3.0 - 0.6)), 110.0);
-  float star = spikes * smoothstep(0.5, 0.0, r) / (1.0 + r * 26.0);
-  float streak = exp(-abs(d.y) * 190.0) * smoothstep(0.9, 0.0, abs(d.x)) * 0.2;
-  vec2 axis = vec2(0.5) - uSunAt;
-  vec3 g = vec3(0.0);
-  g += vec3(0.80, 0.90, 1.00) * ghost(uv, uSunAt + axis * 0.62, 0.030, 0.0) * 0.050;
-  g += vec3(1.00, 0.96, 0.88) * ghost(uv, uSunAt + axis * 1.18, 0.018, 0.0) * 0.060;
-  g += vec3(0.78, 0.88, 1.00) * ghost(uv, uSunAt + axis * 1.55, 0.070, 1.0) * 0.040;
-  g += vec3(0.92, 0.95, 1.00) * ghost(uv, uSunAt + axis * 1.90, 0.036, 0.0) * 0.035;
-  g += vec3(0.75, 0.86, 1.00) * ghost(uv, uSunAt + axis * 2.35, 0.120, 1.0) * 0.028;
-  return (vec3(star + streak) + g) * uSunVis;
-}
+// The Sun is drawn as it is: a disc of its true size and the veiling glare around it. No starburst,
+// no reflections between lens elements: those belong to a camera, not to the sky.
 void main() {
   vec4 c = texture2D(tDiffuse, vUv);
   vec2 d = (vUv - 0.5) * vec2(uAspect, 1.0);
   float vig = smoothstep(1.05, 0.25, length(d));
   c.rgb *= mix(0.72, 1.0, vig);
-  if (uSunVis > 0.001) c.rgb += flare(vUv);
   c.rgb += (h(gl_FragCoord.xy) - 0.5) * 0.012;
   gl_FragColor = c;
 }
@@ -706,7 +696,9 @@ export class LunarScene {
   look = { az: 0, pitch: 4, fov: 46 };
 
   constructor(canvas: HTMLCanvasElement) {
-    this.renderer = new THREE.WebGLRenderer({ canvas, antialias: false, logarithmicDepthBuffer: true, powerPreference: 'high-performance' });
+    // The recording tool asks for a picture that stays in the canvas after it is shown, so that a frame grab never finds it empty.
+    const keep = Boolean((globalThis as { __lwPreserve?: boolean }).__lwPreserve);
+    this.renderer = new THREE.WebGLRenderer({ canvas, antialias: false, logarithmicDepthBuffer: true, powerPreference: 'high-performance', preserveDrawingBuffer: keep });
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.0;
     this.renderer.setClearColor(0x000000, 1);
@@ -914,6 +906,7 @@ void main() {
     const target = new THREE.WebGLRenderTarget(4, 4, { type: THREE.HalfFloatType, samples: 4 });
     this.composer = new EffectComposer(this.renderer, target);
     this.composer.addPass(new RenderPass(this.scene, this.camera));
+    this.composer.addPass(new ShaderPass(new THREE.ShaderMaterial({ vertexShader: QUAD_VERT.replace('vec4(position.xy, 0.0, 1.0)', 'projectionMatrix * modelViewMatrix * vec4(position, 1.0)'), fragmentShader: CLEAN_FRAG, uniforms: { tDiffuse: { value: null } } })));
     this.bloom = new UnrealBloomPass(new THREE.Vector2(4, 4), 0.55, 0.7, 2.4);
     this.composer.addPass(this.bloom);
     this.finish = new ShaderPass(new THREE.ShaderMaterial({ vertexShader: QUAD_VERT.replace('vec4(position.xy, 0.0, 1.0)', 'projectionMatrix * modelViewMatrix * vec4(position, 1.0)'), fragmentShader: FINISH_FRAG, uniforms: { tDiffuse: { value: null }, uAspect: { value: 2 }, uSunAt: { value: new THREE.Vector2(0.5, 0.5) }, uSunVis: { value: 0 } } }));
@@ -1151,7 +1144,7 @@ void main() {
     // their brightness does not follow the exposure, or every star would burn to the same white.
     const dark = Math.max(0, 1 - visible * power * 6);
     this.starMat.uniforms.uOpacity.value = dark;
-    this.starMat.uniforms.uGain.value = 3.3 / this.renderer.toneMappingExposure;
+    this.starMat.uniforms.uGain.value = 4.0 / this.renderer.toneMappingExposure;
     this.galaxyMat.uniforms.uOpacity.value = dark * dark;
     this.galaxyMat.uniforms.uGain.value = 1.5 / this.renderer.toneMappingExposure;
     const planets = s.starAxes.planets;

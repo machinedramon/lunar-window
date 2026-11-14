@@ -68,7 +68,7 @@ export function createHero3D(): Hero3D {
   const skyNames = h('canvas', { class: 'three-sky', 'aria-hidden': 'true' });
   const sunLabel = h('div', { class: 'three-label sun', hidden: true });
   const earthLabel = h('div', { class: 'three-label earth', hidden: true });
-  const caption = h('div', { class: 'three-caption' });
+  const hint = h('div', { class: 'three-hint' }, T.hint);
   const loading = h('div', { class: 'three-loading' }, h('div', { class: 'spinner' }), h('span', null, T.loading));
   const fade = h('div', { class: 'three-fade' });
   const titleName = h('div', { class: 'three-title-name' });
@@ -91,7 +91,7 @@ export function createHero3D(): Hero3D {
   const sunInset = inset('sun', T.teleSun);
   const earthInset = inset('earth', T.teleEarth);
   const insets = h('div', { class: 'three-insets' }, sunInset.frame, earthInset.frame);
-  const el = h('div', { class: 'three' }, canvas, skyNames, tape, sunLabel, earthLabel, insets, caption, controls, title, fade, loading, h('div', { class: 'three-hint' }, T.hint));
+  const el = h('div', { class: 'three' }, canvas, skyNames, tape, sunLabel, earthLabel, insets, controls, title, fade, loading, hint);
 
   let scene: LunarScene | null = null;
   let failed = false;
@@ -116,6 +116,8 @@ export function createHero3D(): Hero3D {
   let loweredAt = -1e9;
   let raisedAt = -1e9;
   let holdMs = 6000;
+  /** Set by the recording tool: the resolution stays put, so that no frame is caught in the middle of a change. */
+  let lockedQuality = false;
   let frames = 0;
   const target: Look = { az: 0, pitch: 4, fov: 46 };
   const api: Hero3D = { el, ok: () => !failed, setSite, setMoment, redraw: wake, onFail: null };
@@ -179,7 +181,7 @@ export function createHero3D(): Hero3D {
     pendingKey = '';
     loading.hidden = true;
     const eye = String(Math.max(1.6, MAST_HEIGHTS_M[targetMast]));
-    setText(caption, !target0.data ? T.captionSphere : fine ? T.captionFine(eye) : T.caption(eye));
+    setText(hint, T.hintEye(eye));
     if (sky) scene.setSky(sky);
     if (newSite) {
       framed = target0.site.id;
@@ -348,7 +350,7 @@ export function createHero3D(): Hero3D {
     // Keep it fluid on slower graphics: lower the resolution a step at a time, and raise it again when there is room.
     // A single long frame (a model arriving, a shader compiling) is not a slow machine.
     slow += (Math.min(dt, 0.066) - slow) * 0.08;
-    if (++frames % 40 === 0) {
+    if (++frames % 40 === 0 && !lockedQuality) {
       if (slow > 0.03 && scene.quality > 0.6) {
         // If raising the resolution is what made it slow again, wait longer before the next try.
         if (now - raisedAt < 5000) holdMs = Math.min(120000, holdMs * 2);
@@ -582,6 +584,19 @@ export function createHero3D(): Hero3D {
   if (import.meta.env.DEV) {
     // Lets the development screenshot tool aim the camera.
     (window as unknown as Record<string, unknown>).__lwScene = () => scene;
+    /** Draws the current state at once: the recording tool grabs the frame right after. */
+    (window as unknown as Record<string, unknown>).__lwDraw = () => {
+      if (!scene || !terrainKey) return;
+      scene.render(teleWindows());
+      overlay();
+    };
+    (window as unknown as Record<string, unknown>).__lwQuality = (q: number) => {
+      lockedQuality = true;
+      if (scene && scene.quality !== q) {
+        scene.quality = q;
+        resize();
+      }
+    };
     (window as unknown as Record<string, unknown>).__lwFace = (which: 'sun' | 'earth', fov: number, lift = 0) => {
       if (!scene || !moment) return;
       const v = which === 'sun' ? moment.sun : moment.earth;

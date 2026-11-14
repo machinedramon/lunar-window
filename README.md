@@ -67,9 +67,13 @@ the code, the tests and the documentation. The team member chose the challenge, 
 proposed and set the direction, reviewed the work on screen at every step and decided what to keep.
 
 All numerical results were validated against NASA data (JPL Horizons tables and LOLA illumination maps);
-the measured errors are published on the Accuracy page of the tool. No AI-generated images, video or
-audio are used: the visuals are rendered in real time from NASA data and open-licensed 3D assets, and
-the sounds are synthesised by code.
+the measured errors are published on the Accuracy page of the tool.
+
+In the tool itself nothing is an AI-generated image, video or sound: the visuals are rendered in real
+time from NASA data and open-licensed 3D assets, and the sounds are synthesised by code. The 30-second
+demo video is a recording of the tool; its narration is an AI-generated voice (OpenAI text-to-speech)
+reading a script, as its closing credits and file metadata state, and its music is synthesised by code
+(`tools/film_audio.py`).
 
 ## License
 

@@ -92,7 +92,7 @@ async function boot(): Promise<void> {
   const views = new Map<Tab, View>();
   const tabs = (Object.keys(factories) as Tab[]).map((tab) => {
     const n = String(tabsEl.childElementCount + 1).padStart(2, '0');
-    const button = h('button', { class: 'tab', role: 'tab', type: 'button', id: `tab-${tab}`, onclick: () => store.set({ tab }) }, h('span', { class: 'tab-n', 'aria-hidden': 'true' }, n), S.tabs[tab]);
+    const button = h('button', { class: 'tab', role: 'tab', type: 'button', id: `tab-${tab}`, onclick: () => store.set({ tab }) }, h('span', { class: 'tab-n', 'aria-hidden': 'true' }, n), S.tabsShort[tab] ? h('span', { class: 'tab-long' }, S.tabs[tab]) : S.tabs[tab], S.tabsShort[tab] ? h('span', { class: 'tab-short', 'aria-hidden': 'true' }, S.tabsShort[tab]) : null);
     tabsEl.append(button);
     return { tab, button };
   });

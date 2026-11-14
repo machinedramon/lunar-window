@@ -173,6 +173,9 @@ a:hover {
   cursor: pointer;
   transition: color 0.15s;
 }
+.tab-short {
+  display: none;
+}
 .tab-n {
   font-size: 10px;
   color: var(--ink-4);
@@ -309,6 +312,11 @@ main {
   display: flex;
   align-items: center;
   gap: 7px;
+  white-space: nowrap;
+}
+.field > span,
+.field > label {
+  white-space: nowrap;
 }
 .row {
   display: flex;
@@ -339,10 +347,14 @@ main {
 }
 .cap .muted {
   margin-left: auto;
+  min-width: 0;
   font: 400 12px/1.3 var(--sans);
   letter-spacing: 0;
   text-transform: none;
   text-align: right;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .btn {
@@ -694,7 +706,15 @@ input:disabled {
   gap: 10px;
 }
 .hud-row > .eyebrow {
-  max-width: 150px;
+  white-space: nowrap;
+}
+.hud .field .seg,
+.reqs .field .seg {
+  display: flex;
+}
+.hud .field .seg button,
+.reqs .field .seg button {
+  flex: 1 1 0;
 }
 .hud-actions {
   display: grid;
@@ -914,6 +934,7 @@ input:disabled {
   appearance: none;
   justify-self: start;
   text-align: left;
+  white-space: nowrap;
   padding: 2px 0;
   background: none;
   border: 0;
@@ -963,14 +984,18 @@ input:disabled {
   top: 38px;
   width: calc(100% - 716px);
   transform: translateX(-50%);
+  display: grid;
+  justify-items: center;
+  gap: 1px;
   font: 500 9.5px/1.6 var(--mono);
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  text-align: center;
-  text-wrap: balance;
   color: var(--ink-3);
   pointer-events: none;
   transition: opacity 0.9s ease;
+}
+.stage-note span {
+  white-space: nowrap;
 }
 .pano {
   position: absolute;
@@ -982,15 +1007,6 @@ input:disabled {
 .pano canvas {
   display: block;
   width: 100%;
-}
-.stage.is-pano .hud-verdict {
-  width: 316px;
-}
-.stage.is-pano .hud-verdict h1 {
-  font-size: 26px;
-}
-.stage.is-pano .stage-scrim {
-  display: none;
 }
 .closeups {
   display: grid;
@@ -1190,37 +1206,28 @@ input:disabled {
 .three-inset-title {
   position: absolute;
   left: 8px;
+  right: 6px;
   top: 8px;
   display: flex;
   align-items: center;
   gap: 6px;
   font: 500 9.5px/1 var(--mono);
-  letter-spacing: 0.1em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
+  white-space: nowrap;
   text-shadow: 0 1px 3px #000;
 }
 .three-inset-note {
   position: absolute;
   left: 8px;
-  right: 8px;
+  right: 6px;
   bottom: 7px;
   font: 400 11px/1.25 var(--sans);
   color: rgb(255 255 255 / 0.85);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   text-shadow: 0 1px 3px #000;
-}
-.three-caption {
-  position: absolute;
-  left: 50%;
-  bottom: 14px;
-  width: min(420px, calc(100% - 1010px));
-  transform: translateX(-50%);
-  font: 500 9.5px/1.6 var(--mono);
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  text-align: center;
-  text-wrap: balance;
-  color: var(--ink-3);
-  pointer-events: none;
 }
 .three-controls {
   position: absolute;
@@ -1245,7 +1252,7 @@ input:disabled {
 .three-hint {
   position: absolute;
   left: 50%;
-  bottom: 54px;
+  bottom: 18px;
   transform: translateX(-50%);
   font: 500 9.5px/1.6 var(--mono);
   letter-spacing: 0.12em;
@@ -1258,7 +1265,7 @@ input:disabled {
 .three-insets,
 .three-hint,
 .three-controls,
-.three-caption,
+.three-sky,
 .three-tape {
   transition: opacity 0.9s ease;
 }
@@ -1266,7 +1273,7 @@ input:disabled {
 .three.arriving .three-insets,
 .three.arriving .three-hint,
 .three.arriving .three-controls,
-.three.arriving .three-caption,
+.three.arriving .three-sky,
 .three.arriving .three-tape {
   opacity: 0;
 }
@@ -1787,6 +1794,14 @@ table.sites.plain th,
 table.sites.plain td {
   white-space: normal;
 }
+/* Headings of the dense tables break only where the text says so. */
+table.sites.plain thead th {
+  white-space: pre;
+}
+table.sites.plain td.num,
+table.sites.plain tbody th {
+  white-space: nowrap;
+}
 .drawer {
   position: fixed;
   top: var(--bar);
@@ -1929,6 +1944,7 @@ table.reqtable tr.failed th {
   max-width: 1160px;
   margin: 0 auto;
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 16px;
 }
 .doc.wide {
@@ -1960,6 +1976,7 @@ table.reqtable tr.failed th {
 .doc-section {
   padding: 22px 24px 24px;
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 14px;
 }
 .doc-section h2 {
@@ -2083,6 +2100,7 @@ table.compare td.best {
   margin-top: 4px;
   font: 500 11px var(--mono);
   color: var(--ink-2);
+  white-space: nowrap;
 }
 .cmp-line canvas {
   display: block;
@@ -2290,6 +2308,15 @@ table.compare td.best {
     height: 100%;
     grid-template-rows: minmax(0, 1fr) auto;
   }
+  .stage.is-pano .hud-verdict {
+    width: 316px;
+  }
+  .stage.is-pano .hud-verdict h1 {
+    font-size: 26px;
+  }
+  .stage.is-pano .stage-scrim {
+    display: none;
+  }
   .plan {
     height: 100%;
     align-items: stretch;
@@ -2404,14 +2431,14 @@ table.compare td.best {
     bottom: 56px;
   }
   .three-inset {
-    width: 104px;
+    width: 142px;
   }
   .three-controls {
     right: 12px;
     bottom: 12px;
+    left: 12px;
     width: auto;
   }
-  .three-caption,
   .three-hint {
     display: none;
   }
@@ -2466,16 +2493,36 @@ table.compare td.best {
   .events .when {
     width: auto;
   }
+  .where {
+    white-space: normal;
+  }
+  table.compare {
+    min-width: 720px;
+  }
+  .cap .muted {
+    display: none;
+  }
 }
 @media (max-width: 640px) {
   :root {
     --gut: 14px;
   }
   .tab {
-    padding: 0 11px;
+    padding: 0 9px;
+    letter-spacing: 0.1em;
+    flex: 1 0 auto;
+    justify-content: center;
   }
-  .tab-n {
+  .tab-n,
+  .tab-long {
     display: none;
+  }
+  .tab-short {
+    display: inline;
+  }
+  .tab::after {
+    left: 9px;
+    right: 9px;
   }
   .sound-btn {
     min-width: 0;
@@ -2483,6 +2530,16 @@ table.compare td.best {
 }
 @media (max-width: 1320px) {
   .brand-tag {
+    display: none;
+  }
+}
+@media (max-width: 1299px) {
+  .stage-note {
+    display: none;
+  }
+}
+@media (max-width: 1239px) {
+  .three-hint {
     display: none;
   }
 }
