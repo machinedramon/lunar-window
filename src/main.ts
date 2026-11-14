@@ -4,6 +4,8 @@ import { App, type View } from './ui/app';
 import { loadSiteList } from './ui/data';
 import { clear, h } from './ui/dom';
 import { createExplore } from './ui/explore';
+import { createPlan } from './ui/plan';
+import { Planner } from './ui/planner';
 import { fromHash, Store, toHash, type State, type Tab } from './ui/store';
 
 const LOGO = `<svg viewBox="0 0 40 40" aria-hidden="true"><defs><clipPath id="lw-c"><circle cx="20" cy="20" r="17"/></clipPath></defs><circle cx="20" cy="20" r="17" fill="#000" stroke="#fff" stroke-width="1.6"/><g clip-path="url(#lw-c)"><circle cx="24.5" cy="22" r="4.6" fill="#fff"/><path d="M0 27 L7 23.5 L12 25.5 L17 21 L22 24.5 L28 22 L33 25 L40 23 L40 40 L0 40 Z" fill="#8f8f96"/><path d="M0 31 L9 28 L15 30 L23 27.5 L31 30 L40 28 L40 40 L0 40 Z" fill="#2a2a2d"/></g></svg>`;
@@ -43,8 +45,10 @@ async function boot(): Promise<void> {
   const store = new Store(fromHash(location.hash, known));
   const app = new App(store, list);
 
+  const planner = new Planner(app);
   const factories: Partial<Record<Tab, () => View>> = {
     explore: () => createExplore(app),
+    plan: () => createPlan(app, planner),
   };
   const views = new Map<Tab, View>();
   const tabs = (Object.keys(factories) as Tab[]).map((tab) => {

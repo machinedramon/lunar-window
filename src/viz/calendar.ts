@@ -36,7 +36,7 @@ export interface CalendarGeometry {
 
 const LEFT = 196;
 const RIGHT = 58;
-const AXIS = 44;
+const AXIS = 60;
 const ROW = 26;
 const GAP = 4;
 const HEADING = 26;
@@ -54,7 +54,6 @@ export function calendarCell(g: CalendarGeometry, x: number, y: number): { row: 
 }
 
 const OK = [255, 255, 255];
-const WARN = [150, 150, 156];
 
 export function drawCalendar(canvas: HTMLCanvasElement, m: CalendarInput): CalendarGeometry {
   const height = calendarHeight(m.rows);
@@ -81,7 +80,7 @@ export function drawCalendar(canvas: HTMLCanvasElement, m: CalendarInput): Calen
     if (date.getUTCDate() === 1) {
       ctx.strokeStyle = 'rgba(255,255,255,0.13)';
       ctx.beginPath();
-      ctx.moveTo(x, AXIS - 8);
+      ctx.moveTo(x, AXIS - 20);
       ctx.lineTo(x, bottom);
       ctx.stroke();
     }
@@ -92,7 +91,7 @@ export function drawCalendar(canvas: HTMLCanvasElement, m: CalendarInput): Calen
     if ((nextFirst - d) * cellW > 44) {
       ctx.fillStyle = COLORS.muted;
       ctx.textAlign = 'left';
-      ctx.fillText(m.labels.month(m.startMs + d * 86400000), x + 5, AXIS - 10);
+      ctx.fillText(m.labels.month(m.startMs + d * 86400000), x + 5, AXIS - 9);
     }
   }
 
@@ -119,10 +118,11 @@ export function drawCalendar(canvas: HTMLCanvasElement, m: CalendarInput): Calen
         const s = r.cal.status[d];
         if (!s) continue;
         viable++;
-        const c = s === 2 ? OK : WARN;
         const share = r.cal.points > 1 ? r.cal.robust[d] / r.cal.points : 1;
-        ctx.fillStyle = `rgba(${c[0]},${c[1]},${c[2]},${(0.38 + 0.62 * share).toFixed(3)})`;
-        ctx.fillRect(xOf(d), top, cellW - gap + 0.35, ROW);
+        ctx.fillStyle = `rgba(${OK[0]},${OK[1]},${OK[2]},${(0.34 + 0.66 * share).toFixed(3)})`;
+        // Marginal days are drawn as a short bar: the difference never depends on colour.
+        if (s === 2) ctx.fillRect(xOf(d), top, cellW - gap + 0.35, ROW);
+        else ctx.fillRect(xOf(d), top + ROW * 0.55, cellW - gap + 0.35, ROW * 0.45);
       }
     } else {
       ctx.fillStyle = 'rgba(255,255,255,0.03)';
@@ -151,7 +151,7 @@ export function drawCalendar(canvas: HTMLCanvasElement, m: CalendarInput): Calen
     ctx.lineWidth = 1.5;
     ctx.setLineDash(dashed ? [4, 4] : []);
     ctx.beginPath();
-    ctx.moveTo(x, AXIS - 6);
+    ctx.moveTo(x, 18);
     ctx.lineTo(x, bottom + 4);
     ctx.stroke();
     ctx.setLineDash([]);
@@ -159,7 +159,7 @@ export function drawCalendar(canvas: HTMLCanvasElement, m: CalendarInput): Calen
     ctx.font = `700 10.5px ${FONT}`;
     const tw = ctx.measureText(text).width + 12;
     const bx = Math.max(LEFT, Math.min(w - RIGHT - tw, x - tw / 2));
-    const by = level ? 1 : 15;
+    const by = level ? 20 : 2;
     ctx.fillStyle = color;
     ctx.beginPath();
     ctx.roundRect(bx, by, tw, 15, 4);
