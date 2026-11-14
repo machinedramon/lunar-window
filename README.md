@@ -6,12 +6,14 @@ Built for the NASA Space Apps Challenge 2026, challenge *Lunar Landing Site Navi
 
 **Open it: https://machinedramon.github.io/lunar-window/**
 
-![Standing at Malapert Massif: NASA's concept rover, the solar array mast and the Earth over the skyline](docs/img/stand-there.jpg)
+![Explore: standing at Malapert Massif, with the Earth over the skyline, the readings on the right and the time dock below](docs/img/stand-there.jpg)
 
 | | |
 |---|---|
-| ![A ridge hides part of the Sun, seen through a long lens](docs/img/ridge.jpg) | ![The landing-window calendar after a launch slip](docs/img/planner.jpg) |
-| *One ridge decides: the Sun through a long lens, with the share of the disc that clears the terrain.* | *Plan a mission: every site and landing day of a year, what a slip does to them, and the sites on a map of the south pole.* |
+| ![A ridge takes the Sun, seen through a long lens](docs/img/ridge.jpg) | ![The night sky over the Moon: catalogue stars and the Milky Way](docs/img/night-sky.jpg) |
+| *One ridge decides: the Sun is a disc of its true size, and the terrain is NASA's.* | *When the Sun is hidden the real sky comes out: Yale catalogue stars, the planets, NASA's Milky Way.* |
+
+![Plan a mission: requirements on the left, the launch slip, the map of the south pole and the landing-window calendar, in one screen](docs/img/planner.jpg)
 
 Most tools ask you to pick a landing site and a date, then show you the sky. Lunar Window starts from
 what a mission needs — sunlight at landing, hours of continuous power, Earth in view for

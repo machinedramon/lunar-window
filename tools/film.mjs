@@ -53,12 +53,13 @@ await page.addStyleTag({
     font: 500 10.5px/1 'Geist Mono Variable', monospace; letter-spacing: 0.2em; text-transform: uppercase; color: rgba(255,255,255,0.56); font-variant-numeric: tabular-nums; }
   #f-slate b { font-weight: 500; color: #fff; }
   #f-fade { position: fixed; inset: 0; background: #000; opacity: 0; z-index: 6000; pointer-events: none; }
-  #f-title { position: fixed; inset: 0; z-index: 5200; display: none; flex-direction: column; align-items: center; justify-content: center; color: #fff; text-align: center; pointer-events: none;
-    background: radial-gradient(ellipse 70% 46% at 50% 56%, rgba(0,0,0,0.6), rgba(0,0,0,0.2) 62%, transparent); }
-  #f-title .f-name { font: 600 96px/1 'Geist Variable', sans-serif; letter-spacing: 0.26em; margin-right: -0.26em; text-transform: uppercase; text-shadow: 0 4px 60px rgba(0,0,0,0.9); }
-  #f-title .f-rule { width: 0; height: 1px; background: rgba(255,255,255,0.7); margin-top: 30px; }
-  #f-title .f-line { margin-top: 26px; font: 400 26px/1.2 'Geist Variable', sans-serif; letter-spacing: -0.01em; text-shadow: 0 2px 30px #000; }
-  #f-title .f-meta { margin-top: 34px; font: 500 11.5px/1.9 'Geist Mono Variable', monospace; letter-spacing: 0.2em; text-transform: uppercase; color: rgba(255,255,255,0.72); text-shadow: 0 2px 20px #000; }
+  /* The title stands on the left, over a darkened side of the picture; the Earth and the vehicle keep the right. */
+  #f-title { position: fixed; inset: 0; z-index: 5200; display: none; flex-direction: column; align-items: flex-start; justify-content: center; padding: 0 0 26px 118px; color: #fff; text-align: left; pointer-events: none;
+    background: linear-gradient(90deg, rgba(0,0,0,0.9), rgba(0,0,0,0.78) 34%, rgba(0,0,0,0.3) 56%, transparent 72%); }
+  #f-title .f-name { font: 600 62px/1 'Geist Variable', sans-serif; letter-spacing: 0.26em; text-transform: uppercase; white-space: nowrap; }
+  #f-title .f-rule { width: 0; height: 1px; background: rgba(255,255,255,0.7); margin-top: 28px; }
+  #f-title .f-line { margin-top: 24px; font: 400 25px/1.2 'Geist Variable', sans-serif; letter-spacing: -0.01em; white-space: nowrap; }
+  #f-title .f-meta { margin-top: 30px; font: 500 11.5px/2 'Geist Mono Variable', monospace; letter-spacing: 0.2em; text-transform: uppercase; color: rgba(255,255,255,0.74); white-space: nowrap; }
   #f-credit { position: fixed; left: 0; right: 0; bottom: 0; height: ${BAR}px; z-index: 5200; display: none; align-items: center; justify-content: center; pointer-events: none;
     font: 500 9.5px/1.9 'Geist Mono Variable', monospace; letter-spacing: 0.18em; text-transform: uppercase; color: rgba(255,255,255,0.5); text-align: center; }
   #f-cursor { position: fixed; left: 0; top: 0; z-index: 5500; width: 26px; height: 26px; pointer-events: none; display: none; filter: drop-shadow(0 2px 5px rgba(0,0,0,0.7)); }
@@ -320,7 +321,7 @@ await shot(8, CUT.title, CUT.end, async () => {
   // A day when the Sun lights the ground from the side and the Earth stands well lit above the skyline.
   await set({ tab: 'explore', siteId: 'malapert', timeMs: utc(2027, 1, 14, 16), hero: '3d' });
   await page.waitForTimeout(10000);
-  await lookBy('earth', -11, -5.6, 31);
+  await lookBy('earth', -15, -3.6, 31);
   await page.waitForTimeout(1500);
   await page.evaluate((team) => {
     const title = document.getElementById('f-title');
@@ -333,14 +334,14 @@ await shot(8, CUT.title, CUT.end, async () => {
 }, async (t, sec) => {
   const ms = utc(2027, 1, 14, 16) + t * 15 * HOUR;
   await set({ timeMs: ms });
-  await lookBy('earth', lerp(-12, -9.5, t), lerp(-5.9, -5.2, t), lerp(31, 26, out3(t)));
+  await lookBy('earth', lerp(-16, -13.5, t), lerp(-3.9, -3.3, t), lerp(31, 26.5, out3(t)));
   // The name on the hit of the music; the line and the address as the narrator reaches them.
   const s = sec - CUT.title;
   await page.evaluate(([name, rule, tag, meta]) => {
     const q = (c) => document.querySelector(`#f-title .f-${c}`);
     q('name').style.opacity = String(name);
     q('name').style.letterSpacing = `${0.26 + 0.1 * (1 - name)}em`;
-    q('rule').style.width = `${rule * 220}px`;
+    q('rule').style.width = `${rule * 150}px`;
     q('line').style.opacity = String(tag);
     q('line').style.transform = `translateY(${(1 - tag) * 10}px)`;
     q('meta').style.opacity = String(meta);
