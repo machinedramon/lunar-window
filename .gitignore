@@ -1,0 +1,14 @@
+node_modules/
+dist/
+.vite/
+__pycache__/
+*.pyc
+*.log
+
+# NASA source rasters (hundreds of MB); tools/README.md says how to fetch them
+data/raw/
+
+# Internal planning notes written in Portuguese. Linked materials for the
+# hackathon must be in English, so they stay out of the public repository.
+docs/SPEC*.md
+docs/pesquisa/
