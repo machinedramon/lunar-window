@@ -20,8 +20,8 @@ it shows which sites survive, which fail, and why.
 
 ## What is in it
 
-- **Explore** — pick a site and a moment; stand there in 3D, or read the 360° panorama and the 30-day timeline. Seven real landings can be replayed.
-- **Plan a mission** — requirements in, landing windows out, for 15 sites over a year; slip the launch and see what survives, and why.
+- **Explore** — pick a site and a moment; stand there in 3D, or read the 360° panorama and the 30-day timeline. Seven real landings can be replayed, and any latitude and longitude can be entered (without terrain: a smooth Moon).
+- **Plan a mission** — requirements in, landing windows out, for 15 sites over a year; slip the launch and see what survives, and why. A map of the south pole shows the sites on NASA's relief, with the permanently shadowed ground in black.
 - **Compare** — up to four options side by side.
 - **Missions** — three planning problems to play, scored on real quantities.
 - **Accuracy** — the measured errors against NASA data, and the limits of the model.

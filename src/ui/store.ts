@@ -14,6 +14,8 @@ export interface CompareItem {
 export interface State {
   tab: Tab;
   siteId: string;
+  /** Coordinates of the visitor's own point, used when siteId is "custom". Degrees, east positive. */
+  custom: { lat: number; lon: number };
   /** Moment shown in Explore. */
   timeMs: number;
   /** Mission requirements; `req.mast` is also the observer height used in Explore. */
@@ -29,6 +31,8 @@ export interface State {
   hero: '3d' | 'panorama';
 }
 
+/** Site id of a point given by its coordinates rather than chosen from the list. */
+export const CUSTOM_SITE = 'custom';
 export const MIN_MS = Date.UTC(1969, 0, 1);
 export const MAX_MS = Date.UTC(2035, 11, 31);
 export const MAX_SLIP = 120;
@@ -38,6 +42,7 @@ export function defaults(): State {
   return {
     tab: 'explore',
     siteId: 'malapert',
+    custom: { lat: -85, lon: 0 },
     timeMs: planned,
     req: { ...PROFILES[0].req },
     profileId: PROFILES[0].id,
@@ -74,6 +79,7 @@ function decodeReq(text: string, fallback: Requirements): Requirements {
 export function toHash(s: State): string {
   const q = new URLSearchParams();
   q.set('site', s.siteId);
+  if (s.siteId === CUSTOM_SITE) q.set('ll', `${s.custom.lat},${s.custom.lon}`);
   q.set('t', isoMinute(s.timeMs));
   q.set('plan', isoDate(s.plannedMs));
   if (s.slipDays) q.set('slip', String(s.slipDays));
@@ -99,6 +105,8 @@ export function fromHash(hash: string, knownSites: (id: string) => boolean): Sta
   const q = new URLSearchParams(m[2]);
   const site = q.get('site');
   if (site && knownSites(site)) s.siteId = site;
+  const ll = (q.get('ll') ?? '').split(',').map(Number);
+  if (ll.length === 2 && ll.every(Number.isFinite)) s.custom = { lat: clamp(ll[0], -90, 90), lon: clamp(ll[1], -180, 180) };
   const t = parseUtc(q.get('t') ?? '');
   if (Number.isFinite(t)) s.timeMs = clamp(t, MIN_MS, MAX_MS);
   const plan = parseUtc(q.get('plan') ?? '');

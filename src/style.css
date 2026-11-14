@@ -1780,3 +1780,7 @@ footer {
     order: -1;
   }
 }
+
+.custom-ll input {
+  width: 104px;
+}

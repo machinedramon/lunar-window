@@ -49,7 +49,7 @@ let cached: Outlook | null = null;
 /** The 30 days starting at 00:00 UTC of the day of `timeMs`. Cached: moving within the day costs nothing. */
 export function outlookFor(loaded: LoadedSite, mast: number, timeMs: number): Outlook {
   const startMs = Math.floor(timeMs / DAY_MS) * DAY_MS;
-  const key = `${loaded.site.id}/${mast}/${startMs}`;
+  const key = `${loaded.site.id}/${loaded.site.lat}/${loaded.site.lon}/${mast}/${startMs}`;
   if (cached && cached.key === key) return cached;
   const grid: TimeGrid = { startMs, stepMs: STEP_MS, count: (EXPLORE_DAYS + 1) * DAY_STEPS };
   const samples = sampleSky(grid);

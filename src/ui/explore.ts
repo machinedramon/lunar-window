@@ -14,7 +14,7 @@ import { createHero3D } from './hero3d';
 import { DAY_MS, HOUR_MS, compass, dayTime, deg, duration, isoMinute, latLon, monthShort, num, parseUtc, pct } from './format';
 import { REPLAYS } from './replays';
 import { linkTone, setSound, soundEnabled, soundPreferred, sunTone, tick } from './sound';
-import { MAX_MS, MIN_MS, type State } from './store';
+import { CUSTOM_SITE, MAX_MS, MIN_MS, type State } from './store';
 
 const T = S.explore;
 const STRIP_H = 330;
@@ -51,6 +51,18 @@ export function createExplore(app: App): View {
     }
     g.appendChild(h('option', { value: s.id, text: s.name }));
   }
+  siteSelect.appendChild(h('optgroup', { label: T.custom.group }, h('option', { value: CUSTOM_SITE, text: T.custom.option })));
+  const coord = (label: string, min: number, max: number, key: 'lat' | 'lon') => {
+    const input = h('input', { type: 'number', min: String(min), max: String(max), step: '0.01', 'aria-label': label, title: label });
+    input.addEventListener('change', () => {
+      const v = Math.max(min, Math.min(max, Number(input.value)));
+      if (Number.isFinite(v) && v !== store.state.custom[key]) store.set({ custom: { ...store.state.custom, [key]: v } });
+    });
+    return input;
+  };
+  const latIn = coord(T.custom.lat, -90, 90, 'lat');
+  const lonIn = coord(T.custom.lon, -180, 180, 'lon');
+  const customField = h('div', { class: 'field custom-ll', hidden: true }, h('span', null, T.custom.label), h('div', { class: 'row' }, latIn, lonIn));
   const timeInput = h('input', {
     id: 'time',
     type: 'datetime-local',
@@ -76,6 +88,7 @@ export function createExplore(app: App): View {
     'div',
     { class: 'controls' },
     h('div', { class: 'field' }, h('label', { for: 'site' }, T.site), siteSelect),
+    customField,
     h('div', { class: 'field' }, h('label', { for: 'time' }, T.time), timeInput),
     h(
       'div',
@@ -249,7 +262,8 @@ export function createExplore(app: App): View {
   function renderFacts(site: Site): void {
     clear(facts);
     const terrain = site.horizon !== 'sphere';
-    const about: (Node | string)[] = [`${site.mission}. ${T.status[site.status]}${site.date ? ` (${site.date})` : ''}.`];
+    const own = site.id === CUSTOM_SITE;
+    const about: (Node | string)[] = [own ? `${site.mission}. ${T.custom.warning}` : `${site.mission}. ${T.status[site.status]}${site.date ? ` (${site.date})` : ''}.`];
     if (site.note) about.push(' ', site.note);
     if (site.published) about.push(' ', T.facts.moved(deg(site.published.lat, 2), deg(site.published.lon, 2)));
     if (site.nasa) about.push(' ', T.facts.nasa(pct(site.nasa.sunVisibility3x3), pct(site.nasa.earthVisibility3x3)));
@@ -262,7 +276,7 @@ export function createExplore(app: App): View {
         h('dt', null, T.facts.horizon),
         h('dd', null, h('span', { class: `tag ${terrain ? 'terrain' : 'sphere'}` }, terrain ? T.facts.terrain : T.facts.sphere), ' ', site.horizon === 'lola-5m-80m-240m' ? T.facts.terrainFineText : terrain ? T.facts.terrainText : T.facts.sphereText),
       ),
-      h('div', null, h('dt', null, T.facts.about), h('dd', null, ...about, ' ', h('a', { href: site.source, target: '_blank', rel: 'noopener' }, T.facts.source))),
+      h('div', null, h('dt', null, T.facts.about), h('dd', null, ...about, ...(own ? [] : [' ', h('a', { href: site.source, target: '_blank', rel: 'noopener' }, T.facts.source)]))),
     );
   }
 
@@ -337,6 +351,9 @@ export function createExplore(app: App): View {
 
     // Controls
     if (siteSelect.value !== site.id) siteSelect.value = site.id;
+    customField.hidden = site.id !== CUSTOM_SITE;
+    if (document.activeElement !== latIn) latIn.value = String(state.custom.lat);
+    if (document.activeElement !== lonIn) lonIn.value = String(state.custom.lon);
     if (document.activeElement !== timeInput) timeInput.value = isoMinute(state.timeMs);
     heightSeg.querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.mast === String(mast))));
 
@@ -411,7 +428,7 @@ export function createExplore(app: App): View {
     const mast = store.state.req.mast;
     const [elMin, elMax] = elevationRange(loaded, mast);
     if (use3d()) {
-      setText(heroNote, T.three.note);
+      setText(heroNote, loaded.site.horizon === 'sphere' ? T.three.noteSphere : T.three.note);
       three.redraw();
     } else stripGeo = drawStrip(
       stripCanvas,
@@ -457,7 +474,7 @@ export function createExplore(app: App): View {
   return {
     el,
     update(state: State, changed) {
-      if (!changed || changed.has('siteId') || !loaded || loaded.site.id !== state.siteId) {
+      if (!changed || changed.has('siteId') || !loaded || loaded.site.id !== state.siteId || (state.siteId === CUSTOM_SITE && changed.has('custom'))) {
         const id = state.siteId;
         const ready = app.peek(id);
         const apply = (l: LoadedSite) => {

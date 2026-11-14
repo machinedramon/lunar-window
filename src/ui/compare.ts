@@ -10,7 +10,7 @@ import type { App, View } from './app';
 import { clear, h } from './dom';
 import { DAY_MS, HOUR_MS, day as fmtDay, deg, duration, isoDate, monthShort, parseUtc, pct } from './format';
 import type { Planner } from './planner';
-import type { CompareItem, State } from './store';
+import { CUSTOM_SITE, type CompareItem, type State } from './store';
 
 const T = S.compare;
 const DAYS = 365;
@@ -53,9 +53,11 @@ export function createCompare(app: App, planner: Planner): View {
   function items(s: State): CompareItem[] {
     if (s.compare.length) return s.compare;
     const slipped = s.plannedMs + (s.slipDays || 21) * DAY_MS;
+    // A custom point is not in the planner (it has no terrain): fall back to a curated site.
+    const own = s.siteId === CUSTOM_SITE ? 'malapert' : s.siteId;
     return [
-      { siteId: s.siteId, dayMs: s.plannedMs },
-      { siteId: s.siteId, dayMs: slipped },
+      { siteId: own, dayMs: s.plannedMs },
+      { siteId: own, dayMs: slipped },
       { siteId: 'cr1', dayMs: slipped },
     ].filter((c, i, all) => all.findIndex((o) => o.siteId === c.siteId && o.dayMs === c.dayMs) === i);
   }
@@ -209,7 +211,7 @@ export function createCompare(app: App, planner: Planner): View {
     update(state) {
       if (!dateIn.value) dateIn.value = isoDate(state.plannedMs + state.slipDays * DAY_MS);
       if (!siteSelect.dataset.set) {
-        siteSelect.value = state.siteId;
+        siteSelect.value = state.siteId === CUSTOM_SITE ? 'malapert' : state.siteId;
         siteSelect.dataset.set = '1';
       }
       load(state);
