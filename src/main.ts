@@ -27,7 +27,7 @@ function shell(): void {
     h(
       'footer',
       null,
-      h('div', { class: 'foot-in' }, h('span', null, S.footer.data), h('span', null, S.footer.utc), h('span', null, S.footer.notNasa), h('span', null, S.footer.license)),
+      h('div', { class: 'foot-in' }, h('span', null, S.footer.data), h('span', null, S.footer.utc), h('span', null, S.footer.notNasa), h('span', null, S.footer.license), h('span', null, S.footer.ai), h('a', { href: 'https://github.com/machinedramon/lunar-window', target: '_blank', rel: 'noopener' }, 'GitHub')),
     ),
   );
   main.append(h('div', { class: 'loading' }, h('div', { class: 'spinner', role: 'status', 'aria-label': S.loading }), h('p', null, S.loading)));

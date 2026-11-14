@@ -10,6 +10,7 @@ export const en = {
     data: 'Terrain: NASA LRO LOLA. Sun and Earth positions checked against NASA JPL Horizons.',
     notNasa: 'An independent NASA Space Apps Challenge 2026 project. Not endorsed by NASA.',
     license: 'Open source, MIT license.',
+    ai: 'Code generated with an AI assistant under human direction; see Accuracy.',
     utc: 'All times are UTC.',
   },
   sun: 'Sun',
@@ -341,6 +342,15 @@ export const en = {
       items: [
         'Real: the terrain (NASA LOLA, 5 m near seven of the sites) and its shadows, the skyline, the directions and sizes of the Sun and the Earth, the phase and the face of the Earth, the stars (Yale Bright Star Catalogue, shown when the Sun is hidden), the height of the solar array.',
         "Illustrative: relief finer than the terrain model, the rocks, the clouds on the Earth, the vehicle and the solar array mast (the rover is NASA's Space Exploration Vehicle concept; the mast is our own design), the radio beam and the lens flare.",
+      ],
+    },
+    made: {
+      title: 'How this project was made',
+      items: [
+        'Built during the NASA Space Apps Challenge 2026 weekend (14 and 15 November 2026) by a team of one.',
+        'An AI coding assistant (a large language model) generated most of the code, the tests and the documentation, and was used to research data sources and to propose design options. The team member chose among the options, set the direction, reviewed the work on screen at every step and decided what to keep.',
+        'Nothing shown here is an AI-generated image, video or sound: the pictures are rendered in your browser from NASA data and open-licensed 3D assets, and the sounds are synthesised by code.',
+        'Every number can be traced to a test or to the comparison with NASA data described above.',
       ],
     },
     sources: { title: 'Sources', text: 'All data, 3D assets, code and reading are listed with their licenses in', link: 'the references' },

@@ -194,6 +194,7 @@ export function createAccuracy(app: App): View {
       h('section', { class: 'panel doc-section' }, h('h2', null, T.includes.title), list(T.includes.items)),
       h('section', { class: 'panel doc-section' }, h('h2', null, T.limits.title), list(T.limits.items)),
       h('section', { class: 'panel doc-section' }, h('h2', null, T.three.title), h('p', null, T.three.text), list(T.three.items)),
+      h('section', { class: 'panel doc-section' }, h('h2', null, T.made.title), list(T.made.items)),
       h(
         'section',
         { class: 'panel doc-section' },

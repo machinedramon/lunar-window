@@ -46,8 +46,15 @@ All external data, code and reading are listed in [`docs/REFERENCES.md`](docs/RE
 
 ## Use of AI
 
-AI assistants (large language models) were used to research NASA sources, to propose and compare
-design options, and to write code and documentation. The full statement is on the project page.
+An AI coding assistant (a large language model) was used throughout this project: to research NASA
+data sources, the rules and prior work; to propose and compare design options; and to generate most of
+the code, the tests and the documentation. The team member chose the challenge, chose among the options
+proposed and set the direction, reviewed the work on screen at every step and decided what to keep.
+
+All numerical results were validated against NASA data (JPL Horizons tables and LOLA illumination maps);
+the measured errors are published on the Accuracy page of the tool. No AI-generated images, video or
+audio are used: the visuals are rendered in real time from NASA data and open-licensed 3D assets, and
+the sounds are synthesised by code.
 
 ## License
 
