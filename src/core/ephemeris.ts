@@ -73,6 +73,17 @@ export function earthAxes(date: Date): { north: Vec3; greenwich: Vec3 } {
   return { north: inMoon(0, 0, 1), greenwich: inMoon(Math.cos(theta), Math.sin(theta), 0) };
 }
 
+/**
+ * The local directions of a site (east, north, up) expressed in J2000 equatorial coordinates.
+ * With them a star of known right ascension and declination can be placed in the site's sky.
+ */
+export function localAxesJ2000(date: Date, latDeg: number, lonDeg: number): { east: Vec3; north: Vec3; up: Vec3 } {
+  const f = moonFrame(MakeTime(date));
+  const s = siteFrame(latDeg, lonDeg, 0);
+  const out = (v: Vec3): Vec3 => [v[0] * f.x[0] + v[1] * f.y[0] + v[2] * f.z[0], v[0] * f.x[1] + v[1] * f.y[1] + v[2] * f.z[1], v[0] * f.x[2] + v[1] * f.y[2] + v[2] * f.z[2]];
+  return { east: out(s.east), north: out(s.north), up: out(s.up) };
+}
+
 /** Local directions of a site, in the Moon-fixed frame, and its position in km. */
 export interface SiteFrame {
   up: Vec3;

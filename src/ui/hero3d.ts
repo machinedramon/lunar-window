@@ -17,7 +17,7 @@ export interface Hero3D {
   /** False once WebGL turned out to be unavailable. */
   ok(): boolean;
   setSite(loaded: LoadedSite, mast: number): void;
-  setMoment(m: Moment, axes: { north: [number, number, number]; greenwich: [number, number, number] }, when: string): void;
+  setMoment(m: Moment, axes: { north: [number, number, number]; greenwich: [number, number, number] }, stars: SceneSky['starAxes'], when: string): void;
   redraw(): void;
   onFail: (() => void) | null;
 }
@@ -175,7 +175,7 @@ export function createHero3D(): Hero3D {
     title.classList.add('show');
   }
 
-  function setMoment(m: Moment, axes: { north: [number, number, number]; greenwich: [number, number, number] }, text: string): void {
+  function setMoment(m: Moment, axes: { north: [number, number, number]; greenwich: [number, number, number] }, stars: SceneSky['starAxes'], text: string): void {
     moment = m;
     when = text;
     sky = {
@@ -190,6 +190,7 @@ export function createHero3D(): Hero3D {
       earthRadius: m.earth.radius,
       earthNorth: axes.north,
       earthGreenwich: axes.greenwich,
+      starAxes: stars,
     };
     if (scene && terrainKey) scene.setSky(sky);
     wake();

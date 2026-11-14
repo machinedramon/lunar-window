@@ -1,5 +1,5 @@
 // Explore: pick a site and a moment, see the Sun and the Earth against the real skyline.
-import { earthAxes, siteFrame } from '../core/ephemeris';
+import { earthAxes, localAxesJ2000, siteFrame } from '../core/ephemeris';
 import { MAST_HEIGHTS_M } from '../core/horizon';
 import { SUN_PRESENT } from '../core/requirements';
 import { S } from '../i18n/en';
@@ -281,7 +281,7 @@ export function createExplore(app: App): View {
       v[0] * f.up[0] + v[1] * f.up[1] + v[2] * f.up[2],
     ];
     three.setSite(loaded, mast);
-    three.setMoment(m, { north: local(axes.north), greenwich: local(axes.greenwich) }, dayTime(ms));
+    three.setMoment(m, { north: local(axes.north), greenwich: local(axes.greenwich) }, localAxesJ2000(new Date(ms), site.lat, site.lon), dayTime(ms));
     const linked = m.earthClear > 0;
     const sunUp = m.sunFrac >= SUN_PRESENT;
     if (shownSite === site.id) {

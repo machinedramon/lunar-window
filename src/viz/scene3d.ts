@@ -4,8 +4,9 @@
 // Moon built in), the skyline (the same horizon profile the planner uses), the directions and
 // angular sizes of the Sun and the Earth, the phase and the face of the Earth, and the shadows
 // (marched through the elevation data towards the Sun, with the penumbra of a 0.53 degree disc).
-// What is illustrative: surface relief finer than the 50 m grid, the clouds on the Earth and
-// the stars.
+// The stars are the Yale Bright Star Catalogue at their true positions.
+// What is illustrative: surface relief finer than the terrain model, the rocks, the vehicles and
+// the clouds on the Earth.
 import * as THREE from 'three';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
@@ -39,6 +40,8 @@ export interface SceneSky {
   /** Unit vectors of the Earth's north pole and Greenwich meridian in the local frame: [east, north, up]. */
   earthNorth: [number, number, number];
   earthGreenwich: [number, number, number];
+  /** Local east, north and up of the site in J2000 equatorial coordinates, to place the stars. */
+  starAxes: { east: readonly number[]; north: readonly number[]; up: readonly number[] };
 }
 
 /** Direction in scene coordinates (x east, y up, z south) of an azimuth and elevation in degrees. */
@@ -423,6 +426,7 @@ const EARTH_FRAG = /* glsl */ `
 #include <logdepthbuf_pars_fragment>
 uniform sampler2D map;
 uniform vec3 uSun;
+uniform float uGain;
 varying vec2 vUv;
 varying vec3 vNormalW;
 varying vec3 vNormalO;
@@ -469,7 +473,7 @@ void main() {
   float rim = pow(1.0 - max(dot(n, v), 0.0), 2.6);
   lit += vec3(0.20, 0.46, 1.0) * rim * day * 1.25;
   lit += col * 0.0012;
-  gl_FragColor = vec4(lit, 1.0);
+  gl_FragColor = vec4(lit * uGain, 1.0);
   #include <tonemapping_fragment>
   #include <colorspace_fragment>
 }
@@ -685,7 +689,7 @@ void main() {
     const earthMap = new THREE.TextureLoader().load(`${import.meta.env.BASE_URL}textures/earth.jpg`, () => this.onChange?.());
     earthMap.colorSpace = THREE.SRGBColorSpace;
     earthMap.anisotropy = 4;
-    this.earthMat = new THREE.ShaderMaterial({ vertexShader: EARTH_VERT, fragmentShader: EARTH_FRAG, uniforms: { map: { value: earthMap }, uSun: light.uSun } });
+    this.earthMat = new THREE.ShaderMaterial({ vertexShader: EARTH_VERT, fragmentShader: EARTH_FRAG, uniforms: { map: { value: earthMap }, uSun: light.uSun, uGain: { value: 1 } } });
     this.earth = new THREE.Mesh(new THREE.SphereGeometry(1, 96, 48), this.earthMat);
     this.earth.frustumCulled = false;
     this.scene.add(this.earth);
@@ -719,26 +723,40 @@ void main() {
     air.frustumCulled = false;
     this.earth.add(air);
 
-    // Stars: illustrative, and only visible when the Sun is hidden, as for a dark-adapted eye.
-    const count = 2600;
-    const pos = new Float32Array(count * 3);
-    const col = new Float32Array(count * 3);
-    let seed = 12345;
-    const rnd = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296);
-    for (let i = 0; i < count; i++) {
-      const z = rnd() * 2 - 1;
-      const a = rnd() * Math.PI * 2;
-      const r = Math.sqrt(1 - z * z);
-      pos.set([r * Math.cos(a) * SKY_M, z * SKY_M, r * Math.sin(a) * SKY_M], i * 3);
-      const b = 0.25 + 0.75 * Math.pow(rnd(), 5);
-      col.set([b, b, b * (0.92 + 0.16 * rnd())], i * 3);
-    }
+    // Stars: the Yale Bright Star Catalogue at the true positions for the site and the moment.
+    // They show only when the Sun is hidden, as for a dark-adapted eye or a long exposure.
     const starGeo = new THREE.BufferGeometry();
-    starGeo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-    starGeo.setAttribute('color', new THREE.BufferAttribute(col, 3));
-    this.stars = new THREE.Points(starGeo, new THREE.PointsMaterial({ size: 1.7, sizeAttenuation: false, vertexColors: true, transparent: true, opacity: 0, depthWrite: false }));
+    starGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(3), 3));
+    starGeo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(3), 3));
+    this.stars = new THREE.Points(starGeo, new THREE.PointsMaterial({ size: 2.1, sizeAttenuation: false, vertexColors: true, transparent: true, opacity: 0, depthWrite: false }));
     this.stars.frustumCulled = false;
+    this.stars.matrixAutoUpdate = false;
+    this.stars.visible = false;
     this.scene.add(this.stars);
+    void fetch(`${import.meta.env.BASE_URL}data/stars.json`)
+      .then((r) => r.json() as Promise<{ stars: number[] }>)
+      .then((doc) => {
+        const count = doc.stars.length / 4;
+        const pos = new Float32Array(count * 3);
+        const col = new Float32Array(count * 3);
+        for (let i = 0; i < count; i++) {
+          const ra = doc.stars[i * 4] * D2R;
+          const dec = doc.stars[i * 4 + 1] * D2R;
+          const mag = doc.stars[i * 4 + 2];
+          const kelvin = doc.stars[i * 4 + 3];
+          // Unit vector in J2000 equatorial coordinates; the object's matrix turns it into the local sky.
+          pos.set([Math.cos(dec) * Math.cos(ra), Math.cos(dec) * Math.sin(ra), Math.sin(dec)], i * 3);
+          const b = Math.min(1.8, 0.07 + 2.2 * Math.pow(10, -0.4 * mag));
+          const warm = Math.max(-1, Math.min(1, (6500 - kelvin) / 4000)); // cool stars slightly warm, hot ones slightly blue
+          col.set([b * (1 + 0.12 * warm), b, b * (1 - 0.16 * warm)], i * 3);
+        }
+        starGeo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+        starGeo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+        this.stars.visible = true;
+        if (this.lastSky) this.setSky(this.lastSky);
+        this.onChange?.();
+      })
+      .catch((err) => console.warn('star catalogue unavailable:', err));
 
     const target = new THREE.WebGLRenderTarget(4, 4, { type: THREE.HalfFloatType, samples: 4 });
     this.composer = new EffectComposer(this.renderer, target);
@@ -970,8 +988,18 @@ void main() {
 
     // Exposure opens up when the Sun is hidden, as a camera (or an eye) would, so that earthshine shows.
     this.renderer.toneMappingExposure = 1.0 + 5.0 * Math.pow(1 - Math.min(1, visible * power), 3);
-    (this.stars.material as THREE.PointsMaterial).opacity = Math.max(0, 1 - visible * 6) * 0.9;
-    this.stars.position.copy(this.camera.position);
+    this.earthMat.uniforms.uGain.value = 1 / Math.sqrt(this.renderer.toneMappingExposure);
+    (this.stars.material as THREE.PointsMaterial).opacity = Math.max(0, 1 - visible * power * 6) * 0.95;
+    // J2000 direction -> scene (x east, y up, z south), scaled out to the sky and centred on the camera.
+    const ax = s.starAxes;
+    const k = SKY_M * 0.985;
+    this.stars.matrix.set(
+      ax.east[0] * k, ax.east[1] * k, ax.east[2] * k, this.camera.position.x,
+      ax.up[0] * k, ax.up[1] * k, ax.up[2] * k, this.camera.position.y,
+      -ax.north[0] * k, -ax.north[1] * k, -ax.north[2] * k, this.camera.position.z,
+      0, 0, 0, 1,
+    );
+    this.stars.matrixWorldNeedsUpdate = true;
   }
 
   /** Share of the full resolution to draw at: lowered on slow graphics to keep the motion fluid. */
