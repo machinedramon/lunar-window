@@ -12,10 +12,12 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { createProps, PROP_LAYER, type Props } from './props';
 
 export const TERRAIN_N = 257;
-export const TERRAIN_HALF_M = [6400, 51200, 307200];
-export const TERRAIN_UNIT_M = [0.25, 0.5, 2.5];
+export const TERRAIN_LEVELS = 4;
+export const TERRAIN_HALF_M = [640, 6400, 51200, 307200];
+export const TERRAIN_UNIT_M = [0.0625, 0.25, 0.5, 2.5];
 const SHADOW_N = 512;
 const FAR_M = 400000;
 const SKY_M = 380000;
@@ -29,6 +31,8 @@ export interface SceneSky {
   sunFrac: number;
   /** Fraction of the Sun hidden by the Earth. */
   eclipse: number;
+  /** True when the Earth is above the terrain: a direct radio link exists. */
+  linked: boolean;
   earthAz: number;
   earthEl: number;
   earthRadius: number;
@@ -48,21 +52,26 @@ const HEIGHTS = /* glsl */ `
 uniform sampler2D tH0;
 uniform sampler2D tH1;
 uniform sampler2D tH2;
-const vec3 HALF = vec3(6400.0, 51200.0, 307200.0);
+uniform sampler2D tH3;
+const vec4 HALF = vec4(640.0, 6400.0, 51200.0, 307200.0);
 const float GN = 257.0;
 float texH(sampler2D t, vec2 p, float halfSize) {
   vec2 uv = (p / halfSize * 0.5 + 0.5) * ((GN - 1.0) / GN) + 0.5 / GN;
   return texture2D(t, uv).r;
 }
+float blendAt(float m, float halfSize) {
+  return smoothstep(0.84 * halfSize, 0.97 * halfSize, m);
+}
 // Ground height (metres above the plane tangent at the site) at a point given as (east, north).
 // The finest grid that contains the point is used, blended into the next one near its edge.
 float heightAt(vec2 p) {
   float m = max(abs(p.x), abs(p.y));
-  float h = texH(tH2, clamp(p, -HALF.z, HALF.z), HALF.z);
-  if (m < HALF.y) {
-    h = mix(texH(tH1, p, HALF.y), h, smoothstep(0.84 * HALF.y, 0.97 * HALF.y, m));
-    if (m < HALF.x) {
-      h = mix(texH(tH0, p, HALF.x), h, smoothstep(0.84 * HALF.x, 0.97 * HALF.x, m));
+  float h = texH(tH3, clamp(p, -HALF.w, HALF.w), HALF.w);
+  if (m < HALF.z) {
+    h = mix(texH(tH2, p, HALF.z), h, blendAt(m, HALF.z));
+    if (m < HALF.y) {
+      h = mix(texH(tH1, p, HALF.y), h, blendAt(m, HALF.y));
+      if (m < HALF.x) h = mix(texH(tH0, p, HALF.x), h, blendAt(m, HALF.x));
     }
   }
   return h;
@@ -169,13 +178,22 @@ void main() {
 
 const TERRAIN_FRAG = /* glsl */ `
 #include <common>
+#include <packing>
 #include <logdepthbuf_pars_fragment>
 ${HEIGHTS}
 ${NOISE}
+uniform sampler2D tRegA;
+uniform sampler2D tRegN;
+uniform float uRegOn;
+uniform sampler2D tProp;
+uniform mat4 uPropMatrix;
+uniform float uPropOn;
 uniform sampler2D tS0;
 uniform sampler2D tS1;
 uniform sampler2D tS2;
+uniform sampler2D tS3;
 uniform float uInner;
+uniform float uFine;
 uniform vec3 uSun;
 uniform float uSunPower;
 uniform vec3 uEarth;
@@ -191,11 +209,12 @@ float texS(sampler2D t, vec2 p, float halfSize) {
 }
 float shadowAt(vec2 p) {
   float m = max(abs(p.x), abs(p.y));
-  float s = texS(tS2, clamp(p, -HALF.z, HALF.z), HALF.z);
-  if (m < HALF.y) {
-    s = mix(texS(tS1, p, HALF.y), s, smoothstep(0.84 * HALF.y, 0.97 * HALF.y, m));
-    if (m < HALF.x) {
-      s = mix(texS(tS0, p, HALF.x), s, smoothstep(0.84 * HALF.x, 0.97 * HALF.x, m));
+  float s = texS(tS3, clamp(p, -HALF.w, HALF.w), HALF.w);
+  if (m < HALF.z) {
+    s = mix(texS(tS2, p, HALF.z), s, blendAt(m, HALF.z));
+    if (m < HALF.y) {
+      s = mix(texS(tS1, p, HALF.y), s, blendAt(m, HALF.y));
+      if (m < HALF.x) s = mix(texS(tS0, p, HALF.x), s, blendAt(m, HALF.x));
     }
   }
   return s;
@@ -210,11 +229,12 @@ void main() {
   // Slope of the real terrain, from the finest grid available here. The slopes of two grids are
   // blended where they meet (blending the heights would add a false slope there).
   float footprint = max(length(dFdx(p)), length(dFdy(p)));
-  vec2 slope = slopeOf(tH2, clamp(p, -HALF.z, HALF.z), HALF.z, max(1900.0, 1.5 * footprint));
-  if (m < HALF.y) {
-    slope = mix(slopeOf(tH1, p, HALF.y, max(320.0, 1.5 * footprint)), slope, smoothstep(0.84 * HALF.y, 0.97 * HALF.y, m));
-    if (m < HALF.x) {
-      slope = mix(slopeOf(tH0, p, HALF.x, max(40.0, 1.5 * footprint)), slope, smoothstep(0.84 * HALF.x, 0.97 * HALF.x, m));
+  vec2 slope = slopeOf(tH3, clamp(p, -HALF.w, HALF.w), HALF.w, max(1900.0, 1.5 * footprint));
+  if (m < HALF.z) {
+    slope = mix(slopeOf(tH2, p, HALF.z, max(320.0, 1.5 * footprint)), slope, blendAt(m, HALF.z));
+    if (m < HALF.y) {
+      slope = mix(slopeOf(tH1, p, HALF.y, max(40.0, 1.5 * footprint)), slope, blendAt(m, HALF.y));
+      if (m < HALF.x) slope = mix(slopeOf(tH0, p, HALF.x, max(4.0, 1.5 * footprint)), slope, blendAt(m, HALF.x));
     }
   }
   float dE = slope.x;
@@ -228,7 +248,8 @@ void main() {
   // Relief below the resolution of the data: illustrative, faded out before it can alias.
   vec2 micro = vec2(0.0);
   float craterLit = 1.0;
-  float cell = 46.0;
+  // With a 5 m model the real craters down to about 15 m are in the geometry; only smaller ones are invented.
+  float cell = m < HALF.x * 0.9 ? mix(46.0, 9.0, uFine) : 46.0;
   // Share of a bowl that its own rim shadows, for craters too small to resolve at this distance.
   float hidden = clamp(1.0 - 6.0 * max(tanSun, 0.0), 0.0, 1.0);
   for (int o = 0; o < 6; o++) {
@@ -244,6 +265,9 @@ void main() {
     if (w > 0.002) boulders(p, block, w, tanSun, sunDir, micro, craterLit);
     block *= 0.34;
   }
+  // Weights of the photographed regolith: only where a pixel is small enough to show it.
+  float wA = uRegOn * smoothstep(0.045, 0.006, footprint);
+  float wB = uRegOn * smoothstep(0.2, 0.03, footprint);
   float albedoNoise = 0.0;
   float lambda = 34.0;
   float amp = 0.005;
@@ -254,7 +278,7 @@ void main() {
     if (w > 0.0) {
       vec2 g;
       float v = vnoise(pr / lambda + float(o) * 19.7, g);
-      micro += w * amp * (g * turn);
+      micro += w * amp * (g * turn) * (1.0 - 0.7 * wB);
       if (o < 3) albedoNoise += w * (v - 0.5) * 0.2;
     }
     pr = turn * pr;
@@ -262,6 +286,17 @@ void main() {
     lambda *= 0.41;
     amp *= 1.32;
   }
+  // Photographed regolith (Poly Haven "moon dusted", CC0) for the grain near the camera, at two scales
+  // turned against each other so that the repetition does not show.
+  vec2 uvA = p / 2.9;
+  vec2 uvB = vec2(0.7071 * p.x - 0.7071 * p.y, 0.7071 * p.x + 0.7071 * p.y) / 13.0 + 0.37;
+  vec3 nA = texture2D(tRegN, uvA).xyz * 2.0 - 1.0;
+  vec3 nB = texture2D(tRegN, uvB).xyz * 2.0 - 1.0;
+  float aA = texture2D(tRegA, uvA).r;
+  float aB = texture2D(tRegA, uvB).r;
+  micro += wA * 0.85 * nA.xy / max(0.35, nA.z) + wB * 0.55 * vec2(0.7071 * (nB.x + nB.y), 0.7071 * (nB.y - nB.x)) / max(0.35, nB.z);
+  albedoNoise += wA * (aA - 0.5) * 0.7 + wB * (aB - 0.5) * 0.5;
+
   vec3 n = normalize(vec3(-(dE + micro.x), 1.0, dN + micro.y));
   vec3 v = normalize(cameraPosition - vPos);
 
@@ -274,6 +309,21 @@ void main() {
   float cosPhase = dot(v, uSun);
   float phase = 0.22 + 0.78 * pow(0.5 + 0.5 * cosPhase, 1.5) + 0.35 * exp(-acos(clamp(cosPhase, -1.0, 1.0)) / 0.09);
   float shadow = shadowAt(p) * craterLit;
+  // Shadows of the rocks and the lander: a depth map seen from the Sun.
+  if (uPropOn > 0.5 && m < 260.0) {
+    vec4 lp = uPropMatrix * vec4(vPos, 1.0);
+    vec3 q = lp.xyz / lp.w * 0.5 + 0.5;
+    if (q.x > 0.0 && q.x < 1.0 && q.y > 0.0 && q.y < 1.0 && q.z < 1.0) {
+      vec2 texel = vec2(1.0 / 2048.0, 1.0 / 512.0);
+      float lit = 0.0;
+      lit += step(q.z - 0.00016, unpackRGBAToDepth(texture2D(tProp, q.xy)));
+      lit += step(q.z - 0.00016, unpackRGBAToDepth(texture2D(tProp, q.xy + texel * vec2(0.8, 0.8))));
+      lit += step(q.z - 0.00016, unpackRGBAToDepth(texture2D(tProp, q.xy + texel * vec2(-0.8, 0.8))));
+      lit += step(q.z - 0.00016, unpackRGBAToDepth(texture2D(tProp, q.xy + texel * vec2(0.8, -0.8))));
+      lit += step(q.z - 0.00016, unpackRGBAToDepth(texture2D(tProp, q.xy + texel * vec2(-0.8, -0.8))));
+      shadow *= lit / 5.0;
+    }
+  }
 
   float albedo = 0.125 * (1.0 + albedoNoise);
   vec3 col = vec3(albedo) * (7.5 * direct * phase * shadow * uSunPower);
@@ -301,7 +351,7 @@ void main() {
   float clearance = 1.0;
   for (int i = 0; i < 80; i++) {
     vec2 q = p + dir * t;
-    if (max(abs(q.x), abs(q.y)) > HALF.z) break;
+    if (max(abs(q.x), abs(q.y)) > HALF.w) break;
     clearance = min(clearance, (h + t * slope - heightAt(q)) / t);
     t *= 1.135;
   }
@@ -490,6 +540,20 @@ export class LunarScene {
   private readonly sunDir = new THREE.Vector3(0, 0.02, -1);
   private readonly shadowSun = new THREE.Vector3();
   private shadowsDirty = true;
+  private readonly fine = { value: 0 };
+  private readonly sunLight = new THREE.DirectionalLight(0xffffff, 0);
+  private readonly bounce = new THREE.HemisphereLight(0x000000, 0xa8a8a8, 0);
+  private readonly earthLight = new THREE.DirectionalLight(0xbdd4ff, 0);
+  private readonly propCam = new THREE.OrthographicCamera(-95, 95, 16, -8, 1, 700);
+  private readonly propTarget = new THREE.WebGLRenderTarget(2048, 512, { minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter });
+  private readonly propDepth = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking });
+  private readonly propUniforms = { tProp: { value: null as THREE.Texture | null }, uPropMatrix: { value: new THREE.Matrix4() }, uPropOn: { value: 0 } };
+  private props: Props | null = null;
+  private propsKey = '';
+  private propsDirty = false;
+  private lastSky: SceneSky | null = null;
+  /** Seconds since the scene started: drives the small animations (beacon, radio link). */
+  clock = 0;
   private eye = 2;
   /** Where the camera looks: azimuth and pitch in degrees, vertical field of view in degrees. */
   look = { az: 0, pitch: 4, fov: 46 };
@@ -501,7 +565,7 @@ export class LunarScene {
     this.renderer.setClearColor(0x000000, 1);
     const linear = this.renderer.extensions.has('OES_texture_float_linear');
 
-    for (let i = 0; i < 3; i++) {
+    for (let i = 0; i < TERRAIN_LEVELS; i++) {
       const tex = new THREE.DataTexture(new Float32Array(TERRAIN_N * TERRAIN_N), TERRAIN_N, TERRAIN_N, THREE.RedFormat, THREE.FloatType);
       tex.minFilter = tex.magFilter = linear ? THREE.LinearFilter : THREE.NearestFilter;
       tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping;
@@ -509,9 +573,24 @@ export class LunarScene {
       this.heightTex.push(tex);
       this.shadowTargets.push(new THREE.WebGLRenderTarget(SHADOW_N, SHADOW_N, { depthBuffer: false, minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter }));
     }
-    const heights = { tH0: { value: this.heightTex[0] }, tH1: { value: this.heightTex[1] }, tH2: { value: this.heightTex[2] } };
-    const shadows = { tS0: { value: this.shadowTargets[0].texture }, tS1: { value: this.shadowTargets[1].texture }, tS2: { value: this.shadowTargets[2].texture } };
-    const light = { uSun: { value: this.sunDir }, uSunPower: { value: 1 }, uEarth: { value: new THREE.Vector3(0, 0.1, -1) }, uEarthshine: { value: 0.012 } };
+    const heights = { tH0: { value: this.heightTex[0] }, tH1: { value: this.heightTex[1] }, tH2: { value: this.heightTex[2] }, tH3: { value: this.heightTex[3] } };
+    const shadows = { tS0: { value: this.shadowTargets[0].texture }, tS1: { value: this.shadowTargets[1].texture }, tS2: { value: this.shadowTargets[2].texture }, tS3: { value: this.shadowTargets[3].texture } };
+    const light = { uSun: { value: this.sunDir }, uSunPower: { value: 1 }, uEarth: { value: new THREE.Vector3(0, 0.1, -1) }, uEarthshine: { value: 0.012 }, uFine: this.fine };
+    const texLoader = new THREE.TextureLoader();
+    const regolith = { tRegA: { value: null as THREE.Texture | null }, tRegN: { value: null as THREE.Texture | null }, uRegOn: { value: 0 } };
+    let loadedMaps = 0;
+    const tile = (file: string, slot: { value: THREE.Texture | null }) => {
+      const t = texLoader.load(`${import.meta.env.BASE_URL}textures/regolith/${file}`, () => {
+        if (++loadedMaps === 2) regolith.uRegOn.value = 1;
+        this.onChange?.();
+      });
+      t.wrapS = t.wrapT = THREE.RepeatWrapping;
+      t.anisotropy = 8;
+      slot.value = t;
+    };
+    tile('albedo.jpg', regolith.tRegA);
+    tile('normal.jpg', regolith.tRegN);
+    this.propUniforms.tProp.value = this.propTarget.texture;
 
     this.shadowMat = new THREE.ShaderMaterial({
       vertexShader: QUAD_VERT,
@@ -523,11 +602,11 @@ export class LunarScene {
     this.shadowScene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), this.shadowMat));
 
     const grid = new THREE.PlaneGeometry(1, 1, TERRAIN_N - 1, TERRAIN_N - 1);
-    for (let i = 0; i < 3; i++) {
+    for (let i = 0; i < TERRAIN_LEVELS; i++) {
       const mat = new THREE.ShaderMaterial({
         vertexShader: TERRAIN_VERT,
         fragmentShader: TERRAIN_FRAG,
-        uniforms: { ...heights, ...shadows, ...light, uHalf: { value: TERRAIN_HALF_M[i] }, uInner: { value: i ? TERRAIN_HALF_M[i - 1] * 0.985 : 0 } },
+        uniforms: { ...heights, ...shadows, ...light, ...regolith, ...this.propUniforms, uHalf: { value: TERRAIN_HALF_M[i] }, uInner: { value: i ? TERRAIN_HALF_M[i - 1] * 0.985 : 0 } },
         side: THREE.DoubleSide,
         polygonOffset: i > 0,
         polygonOffsetFactor: i,
@@ -612,19 +691,127 @@ void main() {
     this.composer.addPass(new OutputPass());
     this.composer.addPass(this.finish);
     this.camera.rotation.order = 'YXZ';
+
+    // Lights for the lander and the rocks (the terrain has its own shading).
+    this.camera.layers.enable(PROP_LAYER);
+    this.tele.layers.enable(PROP_LAYER);
+    this.propCam.layers.set(PROP_LAYER);
+    this.renderer.shadowMap.enabled = true;
+    this.renderer.shadowMap.type = THREE.PCFShadowMap;
+    this.sunLight.castShadow = true;
+    this.sunLight.shadow.mapSize.set(2048, 1024);
+    const sc = this.sunLight.shadow.camera;
+    sc.left = -95;
+    sc.right = 95;
+    sc.top = 16;
+    sc.bottom = -8;
+    sc.near = 1;
+    sc.far = 700;
+    sc.layers.set(PROP_LAYER);
+    this.sunLight.shadow.bias = -0.0004;
+    this.sunLight.shadow.normalBias = 0.03;
+    this.scene.add(this.sunLight, this.sunLight.target, this.bounce, this.earthLight, this.earthLight.target);
+    // What a mirror-like surface sees: black sky above, sunlit ground below.
+    const envScene = new THREE.Scene();
+    envScene.add(
+      new THREE.Mesh(
+        new THREE.SphereGeometry(10, 32, 16),
+        new THREE.ShaderMaterial({
+          side: THREE.BackSide,
+          vertexShader: 'varying vec3 vP; void main() { vP = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+          fragmentShader: 'varying vec3 vP; void main() { float y = normalize(vP).y; gl_FragColor = vec4(vec3(mix(0.55, 0.0, smoothstep(-0.12, 0.05, y))), 1.0); }',
+        }),
+      ),
+    );
+    const pmrem = new THREE.PMREMGenerator(this.renderer);
+    this.scene.environment = pmrem.fromScene(envScene, 0.02).texture;
+    this.scene.environmentIntensity = 0.5;
+    pmrem.dispose();
+  }
+
+  /** Height of the ground (m) at a point east and north of the site, from the terrain grids. */
+  groundAt(east: number, north: number): number {
+    for (let level = 0; level < TERRAIN_LEVELS; level++) {
+      const half = TERRAIN_HALF_M[level];
+      if (Math.max(Math.abs(east), Math.abs(north)) >= half * 0.98 && level < TERRAIN_LEVELS - 1) continue;
+      const data = this.heightTex[level].image.data as Float32Array;
+      const fx = Math.max(0, Math.min(TERRAIN_N - 1.001, ((east / half) * 0.5 + 0.5) * (TERRAIN_N - 1)));
+      const fy = Math.max(0, Math.min(TERRAIN_N - 1.001, ((north / half) * 0.5 + 0.5) * (TERRAIN_N - 1)));
+      const i = Math.floor(fx);
+      const j = Math.floor(fy);
+      const a = fx - i;
+      const b = fy - j;
+      const at = (ii: number, jj: number) => data[jj * TERRAIN_N + ii];
+      return at(i, j) * (1 - a) * (1 - b) + at(i + 1, j) * a * (1 - b) + at(i, j + 1) * (1 - a) * b + at(i + 1, j + 1) * a * b;
+    }
+    return 0;
+  }
+
+  /**
+   * Places the rocks and the vehicle. Safe to call again with the same arguments.
+   * @param key        identifies the arrangement (site and mast height)
+   * @param vehicleAz  azimuth at which the lander stands, degrees
+   */
+  async setProps(key: string, seed: number, vehicleAz: number, apollo: boolean, mastM: number): Promise<void> {
+    if (key === this.propsKey) return;
+    this.propsKey = key;
+    try {
+      const made = await createProps((e, n) => this.groundAt(e, n), seed, vehicleAz, apollo, mastM);
+      if (this.propsKey !== key) {
+        made.dispose();
+        return;
+      }
+      if (this.props) {
+        this.scene.remove(this.props.group);
+        this.props.dispose();
+      }
+      this.props = made;
+      this.scene.add(made.group);
+      this.propsDirty = true;
+      if (this.lastSky) this.setSky(this.lastSky);
+      this.onChange?.();
+    } catch (err) {
+      console.warn('3D props unavailable:', err);
+    }
+  }
+
+  private renderPropShadows(): void {
+    // An orthographic view from the Sun: wide, low and long, because the light is nearly horizontal.
+    this.propCam.position.copy(this.sunDir).multiplyScalar(300).add(this.camera.position);
+    this.propCam.up.set(0, 1, 0);
+    this.propCam.lookAt(this.camera.position);
+    this.propCam.updateMatrixWorld();
+    this.propCam.updateProjectionMatrix();
+    this.propUniforms.uPropMatrix.value.multiplyMatrices(this.propCam.projectionMatrix, this.propCam.matrixWorldInverse);
+    const r = this.renderer;
+    const clear = new THREE.Color();
+    r.getClearColor(clear);
+    const alpha = r.getClearAlpha();
+    r.setRenderTarget(this.propTarget);
+    r.setClearColor(0xffffff, 1);
+    r.clear();
+    this.scene.overrideMaterial = this.propDepth;
+    r.render(this.scene, this.propCam);
+    this.scene.overrideMaterial = null;
+    r.setRenderTarget(null);
+    r.setClearColor(clear, alpha);
+    this.propUniforms.uPropOn.value = this.props ? 1 : 0;
+    this.propsDirty = false;
   }
 
   /** Called when something loaded asynchronously and the picture should be redrawn. */
   onChange: (() => void) | null = null;
 
   /**
-   * @param tiles    the three grids of public/data/terrain/<id>.bin, or null for a smooth sphere
+   * @param tiles    the four grids of public/data/terrain/<id>.bin, or null for a smooth sphere
+   * @param fineReal true when the finest grid comes from a 5 m site model (and not from the 80 m one)
    * @param profile  horizon elevation in degrees per azimuth step, for the current observer height
    * @param distKm   distance of the terrain point that sets the horizon, same indexing; null for a sphere
    */
-  setTerrain(tiles: Int16Array | null, profile: ArrayLike<number> | null, distKm: ArrayLike<number> | null, stepDeg: number, eyeM: number): void {
+  setTerrain(tiles: Int16Array | null, fineReal: boolean, profile: ArrayLike<number> | null, distKm: ArrayLike<number> | null, stepDeg: number, eyeM: number): void {
     const n2 = TERRAIN_N * TERRAIN_N;
-    for (let level = 0; level < 3; level++) {
+    this.fine.value = fineReal ? 1 : 0;
+    for (let level = 0; level < TERRAIN_LEVELS; level++) {
       const data = this.heightTex[level].image.data as Float32Array;
       if (tiles) {
         const unit = TERRAIN_UNIT_M[level];
@@ -678,8 +865,22 @@ void main() {
   }
 
   setSky(s: SceneSky): void {
+    this.lastSky = s;
     direction(s.sunAz, s.sunEl, this.sunDir);
     const power = 1 - s.eclipse;
+    // Lander and rocks: the Sun as far as it clears the terrain, light bounced off the sunlit ground, earthshine.
+    const reach = power * s.sunFrac;
+    this.sunLight.position.copy(this.sunDir).multiplyScalar(300).add(this.camera.position);
+    this.sunLight.target.position.copy(this.camera.position);
+    this.sunLight.intensity = 7.5 * reach;
+    this.bounce.intensity = 0.22 * reach + 0.01;
+    const earthDir = direction(s.earthAz, s.earthEl, new THREE.Vector3());
+    this.earthLight.position.copy(earthDir).multiplyScalar(300).add(this.camera.position);
+    this.earthLight.target.position.copy(this.camera.position);
+    this.earthLight.intensity = s.earthEl > -1 ? 0.035 : 0;
+    this.scene.environmentIntensity = 0.03 + 0.3 * reach;
+    this.props?.mast?.update(Math.atan2(this.sunDir.x, this.sunDir.z), earthDir, reach, s.linked, this.clock);
+    this.propsDirty = true;
     for (const m of this.terrainMats) {
       m.uniforms.uSunPower.value = power;
       direction(s.earthAz, s.earthEl, m.uniforms.uEarth.value as THREE.Vector3);
@@ -726,8 +927,8 @@ void main() {
 
   private renderShadows(): void {
     this.shadowSun.copy(this.sunDir);
-    const starts = [22, 180, 1100];
-    for (let level = 0; level < 3; level++) {
+    const starts = [2.4, 22, 180, 1100];
+    for (let level = 0; level < TERRAIN_LEVELS; level++) {
       this.shadowMat.uniforms.uHalfLevel.value = TERRAIN_HALF_M[level];
       this.shadowMat.uniforms.uStart.value = starts[level];
       this.renderer.setRenderTarget(this.shadowTargets[level]);
@@ -743,6 +944,7 @@ void main() {
    */
   render(insets: { x: number; y: number; size: number; az: number; el: number; fov: number }[] = []): void {
     if (this.shadowsDirty) this.renderShadows();
+    if (this.propsDirty) this.renderPropShadows();
     this.camera.fov = this.look.fov;
     this.camera.rotation.set(this.look.pitch * D2R, -this.look.az * D2R, 0);
     this.camera.updateProjectionMatrix();
@@ -789,5 +991,7 @@ void main() {
     this.renderer.dispose();
     for (const t of this.heightTex) t.dispose();
     for (const t of this.shadowTargets) t.dispose();
+    this.propTarget.dispose();
+    this.props?.dispose();
   }
 }

@@ -223,7 +223,7 @@ export function createExplore(app: App): View {
         'div',
         null,
         h('dt', null, T.facts.horizon),
-        h('dd', null, h('span', { class: `tag ${terrain ? 'terrain' : 'sphere'}` }, terrain ? T.facts.terrain : T.facts.sphere), ' ', terrain ? T.facts.terrainText : T.facts.sphereText),
+        h('dd', null, h('span', { class: `tag ${terrain ? 'terrain' : 'sphere'}` }, terrain ? T.facts.terrain : T.facts.sphere), ' ', site.horizon === 'lola-5m-80m-240m' ? T.facts.terrainFineText : terrain ? T.facts.terrainText : T.facts.sphereText),
       ),
       h('div', null, h('dt', null, T.facts.about), h('dd', null, ...about, ' ', h('a', { href: site.source, target: '_blank', rel: 'noopener' }, T.facts.source))),
     );
@@ -256,7 +256,7 @@ export function createExplore(app: App): View {
         v[0] * f.up[0] + v[1] * f.up[1] + v[2] * f.up[2],
       ];
       three.setSite(loaded, mast);
-      three.setMoment(m, { north: local(axes.north), greenwich: local(axes.greenwich) });
+      three.setMoment(m, { north: local(axes.north), greenwich: local(axes.greenwich) }, dayTime(state.timeMs));
     }
     const sunUp = m.sunFrac >= SUN_PRESENT;
     const earthUp = m.earthClear > 0;

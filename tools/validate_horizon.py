@@ -49,7 +49,7 @@ def stats(ours, nasa):
 def main() -> None:
     sys.stdout.reconfigure(encoding='utf-8')
     t0 = time.time()
-    terrain = Terrain()
+    terrain = Terrain()  # 80 m and 240 m models only: comparable with NASA's maps, made from a 60 m model
     maps = {'sun': PolarGrid('AVGVISIB_85S_060M_201608'), 'earth': PolarGrid('AVGVISIB_85S_060M_201608_EARTH')}
     bodies = {'sun': body_positions('10'), 'earth': body_positions('399')}
 
@@ -82,9 +82,16 @@ def main() -> None:
     for s in json.load(open(os.path.join(OUT, 'sites.json'), encoding='utf-8'))['sites']:
         if 'nasa' not in s:
             continue
+        lat, lon = s['lat'] * D2R, s['lon'] * D2R
+        # Like for like with NASA's maps (made from a 60 m model, observer on the ground): the 80 m model only.
+        h0, elev, _, _ = horizon(terrain, lat, lon, 0.5, DIST_COARSE, masts=(0.0,))
+        v = visibility(lat, lon, h0, elev[0], 0.5)
+        entry = {'id': s['id'], 'sun': round(v['sun'], 3), 'earth': round(v['earth'], 3), **s['nasa']}
+        # What the planner uses: the stored profile (5 m model near the site where one exists), at each height.
         prof = json.load(open(os.path.join(OUT, 'horizons', s['id'] + '.json'), encoding='utf-8'))
-        v = visibility(s['lat'] * D2R, s['lon'] * D2R, prof['elevationM'], np.array(prof['elevDeg'][0]), prof['stepDeg'])
-        sites.append({'id': s['id'], 'sun': round(v['sun'], 3), 'earth': round(v['earth'], 3), **s['nasa']})
+        entry['model'] = s['horizon']
+        entry['sunByHeight'] = [round(visibility(lat, lon, prof['elevationM'] + m, np.array(prof['elevDeg'][k]), prof['stepDeg'])['sun'], 3) for k, m in enumerate(prof['mastsM'])]
+        sites.append(entry)
 
     report = {
         'generated': datetime.date.today().isoformat(),
@@ -109,7 +116,8 @@ def main() -> None:
     print('fine area ', report['fine']['sunArea'])
     for s in sites:
         print(f"{s['id']:17s} sun ours {s['sun']:.3f} NASA {s['sunVisibility']:.3f} (3x3 {s['sunVisibility3x3']:.3f})"
-              f" | earth ours {s['earth']:.3f} NASA {s['earthVisibility']:.3f} (3x3 {s['earthVisibility3x3']:.3f})")
+              f" | earth ours {s['earth']:.3f} NASA {s['earthVisibility']:.3f} (3x3 {s['earthVisibility3x3']:.3f})"
+              f" | planner profile, any part of the Sun at 0 / 2 / 10 m: {s['sunByHeight']}")
     print(f'done in {time.time() - t0:.0f} s')
 
 

@@ -1,23 +1,45 @@
 # References
 
-Every external resource used by the project: data, code and reading.
+Every external resource used by the project: data, 3D assets, code and reading.
 
 ## NASA data
 
 | Resource | Used for | Source |
 |---|---|---|
-| LRO LOLA Gridded Data Records, south polar elevation models `LDEM_80S_80M` and `LDEM_75S_240M` | Terrain horizon of each site | NASA PDS Geosciences Node, `LRO-L-LOLA-4-GDR-V1.0` — https://pds-geosciences.wustl.edu/lro/lro-l-lola-3-rdr-v1/lrolol_1xxx/data/lola_gdr/polar/img/ |
-| LOLA average illumination maps `AVGVISIB_85S_060M_201608` (Sun) and `AVGVISIB_85S_060M_201608_EARTH` (Earth) | Validation of the terrain horizon; choice of the site point inside each candidate region | LOLA team, NASA GSFC — https://imbrium.mit.edu/EXTRAS/ILLUMINATION/ |
-| JPL Horizons System | Reference positions of the Sun and the Earth seen from the lunar surface (validation tables) | NASA JPL Solar System Dynamics — https://ssd.jpl.nasa.gov/horizons/ |
+| LRO LOLA Gridded Data Records, south polar elevation models `LDEM_80S_80M` and `LDEM_60S_240M` | Terrain horizon of each site; terrain of the 3D view | NASA PDS Geosciences Node, `LRO-L-LOLA-4-GDR-V1.0` — https://pds-geosciences.wustl.edu/lro/lro-l-lola-3-rdr-v1/lrolol_1xxx/data/lola_gdr/polar/img/ |
+| LOLA 5 m/pixel site elevation models (Site01, Site04, Site06, Site20, Site23, SL2, Haworth) | Terrain near seven of the sites: horizon and 3D view | NASA GSFC Planetary Geodesy Data Archive, product 78 — https://pgda.gsfc.nasa.gov/products/78 (Barker et al. 2021) |
+| LOLA average illumination maps `AVGVISIB_85S_060M_201608` (Sun) and `AVGVISIB_85S_060M_201608_EARTH` (Earth) | Validation of the terrain horizon; choice of the site point at two published high-illumination locations | LOLA team, NASA GSFC — https://imbrium.mit.edu/EXTRAS/ILLUMINATION/ |
+| JPL Horizons System | Reference positions of the Sun and the Earth seen from the lunar surface (validation tables in `tests/golden`) | NASA JPL Solar System Dynamics — https://ssd.jpl.nasa.gov/horizons/ |
+| LROC "Anthropogenic Features on the Moon" | Coordinates of real landing sites | LROC, Arizona State University — https://data.lroc.im-ldi.com/lroc/view_rdr/SHAPEFILE_ANTHROPOGENIC_OBJECTS |
+| Blue Marble: Land Surface, Shallow Water, and Shaded Topography (2048 x 1024) | Texture of the Earth in the 3D view | NASA Goddard Space Flight Center, image by Reto Stöckli — https://visibleearth.nasa.gov/images/57730 (file obtained from the Wikimedia Commons copy, `Land_ocean_ice_2048.jpg`) |
+
+## 3D models and textures
+
+| Asset | License | Source |
+|---|---|---|
+| Space Exploration Vehicle (concept rover) | Public domain (NASA) | NASA 3D Resources — https://github.com/nasa/NASA-3D-Resources |
+| Apollo Lunar Module | Public domain (NASA) | NASA 3D Resources — https://github.com/nasa/NASA-3D-Resources |
+| Moon Rock 01, 03 and 05 (scanned rocks) | CC0 | Poly Haven — https://polyhaven.com/models/rocks |
+| Moon Dusted 01 and Moon Footprints 01 (surface textures) | CC0 | Poly Haven — https://polyhaven.com/textures |
+| Solar array mast | MIT (this project) | Original, built in code (`src/viz/mast.ts`), loosely after NASA's vertical solar array concept |
+
+The NASA models were only re-encoded for the web (mesh compression and smaller textures); the geometry is unchanged.
+Other candidate sites come from Wueller et al. 2026 (see Reading).
 
 ## Software
 
 | Library | License | Used for |
 |---|---|---|
-| [astronomy-engine](https://github.com/cosinekitty/astronomy) | MIT | Positions of the Sun, Earth and Moon and the lunar rotation axis, in the browser |
-| [Vite](https://vitejs.dev), [TypeScript](https://www.typescriptlang.org), [Vitest](https://vitest.dev) | MIT / Apache-2.0 / MIT | Build and tests |
-| [NumPy](https://numpy.org) | BSD-3-Clause | Offline horizon computation |
+| [astronomy-engine](https://github.com/cosinekitty/astronomy) | MIT | Positions of the Sun, Earth and Moon and the lunar rotation, in the browser |
+| [three.js](https://threejs.org) | MIT | 3D view |
+| [Inter](https://rsms.me/inter/) and [Space Grotesk](https://github.com/floriankarsten/space-grotesk), via Fontsource | OFL 1.1 | Typefaces |
+| [Vite](https://vitejs.dev), [TypeScript](https://www.typescriptlang.org), [Vitest](https://vitest.dev), [Playwright](https://playwright.dev) | MIT / Apache-2.0 | Build, tests and development screenshots |
+| [NumPy](https://numpy.org), [tifffile](https://github.com/cgohlke/tifffile), [Pillow](https://python-pillow.org) | BSD / BSD / MIT-CMU | Offline tools: horizons, terrain tiles, textures |
+| [glTF-Transform](https://gltf-transform.dev) | MIT | Re-encoding the NASA models for the web |
 
 ## Reading
 
 - Mazarico, E., Neumann, G. A., Smith, D. E., Zuber, M. T., Torrence, M. H. (2011). Illumination conditions of the lunar polar regions using LOLA topography. *Icarus* 211, 1066–1081.
+- Barker, M. K., et al. (2021). Improved LOLA elevation maps for south pole landing sites: Error estimates and their impact on illumination conditions. *Planetary and Space Science* 203, 105119.
+- Gläser, P., et al. (2018). Illumination conditions at the lunar poles: Implications for future exploration. *Planetary and Space Science* 162, 170–178. https://ntrs.nasa.gov/api/citations/20170007365/downloads/20170007365.pdf
+- Wueller, F., et al. (2026). Candidate landing sites in the Artemis exploration regions. *JGR Planets* 131(3), e2025JE009434. Data: https://zenodo.org/records/17084058

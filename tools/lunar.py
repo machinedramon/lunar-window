@@ -71,13 +71,59 @@ class PolarGrid:
         return out
 
 
+class FineGrid:
+    """A 5 m/pixel site elevation model from NASA GSFC's PGDA (GeoTIFF, same south polar stereographic
+    projection, metres above the 1737.4 km sphere). Needs the tifffile and imagecodecs packages."""
+
+    def __init__(self, site_id: str):
+        import tifffile
+
+        with tifffile.TiffFile(os.path.join(RAW, 'pgda5m', site_id + '.tif')) as tif:
+            page = tif.pages[0]
+            self.a = page.asarray().astype(np.float32)
+            scale = page.tags['ModelPixelScaleTag'].value
+            tie = page.tags['ModelTiepointTag'].value
+            nodata = page.tags.get('GDAL_NODATA')
+        if nodata is not None:
+            try:
+                self.a[self.a == np.float32(float(str(nodata.value).strip().rstrip('\x00')))] = np.nan
+            except ValueError:
+                pass
+        self.a[np.abs(self.a) > 30000] = np.nan
+        self.name = 'pgda_5m_' + site_id.lower()
+        self.step = float(scale[0])
+        # Projected coordinates (metres) of the outer corner of the first pixel.
+        self.x0 = float(tie[3]) - float(tie[0]) * self.step
+        self.y0 = float(tie[4]) + float(tie[1]) * self.step
+        self.rows, self.cols = self.a.shape
+
+    def sample(self, lat, lon):
+        r = 2 * R_M * np.tan((np.pi / 2 + lat) / 2)
+        i = (r * np.sin(lon) - self.x0) / self.step - 0.5
+        j = (self.y0 - r * np.cos(lon)) / self.step - 0.5
+        i0 = np.floor(i).astype(np.int64)
+        j0 = np.floor(j).astype(np.int64)
+        ok = (i0 >= 0) & (i0 < self.cols - 1) & (j0 >= 0) & (j0 < self.rows - 1)
+        out = np.full(lat.shape, np.nan)
+        ii, jj = i0[ok], j0[ok]
+        fi, fj = i[ok] - ii, j[ok] - jj
+        a = self.a
+        out[ok] = a[jj, ii] * (1 - fi) * (1 - fj) + a[jj, ii + 1] * fi * (1 - fj) + a[jj + 1, ii] * (1 - fi) * fj + a[jj + 1, ii + 1] * fi * fj
+        return out
+
+
 class Terrain:
-    """Elevation above the 1737.4 km sphere: the 80 m model near the pole, the 240 m model beyond it."""
+    """Elevation above the 1737.4 km sphere: a 5 m site model where one exists, then the 80 m model
+    near the pole, then the 240 m model beyond it."""
 
     DEMS = ['ldem_80s_80m', 'ldem_60s_240m']
+    _shared = None
 
-    def __init__(self, grids=None):
-        self.grids = grids if grids is not None else [PolarGrid(n) for n in self.DEMS]
+    def __init__(self, fine: FineGrid | None = None):
+        if Terrain._shared is None:
+            Terrain._shared = [PolarGrid(n) for n in self.DEMS]
+        self.grids = ([fine] if fine else []) + Terrain._shared
+        self.names = [g.name for g in self.grids]
 
     def height(self, lat, lon):
         h = self.grids[0].sample(lat, lon)
@@ -102,6 +148,11 @@ def destination(lat, lon, azimuth, distance_m):
 
 # Sampling distances along each azimuth: 40 m steps to 100 km, 120 m steps to 300 km.
 DIST_FULL = np.concatenate([np.arange(40.0, 100e3, 40.0), np.arange(100e3, 300e3 + 1, 120.0)])
+# With a 5 m site model: 2.5 m steps to 1 km and 10 m steps to 5 km, then as above. Terrain closer than
+# 10 m is left out: it is within the footprint of a lander and below the fidelity of the model (most
+# 5 m pixels are interpolated between laser tracks), yet it would decide the horizon of a ground-level observer.
+DIST_FINE = np.concatenate([np.arange(10.0, 1000.0, 2.5), np.arange(1000.0, 5000.0, 10.0), np.arange(5000.0, 100e3, 40.0),
+                            np.arange(100e3, 300e3 + 1, 120.0)])
 # Coarser sampling for the many-point validation mesh.
 DIST_COARSE = np.concatenate([np.arange(80.0, 100e3, 80.0), np.arange(100e3, 300e3 + 1, 240.0)])
 

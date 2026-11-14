@@ -15,12 +15,15 @@ Work in progress during the hackathon weekend (14–15 November 2026).
 
 ## How it works
 
-- **Terrain horizon.** For each site, an offline Python tool reads NASA LOLA polar elevation models
+- **Terrain horizon.** For each site, an offline Python tool reads NASA LOLA elevation models
   and computes the elevation of the terrain horizon in 1440 directions, for observers 0, 2 and 10 m
   above the ground.
 - **Sun and Earth.** The browser computes where the Sun and the Earth are, as seen from the site,
   with [astronomy-engine](https://github.com/cosinekitty/astronomy). No server is involved.
 - **Planner.** Mission requirements are checked against the horizon for every landing day.
+- **Stand there.** A first-person 3D view from the site: the real LOLA terrain (5 m near seven of the
+  sites) with shadows marched through the elevation data, and the Sun and the Earth at their true
+  positions, sizes, phase and rotation.
 
 Accuracy is measured against NASA products (JPL Horizons and the LOLA average-illumination maps) and
 published with the tool, including where it does not hold.

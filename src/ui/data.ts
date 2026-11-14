@@ -12,7 +12,7 @@ export interface Site {
   lat: number;
   lon: number;
   elevationM: number;
-  horizon: 'lola-80m-240m' | 'sphere';
+  horizon: 'lola-5m-80m-240m' | 'lola-80m-240m' | 'sphere';
   source: string;
   note?: string;
   published?: { lat: number; lon: number };

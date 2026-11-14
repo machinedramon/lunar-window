@@ -17,7 +17,7 @@ import time
 
 import numpy as np
 
-from lunar import D2R, ROOT, PolarGrid, Terrain, destination, horizon
+from lunar import D2R, DIST_FINE, DIST_FULL, ROOT, FineGrid, PolarGrid, Terrain, destination, horizon
 
 OUT = os.path.join(ROOT, 'public', 'data')
 MASTS = (0.0, 2.0, 10.0)
@@ -66,7 +66,6 @@ def dump(path: str, obj) -> int:
 def main() -> None:
     sys.stdout.reconfigure(encoding='utf-8')
     t0 = time.time()
-    terrain = Terrain()
     sun_map = PolarGrid('AVGVISIB_85S_060M_201608')
     earth_map = PolarGrid('AVGVISIB_85S_060M_201608_EARTH')
     today = datetime.date.today().isoformat()
@@ -91,27 +90,31 @@ def main() -> None:
             lat_d, lon_d = round(la / D2R, 5), round(wrap180(lo / D2R), 5)
         lat, lon = lat_d * D2R, lon_d * D2R
 
-        h0, elev, far, nodata = horizon(terrain, lat, lon, STEP_DEG, masts=MASTS)
+        # A 5 m site model, where NASA made one, replaces the 80 m model for the terrain near the site.
+        fine = FineGrid(src['fine']) if src.get('fine') else None
+        terrain = Terrain(fine)
+        dist = DIST_FINE if fine else DIST_FULL
+        h0, elev, far, nodata = horizon(terrain, lat, lon, STEP_DEG, dist, masts=MASTS)
         size = dump(os.path.join(OUT, 'horizons', f"{src['id']}.json"), {
             'siteId': src['id'], 'lat': lat_d, 'lon': lon_d, 'elevationM': round(h0, 1),
             'az0Deg': 0, 'stepDeg': STEP_DEG, 'mastsM': list(MASTS),
             'elevDeg': np.round(elev, 3).tolist(), 'distKm': np.round(far, 2).tolist(),
-            'dem': Terrain.DEMS, 'noDataFraction': round(nodata, 4), 'generated': today,
+            'dem': terrain.names, 'noDataFraction': round(nodata, 4), 'generated': today,
         })
 
         points = []
         for bearing in RING_BEARINGS:
             la, lo = destination(lat, lon, bearing * D2R, RING_RADIUS_M)
             la, lo = float(la), float(lo)
-            hp, ep, _, _ = horizon(terrain, la, lo, STEP_DEG, masts=MASTS)
+            hp, ep, _, _ = horizon(terrain, la, lo, STEP_DEG, dist, masts=MASTS)
             points.append({'bearingDeg': bearing, 'lat': round(la / D2R, 5), 'lon': round(wrap180(lo / D2R), 5),
                            'elevationM': round(hp, 1), 'elevCdeg': np.round(ep * 100).astype(int).tolist()})
         ring_size = dump(os.path.join(OUT, 'horizons', f"{src['id']}.ring.json"), {
             'siteId': src['id'], 'radiusM': RING_RADIUS_M, 'az0Deg': 0, 'stepDeg': STEP_DEG,
-            'mastsM': list(MASTS), 'points': points, 'dem': Terrain.DEMS, 'generated': today,
+            'mastsM': list(MASTS), 'points': points, 'dem': terrain.names, 'generated': today,
         })
 
-        site.update(lat=lat_d, lon=lon_d, elevationM=round(h0), horizon='lola-80m-240m', source=src['source'])
+        site.update(lat=lat_d, lon=lon_d, elevationM=round(h0), horizon='lola-5m-80m-240m' if fine else 'lola-80m-240m', source=src['source'])
         if 'note' in src:
             site['note'] = src['note']
         i, j = sun_map.nearest(lat, lon)

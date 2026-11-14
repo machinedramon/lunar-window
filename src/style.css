@@ -720,6 +720,71 @@ input:hover {
   pointer-events: none;
   text-shadow: 0 1px 3px #000;
 }
+.three-label,
+.three-insets,
+.three-hint,
+.three-controls,
+.three-caption,
+.three-tape {
+  transition: opacity 0.9s ease;
+}
+.three.arriving .three-label,
+.three.arriving .three-insets,
+.three.arriving .three-hint,
+.three.arriving .three-controls,
+.three.arriving .three-caption,
+.three.arriving .three-tape {
+  opacity: 0;
+}
+.three-fade {
+  position: absolute;
+  inset: 0;
+  background: #000;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.4s ease;
+}
+.three-fade.on {
+  opacity: 1;
+}
+.three-title {
+  position: absolute;
+  left: clamp(18px, 3.4vw, 52px);
+  top: 26%;
+  opacity: 0;
+  pointer-events: none;
+  text-shadow: 0 2px 24px rgb(0 0 0 / 0.9);
+}
+.three-title.show {
+  animation: title-card 5.4s ease forwards;
+}
+.three-title-name {
+  font: 600 clamp(30px, 4.6vw, 68px) / 0.98 var(--display);
+  letter-spacing: -0.03em;
+}
+.three-title-sub {
+  margin-top: 12px;
+  font: 500 12.5px var(--font);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: rgb(255 255 255 / 0.82);
+}
+@keyframes title-card {
+  0% {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  16% {
+    opacity: 1;
+    transform: none;
+  }
+  70% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
 .three-loading {
   position: absolute;
   inset: 0;

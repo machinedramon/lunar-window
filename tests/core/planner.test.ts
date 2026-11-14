@@ -29,15 +29,16 @@ describe('real site: Connecting Ridge, from 1 January 2027', () => {
     const events = findEvents(series, samples.grid, frame, horizon, 1, 0, 0, samples.grid.count).filter((e) => e.kind === 'sunrise' || e.kind === 'sunset');
     expect(events.length).toBeGreaterThan(2);
     for (const ev of events.slice(0, 4)) {
-      // Reference: scan minute by minute around the event and take the first crossing.
+      // Reference: scan minute by minute around the event. A jagged skyline can make the Sun flicker
+      // across the threshold several times within the hour, so compare with the nearest crossing.
       let ref = NaN;
       const from = ev.timeMs - 45 * 60000;
       let prev = instant(from, frame, horizon, 1).sunFrac >= SUN_PRESENT;
       for (let m = 1; m <= 90; m++) {
         const now = instant(from + m * 60000, frame, horizon, 1).sunFrac >= SUN_PRESENT;
         if (now !== prev) {
-          ref = from + (m - 0.5) * 60000;
-          break;
+          const at = from + (m - 0.5) * 60000;
+          if (Number.isNaN(ref) || Math.abs(at - ev.timeMs) < Math.abs(ref - ev.timeMs)) ref = at;
         }
         prev = now;
       }

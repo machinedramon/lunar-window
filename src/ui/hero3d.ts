@@ -1,12 +1,14 @@
 // The 3D view of Explore: stand on the landing site and look around.
+// Camera work is deliberate: every move eases in and out, a site opens with an arrival shot and
+// a title card, and the view never sits completely still.
 import { MAST_HEIGHTS_M } from '../core/horizon';
 import { S } from '../i18n/en';
 import { FONT } from '../viz/canvas';
 import type { LunarScene, SceneSky } from '../viz/scene3d';
 import type { LoadedSite } from './data';
-import { h, setText } from './dom';
+import { h, reducedMotion, setText } from './dom';
 import type { Moment } from './exploreModel';
-import { compass, deg, pct } from './format';
+import { compass, deg, latLon, pct } from './format';
 
 const T = S.explore.three;
 
@@ -15,12 +17,18 @@ export interface Hero3D {
   /** False once WebGL turned out to be unavailable. */
   ok(): boolean;
   setSite(loaded: LoadedSite, mast: number): void;
-  setMoment(m: Moment, axes: { north: [number, number, number]; greenwich: [number, number, number] }): void;
-  /** Aim the camera so that the Sun and the Earth are framed as well as possible. */
-  frame(): void;
+  setMoment(m: Moment, axes: { north: [number, number, number]; greenwich: [number, number, number] }, when: string): void;
   redraw(): void;
   onFail: (() => void) | null;
 }
+
+interface Look {
+  az: number;
+  pitch: number;
+  fov: number;
+}
+
+const shortest = (from: number, to: number): number => ((to - from + 540) % 360) - 180;
 
 export function createHero3D(): Hero3D {
   const canvas = h('canvas', { class: 'three-canvas', tabindex: '0', role: 'img', 'aria-label': T.aria });
@@ -29,6 +37,10 @@ export function createHero3D(): Hero3D {
   const earthLabel = h('div', { class: 'three-label earth', hidden: true });
   const caption = h('div', { class: 'three-caption' });
   const loading = h('div', { class: 'three-loading' }, h('div', { class: 'spinner' }), h('span', null, T.loading));
+  const fade = h('div', { class: 'three-fade' });
+  const titleName = h('div', { class: 'three-title-name' });
+  const titleSub = h('div', { class: 'three-title-sub' });
+  const title = h('div', { class: 'three-title', 'aria-hidden': 'true' }, titleName, titleSub);
   const btn = (text: string, tip: string, fn: () => void) => h('button', { class: 'btn ghost three-btn', type: 'button', title: tip, onclick: fn }, text);
   const controls = h(
     'div',
@@ -38,15 +50,15 @@ export function createHero3D(): Hero3D {
     btn('−', T.zoomOut, () => zoom(1.25)),
     btn('+', T.zoomIn, () => zoom(0.8)),
   );
-  const inset = (cls: string, title: string) => {
+  const inset = (cls: string, text: string) => {
     const note = h('span', { class: 'three-inset-note' });
-    const frame = h('div', { class: `three-inset ${cls}` }, h('span', { class: 'three-inset-title' }, h('span', { class: `dot ${cls}` }), title), note);
+    const frame = h('div', { class: `three-inset ${cls}` }, h('span', { class: 'three-inset-title' }, h('span', { class: `dot ${cls}` }), text), note);
     return { frame, note };
   };
   const sunInset = inset('sun', T.teleSun);
   const earthInset = inset('earth', T.teleEarth);
   const insets = h('div', { class: 'three-insets' }, sunInset.frame, earthInset.frame);
-  const el = h('div', { class: 'three' }, canvas, tape, sunLabel, earthLabel, insets, caption, controls, loading, h('div', { class: 'three-hint' }, T.hint));
+  const el = h('div', { class: 'three' }, canvas, tape, sunLabel, earthLabel, insets, caption, controls, title, fade, loading, h('div', { class: 'three-hint' }, T.hint));
 
   let scene: LunarScene | null = null;
   let failed = false;
@@ -57,13 +69,22 @@ export function createHero3D(): Hero3D {
   let pendingKey = '';
   let moment: Moment | null = null;
   let sky: SceneSky | null = null;
-  let queued = 0;
+  let when = '';
   let framed = '';
-  const api: Hero3D = { el, ok: () => !failed, setSite, setMoment, frame, redraw: request, onFail: null };
+  let vehicleAz = 0;
+  let visible = true;
+  let running = 0;
+  let last = 0;
+  let idleSince = 0;
+  let arriving = 0;
+  const target: Look = { az: 0, pitch: 4, fov: 46 };
+  const api: Hero3D = { el, ok: () => !failed, setSite, setMoment, redraw: wake, onFail: null };
 
   function fail(err: unknown): void {
     console.warn('3D view unavailable:', err);
     failed = true;
+    cancelAnimationFrame(running);
+    running = 0;
     api.onFail?.();
   }
 
@@ -72,7 +93,7 @@ export function createHero3D(): Hero3D {
       starting = import('../viz/scene3d')
         .then(({ LunarScene }) => {
           scene = new LunarScene(canvas);
-          scene.onChange = request;
+          scene.onChange = wake;
           resize();
         })
         .catch(fail);
@@ -91,13 +112,15 @@ export function createHero3D(): Hero3D {
     const key = `${site.site.id}/${mast}`;
     if (key === terrainKey || key === pendingKey) return;
     pendingKey = key;
-    const target = site;
+    const target0 = site;
     const targetMast = mast;
+    const newSite = framed !== target0.site.id;
+    if (newSite && terrainKey) fade.classList.add('on'); // dip to black between sites
     let tiles: Int16Array | null = null;
     try {
-      if (target.data) {
-        loading.hidden = false;
-        const res = await fetch(`${import.meta.env.BASE_URL}data/terrain/${target.site.id}.bin`);
+      if (target0.data) {
+        if (!terrainKey) loading.hidden = false;
+        const res = await fetch(`${import.meta.env.BASE_URL}data/terrain/${target0.site.id}.bin`);
         if (!res.ok) throw new Error(`terrain: HTTP ${res.status}`);
         tiles = new Int16Array(await res.arrayBuffer());
       }
@@ -105,8 +128,9 @@ export function createHero3D(): Hero3D {
       console.warn(err);
     }
     if (pendingKey !== key || !scene) return;
+    const fine = target0.site.horizon === 'lola-5m-80m-240m';
     try {
-      scene.setTerrain(tiles, target.data ? target.data.elevDeg[targetMast] : null, target.data ? target.data.distKm[targetMast] : null, target.data ? target.data.stepDeg : 1, MAST_HEIGHTS_M[targetMast]);
+      scene.setTerrain(tiles, fine, target0.data ? target0.data.elevDeg[targetMast] : null, target0.data ? target0.data.distKm[targetMast] : null, target0.data ? target0.data.stepDeg : 1, MAST_HEIGHTS_M[targetMast]);
     } catch (err) {
       fail(err);
       return;
@@ -114,73 +138,103 @@ export function createHero3D(): Hero3D {
     terrainKey = key;
     pendingKey = '';
     loading.hidden = true;
-    setText(caption, target.data ? T.caption(String(Math.max(1.6, MAST_HEIGHTS_M[targetMast]))) : T.captionSphere);
+    const eye = String(Math.max(1.6, MAST_HEIGHTS_M[targetMast]));
+    setText(caption, !target0.data ? T.captionSphere : fine ? T.captionFine(eye) : T.caption(eye));
     if (sky) scene.setSky(sky);
-    if (framed !== target.site.id) {
-      framed = target.site.id;
+    if (newSite) {
+      framed = target0.site.id;
       frame();
+      vehicleAz = (target.az - 15 + 360) % 360;
+      arrive(target0);
     }
-    request();
+    // Rocks, vehicle and mast: the same arrangement every time for a given site.
+    let seed = 7;
+    for (const ch of target0.site.id) seed = (seed * 31 + ch.charCodeAt(0)) >>> 0;
+    void scene.setProps(key, seed, vehicleAz, target0.site.category === 'apollo', MAST_HEIGHTS_M[targetMast]);
+    wake();
   }
 
-  function setMoment(m: Moment, axes: { north: [number, number, number]; greenwich: [number, number, number] }): void {
+  /** Arrival shot: from the ground at one's feet up to the sky, with the name of the place. */
+  function arrive(s: LoadedSite): void {
+    if (!scene) return;
+    setText(titleName, s.site.name);
+    setText(titleSub, `${latLon(s.site.lat, s.site.lon)}${when ? ` · ${when}` : ''}`);
+    fade.classList.remove('on');
+    if (reducedMotion()) {
+      Object.assign(scene.look, target);
+      return;
+    }
+    scene.look.az = (target.az - 22 + 360) % 360;
+    scene.look.pitch = -24;
+    scene.look.fov = Math.min(62, target.fov + 14);
+    arriving = performance.now();
+    title.classList.remove('show');
+    void title.offsetWidth; // restart the animation
+    title.classList.add('show');
+  }
+
+  function setMoment(m: Moment, axes: { north: [number, number, number]; greenwich: [number, number, number] }, text: string): void {
     moment = m;
+    when = text;
     sky = {
       sunAz: m.sun.az,
       sunEl: m.sun.el,
       sunRadius: m.sun.radius,
       sunFrac: m.sunFrac,
       eclipse: m.eclipse,
+      linked: m.earthClear > 0,
       earthAz: m.earth.az,
       earthEl: m.earth.el,
       earthRadius: m.earth.radius,
       earthNorth: axes.north,
       earthGreenwich: axes.greenwich,
     };
-    if (scene && terrainKey) {
-      scene.setSky(sky);
-      request();
-    }
+    if (scene && terrainKey) scene.setSky(sky);
+    wake();
   }
 
-  const hFov = () => {
-    if (!scene) return 80;
+  const hFov = (fov = target.fov) => {
     const aspect = canvas.clientWidth / Math.max(1, canvas.clientHeight);
-    return (2 * Math.atan(Math.tan((scene.look.fov * Math.PI) / 360) * aspect) * 180) / Math.PI;
+    return (2 * Math.atan(Math.tan((fov * Math.PI) / 360) * aspect) * 180) / Math.PI;
   };
 
+  /** Default framing: the Earth in frame over lit ground, leaning towards the Sun as far as the frame allows. */
   function frame(): void {
-    if (!scene || !moment) return;
+    if (!moment) return;
     const m = moment;
-    const dAz = ((m.earth.az - m.sun.az + 540) % 360) - 180;
+    const dAz = shortest(m.sun.az, m.earth.az);
     const sunUp = m.sun.el > -3;
     const earthUp = m.earth.el > -6;
-    scene.look.fov = 46;
+    target.fov = 46;
     const half = hFov() / 2;
     if (earthUp) {
-      // The Earth in frame, lit ground in front of it; lean towards the Sun as far as the frame allows.
       const lean = sunUp ? Math.max(-half * 0.62, Math.min(half * 0.62, -dAz)) : 0;
-      scene.look.az = (m.earth.az + lean * (Math.abs(dAz) < half * 1.5 ? 1 : 0.35) + 360) % 360;
-      scene.look.pitch = Math.max(1, Math.min(30, m.earth.el * 0.45 + 1.5));
+      target.az = (m.earth.az + lean * (Math.abs(dAz) < half * 1.5 ? 1 : 0.35) + 360) % 360;
+      target.pitch = Math.max(1, Math.min(30, m.earth.el * 0.45 + 1.5));
     } else {
-      scene.look.az = m.sun.az;
-      scene.look.pitch = Math.max(1.5, Math.min(40, m.sun.el + 3));
+      target.az = m.sun.az;
+      target.pitch = Math.max(1.5, Math.min(40, m.sun.el + 3));
     }
-    request();
+    touch();
   }
 
   function face(which: 'sun' | 'earth'): void {
-    if (!scene || !moment) return;
+    if (!moment) return;
     const v = which === 'sun' ? moment.sun : moment.earth;
-    scene.look.az = v.az;
-    scene.look.pitch = Math.max(-20, Math.min(70, v.el + (which === 'sun' ? 1.5 : 0)));
-    request();
+    target.az = v.az;
+    target.pitch = Math.max(-20, Math.min(70, v.el + (which === 'sun' ? 1.5 : 0)));
+    touch();
   }
 
   function zoom(factor: number): void {
-    if (!scene) return;
-    scene.look.fov = Math.max(8, Math.min(75, scene.look.fov * factor));
-    request();
+    target.fov = Math.max(8, Math.min(75, target.fov * factor));
+    touch();
+  }
+
+  function touch(): void {
+    idleSince = performance.now();
+    arriving = 0;
+    wake();
   }
 
   function resize(): void {
@@ -189,22 +243,53 @@ export function createHero3D(): Hero3D {
     const ht = el.clientHeight;
     if (w < 10 || ht < 10) return;
     scene.resize(w, ht);
-    request();
+    wake();
   }
 
-  function request(): void {
-    if (queued || !scene || !terrainKey) return;
-    queued = requestAnimationFrame(() => {
-      queued = 0;
-      if (!scene || !el.isConnected || el.clientWidth < 10) return;
-      try {
-        scene.render(teleWindows());
-      } catch (err) {
-        fail(err);
-        return;
-      }
-      overlay();
-    });
+  function wake(): void {
+    if (running || failed || !visible) return;
+    last = performance.now();
+    running = requestAnimationFrame(tick);
+  }
+
+  function tick(now: number): void {
+    running = 0;
+    if (!scene || !terrainKey || !el.isConnected || el.clientWidth < 10 || document.hidden) {
+      if (el.isConnected && visible && !document.hidden) running = requestAnimationFrame(tick);
+      return;
+    }
+    const dt = Math.min(0.1, (now - last) / 1000);
+    last = now;
+    scene.clock += dt;
+
+    // Ease the camera towards where it should look. The arrival shot is slow; a drag follows closely.
+    const still = reducedMotion();
+    const rate = arriving ? 1.15 : drag ? 18 : 5.5;
+    const k = still ? 1 : 1 - Math.exp(-dt * rate);
+    let goalAz = target.az;
+    let goalPitch = target.pitch;
+    if (!still && !drag && !arriving && now - idleSince > 3500) {
+      // Never completely still: a slow drift, as a hand-held camera breathes.
+      const t = (now - idleSince - 3500) / 1000;
+      const ease = Math.min(1, t / 4);
+      goalAz += ease * 0.55 * Math.sin(t * 0.21);
+      goalPitch += ease * 0.22 * Math.sin(t * 0.33 + 1.3);
+    }
+    scene.look.az = (scene.look.az + shortest(scene.look.az, goalAz) * k + 360) % 360;
+    scene.look.pitch += (goalPitch - scene.look.pitch) * k;
+    scene.look.fov += (target.fov - scene.look.fov) * k;
+    if (arriving && now - arriving > 5200) arriving = 0;
+    // The title card plays over a clean picture; the instruments come in afterwards.
+    el.classList.toggle('arriving', arriving > 0 && now - arriving < 3600);
+
+    try {
+      scene.render(teleWindows());
+    } catch (err) {
+      fail(err);
+      return;
+    }
+    overlay();
+    running = requestAnimationFrame(tick);
   }
 
   /** Where the telephoto windows are, and where each lens points. A body well below the skyline gets no window. */
@@ -213,12 +298,12 @@ export function createHero3D(): Hero3D {
     const box = canvas.getBoundingClientRect();
     const out: { x: number; y: number; size: number; az: number; el: number; fov: number }[] = [];
     const m = moment;
-    const one = (frame: HTMLElement, note: HTMLElement, az: number, elv: number, radius: number, clear: number, fov: number, widest: number, text: string) => {
+    const one = (frameEl: HTMLElement, note: HTMLElement, az: number, elv: number, radius: number, clear: number, fov: number, widest: number, text: string) => {
       const hiddenDeep = clear < -radius - 1.5;
-      frame.classList.toggle('off', hiddenDeep);
+      frameEl.classList.toggle('off', hiddenDeep);
       setText(note, hiddenDeep ? T.teleBelow : text);
       if (hiddenDeep) return;
-      const r = frame.getBoundingClientRect();
+      const r = frameEl.getBoundingClientRect();
       if (r.width < 20) return;
       // Widen the lens until the skyline under the body is in the window; beyond `widest`, show the body alone.
       const need = (Math.abs(clear) + radius * 2.2) * 2.1;
@@ -261,7 +346,7 @@ export function createHero3D(): Hero3D {
     const ctx = tape.getContext('2d')!;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, w, hgt);
-    const span = hFov();
+    const span = hFov(scene.look.fov);
     const names: Record<number, string> = { 0: 'N', 90: 'E', 180: 'S', 270: 'W' };
     const stepTick = span > 60 ? 10 : span > 25 ? 5 : 1;
     const from = Math.floor((scene.look.az - span / 2) / stepTick) * stepTick;
@@ -292,7 +377,7 @@ export function createHero3D(): Hero3D {
     ctx.lineTo(w / 2, 6);
     ctx.closePath();
     ctx.fill();
-    el.setAttribute('aria-description', T.looking(scene.look.az.toFixed(0), compass(scene.look.az)));
+    canvas.setAttribute('aria-description', T.looking(scene.look.az.toFixed(0), compass(scene.look.az)));
   }
 
   // ----- pointer, wheel and keyboard
@@ -309,6 +394,7 @@ export function createHero3D(): Hero3D {
       pinchDist = Math.hypot(a.x - b.x, a.y - b.y);
     }
     el.classList.add('dragging');
+    touch();
   });
   canvas.addEventListener('pointermove', (ev) => {
     if (!scene || !pinch.has(ev.pointerId)) return;
@@ -322,16 +408,17 @@ export function createHero3D(): Hero3D {
     }
     if (!drag || drag.id !== ev.pointerId) return;
     const perPx = scene.look.fov / Math.max(1, canvas.clientHeight);
-    scene.look.az = (scene.look.az - (ev.clientX - drag.x) * perPx + 360) % 360;
-    scene.look.pitch = Math.max(-35, Math.min(80, scene.look.pitch + (ev.clientY - drag.y) * perPx));
+    target.az = (target.az - (ev.clientX - drag.x) * perPx + 360) % 360;
+    target.pitch = Math.max(-35, Math.min(80, target.pitch + (ev.clientY - drag.y) * perPx));
     drag.x = ev.clientX;
     drag.y = ev.clientY;
-    request();
+    touch();
   });
   const release = (ev: PointerEvent) => {
     pinch.delete(ev.pointerId);
     if (drag && drag.id === ev.pointerId) drag = null;
     if (!pinch.size) el.classList.remove('dragging');
+    idleSince = performance.now();
   };
   canvas.addEventListener('pointerup', release);
   canvas.addEventListener('pointercancel', release);
@@ -344,33 +431,42 @@ export function createHero3D(): Hero3D {
     { passive: false },
   );
   canvas.addEventListener('keydown', (ev) => {
-    if (!scene) return;
-    const stepDeg = scene.look.fov / 12;
-    if (ev.key === 'ArrowLeft') scene.look.az = (scene.look.az - stepDeg + 360) % 360;
-    else if (ev.key === 'ArrowRight') scene.look.az = (scene.look.az + stepDeg) % 360;
-    else if (ev.key === 'ArrowUp') scene.look.pitch = Math.min(80, scene.look.pitch + stepDeg);
-    else if (ev.key === 'ArrowDown') scene.look.pitch = Math.max(-35, scene.look.pitch - stepDeg);
+    const stepDeg = target.fov / 10;
+    if (ev.key === 'ArrowLeft') target.az = (target.az - stepDeg + 360) % 360;
+    else if (ev.key === 'ArrowRight') target.az = (target.az + stepDeg) % 360;
+    else if (ev.key === 'ArrowUp') target.pitch = Math.min(80, target.pitch + stepDeg);
+    else if (ev.key === 'ArrowDown') target.pitch = Math.max(-35, target.pitch - stepDeg);
     else if (ev.key === '+' || ev.key === '=') return zoom(0.85);
     else if (ev.key === '-') return zoom(1.18);
     else if (ev.key.toLowerCase() === 's') return face('sun');
     else if (ev.key.toLowerCase() === 'e') return face('earth');
     else return;
     ev.preventDefault();
-    request();
+    touch();
   });
   canvas.addEventListener('webglcontextlost', (ev) => {
     ev.preventDefault();
     fail('context lost');
   });
   new ResizeObserver(resize).observe(el);
+  // Draw only while the view is on screen.
+  new IntersectionObserver((entries) => {
+    visible = entries.some((e) => e.isIntersecting);
+    if (visible) wake();
+  }).observe(el);
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) wake();
+  });
+
   if (import.meta.env.DEV) {
     // Lets the development screenshot tool aim the camera.
     (window as unknown as Record<string, unknown>).__lwLook = (az: number, pitch: number, fov: number) => {
       if (!scene) return;
-      scene.look.az = az;
-      scene.look.pitch = pitch;
-      scene.look.fov = fov;
-      request();
+      Object.assign(target, { az, pitch, fov });
+      Object.assign(scene.look, target);
+      idleSince = performance.now() + 1e9;
+      arriving = 0;
+      wake();
     };
   }
 
