@@ -1,0 +1,101 @@
+[
+  {
+    "id": "cr1", "name": "Connecting Ridge", "category": "south-pole",
+    "mission": "High-illumination ridge between Shackleton and de Gerlache", "status": "candidate",
+    "lat": -89.45, "lon": -137.31, "snap": true, "horizon": "lola",
+    "source": "https://ntrs.nasa.gov/api/citations/20170007365/downloads/20170007365.pdf",
+    "note": "Published point: Mazarico et al. 2011, site 01, as quoted by Gläser et al. 2017."
+  },
+  {
+    "id": "shackleton-rim", "name": "Shackleton rim", "category": "south-pole",
+    "mission": "High-illumination point on the rim of Shackleton crater", "status": "candidate",
+    "lat": -89.78, "lon": -155.73, "snap": true, "horizon": "lola",
+    "source": "https://ntrs.nasa.gov/api/citations/20170007365/downloads/20170007365.pdf",
+    "note": "Published point: Mazarico et al. 2011, site 04, as quoted by Gläser et al. 2017."
+  },
+  {
+    "id": "de-gerlache-rim2", "name": "de Gerlache Rim 2", "category": "south-pole",
+    "mission": "Artemis candidate region", "status": "candidate",
+    "lat": -88.45, "lon": -67.8591, "horizon": "lola",
+    "source": "https://zenodo.org/records/17084058",
+    "note": "Individual site dGR2_K2023 from Wueller et al. 2026; NASA published the regions without coordinates."
+  },
+  {
+    "id": "haworth", "name": "Haworth", "category": "south-pole",
+    "mission": "Artemis candidate region", "status": "candidate",
+    "lat": -87.0499, "lon": -24.2402, "horizon": "lola",
+    "source": "https://zenodo.org/records/17084058",
+    "note": "Individual site HW06 from Wueller et al. 2026; NASA published the regions without coordinates."
+  },
+  {
+    "id": "malapert", "name": "Malapert Massif", "category": "south-pole",
+    "mission": "Artemis candidate region", "status": "candidate",
+    "lat": -85.9919, "lon": 2.0564, "horizon": "lola",
+    "source": "https://zenodo.org/records/17084058",
+    "note": "Individual site MMA_K2023 from Wueller et al. 2026; NASA published the regions without coordinates."
+  },
+  {
+    "id": "mons-mouton", "name": "Mons Mouton (VIPER area)", "category": "south-pole",
+    "mission": "NASA VIPER mission area", "status": "planned",
+    "lat": -85.42088, "lon": 31.6218, "horizon": "lola",
+    "source": "https://iopscience.iop.org/article/10.3847/PSJ/ae061a",
+    "note": "Site published for the original VIPER plan."
+  },
+  {
+    "id": "nobile-rim1", "name": "Nobile Rim 1", "category": "south-pole",
+    "mission": "Artemis candidate region", "status": "candidate",
+    "lat": -85.295, "lon": 36.9168, "horizon": "lola",
+    "source": "https://zenodo.org/records/17084058",
+    "note": "Individual site NR101 from Wueller et al. 2026; NASA published the regions without coordinates."
+  },
+  {
+    "id": "im2-athena", "name": "IM-2 Athena (Mons Mouton)", "category": "south-pole",
+    "mission": "Intuitive Machines IM-2, NASA CLPS", "status": "failed", "date": "2025-03-06",
+    "lat": -84.7906, "lon": 29.1957, "horizon": "lola",
+    "source": "https://lroc.im-ldi.com/images/1409",
+    "note": "Landed on its side inside a small crater; the mission ended after about half a day."
+  },
+  {
+    "id": "im1-odysseus", "name": "IM-1 Odysseus (Malapert A)", "category": "south-pole",
+    "mission": "Intuitive Machines IM-1, NASA CLPS", "status": "landed", "date": "2024-02-22",
+    "lat": -80.1276, "lon": 1.4367, "horizon": "lola",
+    "source": "https://lroc.im-ldi.com/images/1360",
+    "note": "Landed tipped over. Most of the terrain around this site is only covered by the 240 m model."
+  },
+  {
+    "id": "apollo-11", "name": "Apollo 11 (Mare Tranquillitatis)", "category": "apollo",
+    "mission": "Apollo 11", "status": "landed", "date": "1969-07-20",
+    "lat": 0.67416, "lon": 23.47314, "elevationM": -1926, "horizon": "sphere",
+    "source": "https://data.lroc.im-ldi.com/lroc/view_rdr/SHAPEFILE_ANTHROPOGENIC_OBJECTS"
+  },
+  {
+    "id": "apollo-17", "name": "Apollo 17 (Taurus-Littrow)", "category": "apollo",
+    "mission": "Apollo 17", "status": "landed", "date": "1972-12-11",
+    "lat": 20.1911, "lon": 30.7723, "elevationM": -2626, "horizon": "sphere",
+    "source": "https://data.lroc.im-ldi.com/lroc/view_rdr/SHAPEFILE_ANTHROPOGENIC_OBJECTS"
+  },
+  {
+    "id": "blue-ghost-1", "name": "Blue Ghost Mission 1 (Mare Crisium)", "category": "clps",
+    "mission": "Firefly Blue Ghost Mission 1, NASA CLPS", "status": "landed", "date": "2025-03-02",
+    "lat": 18.5622, "lon": 61.8102, "elevationM": -3650, "horizon": "sphere",
+    "source": "https://lroc.im-ldi.com/images/1407"
+  },
+  {
+    "id": "chandrayaan-3", "name": "Chandrayaan-3 Vikram (Statio Shiv Shakti)", "category": "international",
+    "mission": "ISRO Chandrayaan-3", "status": "landed", "date": "2023-08-23",
+    "lat": -69.374, "lon": 32.3187, "elevationM": 532, "horizon": "sphere",
+    "source": "https://lroc.im-ldi.com/images/1314"
+  },
+  {
+    "id": "slim", "name": "SLIM (near Shioli crater)", "category": "international",
+    "mission": "JAXA SLIM", "status": "landed", "date": "2024-01-19",
+    "lat": -13.316, "lon": 25.251, "elevationM": -913, "horizon": "sphere",
+    "source": "https://lroc.im-ldi.com/images/1358"
+  },
+  {
+    "id": "change-6", "name": "Chang'e 6 (Apollo basin, far side)", "category": "international",
+    "mission": "CNSA Chang'e 6", "status": "landed", "date": "2024-06-01",
+    "lat": -41.6383, "lon": -153.9857, "elevationM": -5252, "horizon": "sphere",
+    "source": "https://lroc.im-ldi.com/images/1374"
+  }
+]
