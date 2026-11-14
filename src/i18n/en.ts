@@ -173,6 +173,8 @@ export const en = {
     slipValue: (n: number) => (n === 1 ? '1 day late' : `${n} days late`),
     landing: (date: string) => `Landing on ${date}`,
     reset: 'On time',
+    csv: 'Download CSV',
+    csvTip: 'The whole calendar as a table: one line per site and landing day.',
     copy: 'Copy link to this plan',
     copied: 'Link copied',
     computing: 'Computing a year of Sun and Earth for every site…',

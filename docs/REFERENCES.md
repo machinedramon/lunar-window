@@ -11,6 +11,7 @@ Every external resource used by the project: data, 3D assets, code and reading.
 | LOLA average illumination maps `AVGVISIB_85S_060M_201608` (Sun) and `AVGVISIB_85S_060M_201608_EARTH` (Earth) | Validation of the terrain horizon; choice of the site point at two published high-illumination locations | LOLA team, NASA GSFC — https://imbrium.mit.edu/EXTRAS/ILLUMINATION/ |
 | JPL Horizons System | Reference positions of the Sun and the Earth seen from the lunar surface (validation tables in `tests/golden`) | NASA JPL Solar System Dynamics — https://ssd.jpl.nasa.gov/horizons/ |
 | LROC "Anthropogenic Features on the Moon" | Coordinates of real landing sites | LROC, Arizona State University — https://data.lroc.im-ldi.com/lroc/view_rdr/SHAPEFILE_ANTHROPOGENIC_OBJECTS |
+| Yale Bright Star Catalogue, 5th revised edition (Hoffleit and Warren 1991), stars to magnitude 5.6 | Stars of the 3D view, at their true positions | Yale University Observatory / NASA ADC catalogue V/50; JSON edition by Bretton Wade (MIT) — https://github.com/brettonw/YaleBrightStarCatalog |
 | Blue Marble: Land Surface, Shallow Water, and Shaded Topography (2048 x 1024) | Texture of the Earth in the 3D view | NASA Goddard Space Flight Center, image by Reto Stöckli — https://visibleearth.nasa.gov/images/57730 (file obtained from the Wikimedia Commons copy, `Land_ocean_ice_2048.jpg`) |
 
 ## 3D models and textures

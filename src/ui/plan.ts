@@ -159,12 +159,34 @@ export function createPlan(app: App, planner: Planner): View {
     h('span', null, h('i', { class: 'sw off' }), `${S.statusMark.fail} ${T.legendFail}`),
     h('span', { class: 'muted' }, T.legendRobust),
   );
+  const csvBtn = h('button', { class: 'btn', type: 'button', title: T.csvTip }, T.csv);
+  csvBtn.addEventListener('click', () => {
+    if (!result) return;
+    // One line per site and landing day: what the calendar shows, as a table for a spreadsheet.
+    const lines = ['site,site_id,landing_day_utc,verdict,best_landing_time_utc,first_failed_requirement,viable_nearby_points,nearby_points_tested'];
+    for (const site of sites) {
+      const cal = calOf(site.id);
+      if (!cal) continue;
+      for (let d = 0; d < DAYS; d++) {
+        const status = STATUS_CODES[cal.status[d]];
+        const failed = cal.failed[d] ? REQUIREMENT_ORDER[cal.failed[d] - 1] : '';
+        const time = `${String((LANDING_STEPS[cal.bestTime[d]] * STEP_MS) / HOUR_MS).padStart(2, '0')}:00`;
+        lines.push([`"${site.name.replace(/"/g, '""')}"`, site.id, isoDate(startMs() + d * DAY_MS), status === 'ok' ? 'viable' : status === 'marginal' ? 'marginal' : 'not viable', time, failed, cal.robust[d], cal.points].join(','));
+      }
+    }
+    const url = URL.createObjectURL(new Blob([lines.join('\n') + '\n'], { type: 'text/csv' }));
+    const a = h('a', { href: url, download: `lunar-window-${isoDate(store.state.plannedMs)}.csv` });
+    document.body.append(a);
+    a.click();
+    a.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 2000);
+  });
   const calPanel = h(
     'section',
     { class: 'panel cal', 'aria-label': T.calendarTitle },
     h('div', { class: 'cap' }, T.calendarTitle, h('span', { class: 'muted small' }, T.calendarHelp)),
     h('div', { class: 'cal-wrap' }, calCanvas, tip),
-    h('div', { class: 'cal-foot' }, legend, stamp),
+    h('div', { class: 'cal-foot' }, legend, h('div', { class: 'row' }, stamp, csvBtn)),
   );
   const rows = (): CalendarRow[] =>
     sites.map((s, i) => ({
