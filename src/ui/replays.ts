@@ -34,7 +34,7 @@ export const REPLAYS: Replay[] = [
     year: '2023',
     when: '23 August 2023, 12:33 UTC',
     happened: 'Vikram landed at 12:33 UTC. The lander was put to sleep on 4 September, shortly before sunset, and did not wake after the lunar night.',
-    look: 'Check the time to sunset below against the day the lander was put to sleep.',
+    look: 'The tool puts sunset at this site on 4 September 2023, the day the lander was put to sleep.',
     source: { label: 'Wikipedia, citing ISRO', url: 'https://en.wikipedia.org/wiki/Chandrayaan-3' },
   },
   {
@@ -45,7 +45,7 @@ export const REPLAYS: Replay[] = [
     year: '2024',
     when: '19 January 2024, 15:20 UTC',
     happened: 'SLIM landed at 15:20 UTC, nose down.',
-    look: 'The Sun had risen a few days earlier and was climbing in the east.',
+    look: 'The Sun is up and was still climbing in the east: it had risen about three days earlier and would set on 31 January.',
     source: { label: 'JAXA', url: 'https://www.isas.jaxa.jp/en/topics/files/SLIM-press-briefing-20241226.pdf' },
   },
   {
@@ -56,7 +56,7 @@ export const REPLAYS: Replay[] = [
     year: '2024',
     when: '22 February 2024, 23:23 UTC',
     happened: 'Odysseus touched down at 23:23 UTC and tipped over. Contact ended on 29 February with the onset of lunar night.',
-    look: 'Real terrain here. Check the time to sunset below against 29 February.',
+    look: 'Real terrain here. The tool puts sunset at this point on 2 March, for a panel 2 m above level ground; contact ended two days earlier. The lander lay tipped over on sloping ground, which an 80 m terrain model and an upright mast do not represent.',
     source: { label: 'Intuitive Machines', url: 'https://www.intuitivemachines.com/post/im-1-lunar-night-update-farewell-odysseus' },
   },
   {
@@ -89,7 +89,7 @@ export const REPLAYS: Replay[] = [
     year: '2025',
     when: '6 March 2025, about 17:30 UTC',
     happened: 'Athena landed about 250 m from its target, inside a crater and on its side. Its batteries ran out about 12 hours later.',
-    look: 'Real terrain here. Our horizon is for the published landing point at 2 m; a lander on its side at the bottom of a 20 m crater sees far less sky than that.',
+    look: 'Real terrain here. At the published landing point, 2 m up, the tool finds full Sun and the Earth 12° above the skyline. A lander on its side at the bottom of a small crater sees far less sky than that: the limit of any model at 80 m.',
     source: { label: 'SpacePolicyOnline', url: 'https://spacepolicyonline.com/news/im-2-mission-ends-one-day-after-lunar-landing/' },
   },
 ];
