@@ -12,3 +12,4 @@ data/raw/
 # hackathon must be in English, so they stay out of the public repository.
 docs/SPEC*.md
 docs/pesquisa/
+shots/
