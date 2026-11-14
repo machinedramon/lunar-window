@@ -437,7 +437,7 @@ export function createPlan(app: App, planner: Planner): View {
         const next = cal.status[d1] > 0 ? d1 : nextViableDay(cal, d1);
         const total = Array.from(cal.status).filter((x) => x > 0).length;
         tr.append(
-          h('td', null, whyOf(cal, d1)),
+          h('td', { class: 'why' }, whyOf(cal, d1)),
           h('td', null, cal.points > 1 ? T.table.of9(cal.robust[d1], cal.points) : '—'),
           h('td', null, next === d1 ? T.table.now : next < 0 ? T.table.none : `${fmtDay(startMs() + next * DAY_MS)} (+${next - d1} d)`),
           h('td', { class: 'num' }, T.daysShort(total)),

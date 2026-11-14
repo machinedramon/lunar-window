@@ -1134,14 +1134,29 @@ table.sites td {
   white-space: nowrap;
 }
 table.sites thead th {
-  font: 600 11px/1 var(--font);
+  font: 600 11px/1.3 var(--font);
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--muted);
   padding-top: 14px;
+  /* Long headings break onto two lines so that the whole table fits its panel. */
+  white-space: normal;
+  vertical-align: bottom;
 }
 table.sites tbody th {
   font-weight: 600;
+  white-space: normal;
+  min-width: 190px;
+}
+table.sites tbody th .tag {
+  display: block;
+  width: fit-content;
+  margin: 4px 0 0;
+  white-space: nowrap;
+}
+table.sites td.why {
+  white-space: normal;
+  min-width: 130px;
 }
 table.sites tbody tr {
   cursor: pointer;
