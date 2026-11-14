@@ -9,6 +9,11 @@ Sources (download them into data/raw/assets first; see docs/REFERENCES.md):
 
 Output: public/models and public/textures/regolith. Textures are reduced so that the whole set
 stays small; the geometry is untouched. Needs Pillow.
+
+    python -X utf8 tools/build_assets.py rocks-far
+
+makes only the simplified copies of the rocks (rock<k>_far.gltf/.bin: geometry alone, about a tenth of
+the triangles) that the scene uses for rocks too far away to show their detail. Needs Node (npx).
 """
 from __future__ import annotations
 
@@ -16,7 +21,9 @@ import json
 import os
 import shutil
 import struct
+import subprocess
 import sys
+import tempfile
 
 from PIL import Image
 
@@ -52,7 +59,34 @@ def glb_summary(path: str) -> str:
             f"{len(doc.get('images', []))} images, skins {len(doc.get('skins', []))}, bounds {[round(v, 2) for v in lo]} .. {[round(v, 2) for v in hi]}")
 
 
+def rocks_far() -> None:
+    """Simplified geometry of each rock, for the instances far from the camera. No material: the scene
+    gives them the material of the full model."""
+    for k in (1, 2, 3):
+        with tempfile.TemporaryDirectory() as tmp:
+            out = os.path.join(tmp, f'rock{k}_far.gltf')
+            subprocess.run(f'npx --yes @gltf-transform/cli simplify "{os.path.join(MODELS, f"rock{k}.gltf")}" "{out}" --ratio 0.07 --error 0.02', shell=True, check=True, capture_output=True)
+            doc = json.load(open(out, encoding='utf-8'))
+            for key in ('materials', 'textures', 'images', 'samplers'):
+                doc.pop(key, None)
+            # Only the first mesh is used (one of the scans carries its own lower levels of detail as further meshes).
+            for mesh in doc['meshes']:
+                for prim in mesh['primitives']:
+                    prim.pop('material', None)
+            doc['scenes'][0]['nodes'] = [0]
+            src_bin = os.path.join(tmp, doc['buffers'][0]['uri'])
+            doc['buffers'][0]['uri'] = f'rock{k}_far.bin'
+            shutil.copyfile(src_bin, os.path.join(MODELS, f'rock{k}_far.bin'))
+            json.dump(doc, open(os.path.join(MODELS, f'rock{k}_far.gltf'), 'w', encoding='utf-8'), separators=(',', ':'))
+            full = json.load(open(os.path.join(MODELS, f'rock{k}.gltf'), encoding='utf-8'))
+            count = lambda d: d['accessors'][d['meshes'][0]['primitives'][0]['indices']]['count'] // 3
+            print(f'rock{k}_far: {count(doc)} triangles (full model: {count(full)}), {os.path.getsize(os.path.join(MODELS, f"rock{k}_far.bin")) / 1000:.0f} kB')
+
+
 def main() -> None:
+    if sys.argv[1:] == ['rocks-far']:
+        rocks_far()
+        return
     sys.stdout.reconfigure(encoding='utf-8')
     os.makedirs(MODELS, exist_ok=True)
     os.makedirs(TEX, exist_ok=True)

@@ -15,6 +15,8 @@ export interface Mast {
    * @param timeS     seconds, for the travelling pulses of the link and the beacon
    */
   update(sunYaw: number, earthDir: THREE.Vector3, powered: number, linked: boolean, timeS: number): void;
+  /** The small animations (radio link, beacon), every frame. */
+  animate(timeS: number): void;
   dispose(): void;
 }
 
@@ -98,7 +100,7 @@ void main() {
   // Short pulses running up the beam towards the Earth, fading with distance.
   float pulse = smoothstep(0.55, 1.0, fract(vAlong * 0.09 - uTime * 0.9));
   float fade = exp(-vAlong * 0.012);
-  gl_FragColor = vec4(vec3(0.49, 0.72, 1.0) * (0.25 + 2.6 * pulse) * fade * uOn, 1.0);
+  gl_FragColor = vec4(vec3(0.49, 0.72, 1.0) * (0.22 + 1.1 * pulse) * fade * uOn, 1.0);
   #include <tonemapping_fragment>
   #include <colorspace_fragment>
 }`;
@@ -204,18 +206,25 @@ export function createMast(mastM: number): Mast {
   const up = new THREE.Vector3(0, 1, 0);
   const forward = new THREE.Vector3(0, 0, 1);
   let linkLevel = 0;
+  let hasPower = false;
+  let hasLink = false;
   return {
     group,
     update(sunYaw, earthDir, powered, linked, timeS) {
       head.rotation.y = sunYaw - group.rotation.y;
       const local = earthDir.clone().applyAxisAngle(up, -group.rotation.y).normalize();
       dish.quaternion.setFromUnitVectors(forward, local);
-      linkLevel += ((linked ? 1 : 0) - linkLevel) * 0.2;
+      hasPower = powered > 0.5;
+      hasLink = linked;
+      this.animate(timeS);
+    },
+    animate(timeS) {
+      linkLevel += ((hasLink ? 1 : 0) - linkLevel) * 0.12;
       linkMat.uniforms.uOn.value = linkLevel;
       linkMat.uniforms.uTime.value = timeS;
       link.visible = linkLevel > 0.01;
       // A beacon that blinks once every two seconds while the array has power.
-      const blink = powered > 0.5 && timeS % 2 < 0.12 ? 1 : 0;
+      const blink = hasPower && timeS % 2 < 0.12 ? 1 : 0;
       beacon.color.setScalar(blink * 6);
     },
     dispose() {

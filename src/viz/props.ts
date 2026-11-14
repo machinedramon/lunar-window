@@ -14,8 +14,34 @@ loader.setMeshoptDecoder(MeshoptDecoder);
 
 interface RockModel {
   geometry: THREE.BufferGeometry;
+  /** The same rock with about a fifteenth of the triangles, for instances too far away to show the difference. */
+  far: BufferGeometryOrNull;
   material: THREE.MeshStandardMaterial;
   size: number;
+}
+type BufferGeometryOrNull = THREE.BufferGeometry | null;
+
+/** A rock is drawn in full detail when its size is more than this share of its distance (about 1.7 degrees). */
+const FULL_DETAIL = 0.03;
+
+function firstMesh(root: THREE.Object3D): THREE.Mesh | null {
+  let mesh: THREE.Mesh | null = null;
+  root.traverse((o) => {
+    if (!mesh && (o as THREE.Mesh).isMesh) mesh = o as THREE.Mesh;
+  });
+  return mesh;
+}
+
+/** The simplified geometry of a rock; null if it cannot be loaded (the full one is then used everywhere). */
+function loadFar(k: number): Promise<BufferGeometryOrNull> {
+  return new Promise((resolve) => {
+    loader.load(
+      `${base}models/rock${k}_far.gltf`,
+      (gltf) => resolve(firstMesh(gltf.scene)?.geometry.clone() ?? null),
+      undefined,
+      () => resolve(null),
+    );
+  });
 }
 
 let rocksReady: Promise<RockModel[]> | null = null;
@@ -26,26 +52,28 @@ function loadRocks(): Promise<RockModel[]> {
       [1, 2, 3].map(
         (k) =>
           new Promise<RockModel>((resolve, reject) => {
+            const farReady = loadFar(k);
             loader.load(
               `${base}models/rock${k}.gltf`,
               (gltf) => {
-                let mesh: THREE.Mesh | null = null;
-                gltf.scene.traverse((o) => {
-                  if (!mesh && (o as THREE.Mesh).isMesh) mesh = o as THREE.Mesh;
-                });
-                if (!mesh) return reject(new Error('rock without mesh'));
-                const m = mesh as THREE.Mesh;
+                const m = firstMesh(gltf.scene);
+                if (!m) return reject(new Error('rock without mesh'));
                 const geometry = m.geometry.clone();
                 geometry.computeBoundingBox();
                 const box = geometry.boundingBox!;
                 // Centre on the vertical axis, base at y = 0.
-                geometry.translate(-(box.min.x + box.max.x) / 2, -box.min.y, -(box.min.z + box.max.z) / 2);
+                const shift: [number, number, number] = [-(box.min.x + box.max.x) / 2, -box.min.y, -(box.min.z + box.max.z) / 2];
+                geometry.translate(...shift);
                 const material = (m.material as THREE.MeshStandardMaterial).clone();
                 // Lunar rock is dark: the scans are lit for display, bring them down to a lunar albedo.
                 material.color.setScalar(0.36);
                 material.roughness = 0.96;
                 material.metalness = 0;
-                resolve({ geometry, material, size: Math.max(box.max.x - box.min.x, box.max.z - box.min.z) });
+                const size = Math.max(box.max.x - box.min.x, box.max.z - box.min.z);
+                void farReady.then((far) => {
+                  far?.translate(...shift);
+                  resolve({ geometry, far, material, size });
+                });
               },
               undefined,
               reject,
@@ -136,7 +164,9 @@ export async function createProps(ground: (east: number, north: number) => numbe
     const perModel = 44;
     const dummy = new THREE.Object3D();
     for (const model of rocks) {
-      const mesh = new THREE.InstancedMesh(model.geometry, model.material, perModel);
+      // The camera never leaves its spot, so which rocks are near enough to need every triangle is known once.
+      const near: THREE.Matrix4[] = [];
+      const distant: THREE.Matrix4[] = [];
       for (let i = 0; i < perModel; i++) {
         let e = 0;
         let n = 0;
@@ -155,11 +185,16 @@ export async function createProps(ground: (east: number, north: number) => numbe
         dummy.rotation.set((rnd() - 0.5) * 0.5, rnd() * Math.PI * 2, (rnd() - 0.5) * 0.5);
         dummy.scale.set(k * (0.8 + 0.5 * rnd()), k * (0.7 + 0.5 * rnd()), k * (0.8 + 0.5 * rnd()));
         dummy.updateMatrix();
-        mesh.setMatrixAt(i, dummy.matrix);
+        (model.far && size / Math.hypot(e, n) < FULL_DETAIL ? distant : near).push(dummy.matrix.clone());
       }
-      mesh.instanceMatrix.needsUpdate = true;
-      meshes.push(mesh);
-      group.add(mesh);
+      for (const [geometry, list] of [[model.geometry, near], [model.far, distant]] as const) {
+        if (!geometry || !list.length) continue;
+        const mesh = new THREE.InstancedMesh(geometry, model.material, list.length);
+        list.forEach((matrix, i) => mesh.setMatrixAt(i, matrix));
+        mesh.instanceMatrix.needsUpdate = true;
+        meshes.push(mesh);
+        group.add(mesh);
+      }
     }
   } catch (err) {
     console.warn('rock models unavailable:', err);

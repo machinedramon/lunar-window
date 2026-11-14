@@ -554,6 +554,21 @@ export class LunarScene {
   private readonly scene = new THREE.Scene();
   private readonly camera = new THREE.PerspectiveCamera(45, 2, 0.4, FAR_M);
   private readonly tele = new THREE.PerspectiveCamera(5, 1, 0.4, FAR_M);
+  /**
+   * The telephoto windows show the scene from where the camera stands, so they only change when the sky,
+   * the terrain or the vehicles do, not when the camera turns. Each is kept as a small picture of its own
+   * and redrawn when its content changes, instead of drawing the whole scene three times per frame.
+   */
+  private readonly teleShots = [0, 1].map(() => {
+    const target = new THREE.WebGLRenderTarget(4, 4, { type: THREE.HalfFloatType, samples: 4 });
+    const scene = new THREE.Scene();
+    scene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), new THREE.MeshBasicMaterial({ map: target.texture, depthTest: false, depthWrite: false, fog: false })));
+    return { target, scene, key: '', at: -1e9 };
+  });
+  private readonly flat = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+  /** Counts every change of what the scene shows (sky, terrain, vehicles), whatever the camera does. */
+  private version = 0;
+  private shadowMapAt = 0;
   private readonly composer: EffectComposer;
   private readonly bloom: UnrealBloomPass;
   private readonly finish: ShaderPass;
@@ -775,6 +790,8 @@ void main() {
     this.propCam.layers.set(PROP_LAYER);
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFShadowMap;
+    // The shadows of the vehicles change with the Sun, not with the camera: drawn when needed, not every frame.
+    this.renderer.shadowMap.autoUpdate = false;
     this.sunLight.castShadow = true;
     this.sunLight.shadow.mapSize.set(2048, 1024);
     const sc = this.sunLight.shadow.camera;
@@ -874,6 +891,8 @@ void main() {
     r.setClearColor(clear, alpha);
     this.propUniforms.uPropOn.value = this.props ? 1 : 0;
     this.propsDirty = false;
+    r.shadowMap.needsUpdate = true;
+    this.version++;
   }
 
   /** Called when something loaded asynchronously and the picture should be redrawn. */
@@ -943,6 +962,7 @@ void main() {
 
   setSky(s: SceneSky): void {
     this.lastSky = s;
+    this.version++;
     direction(s.sunAz, s.sunEl, this.sunDir);
     const power = 1 - s.eclipse;
     // Lander and rocks: the Sun as far as it clears the terrain, light bounced off the sunlit ground, earthshine.
@@ -1026,6 +1046,7 @@ void main() {
     }
     this.renderer.setRenderTarget(null);
     this.shadowsDirty = false;
+    this.version++;
   }
 
   /**
@@ -1035,6 +1056,11 @@ void main() {
   render(insets: { x: number; y: number; size: number; az: number; el: number; fov: number }[] = []): void {
     if (this.shadowsDirty) this.renderShadows();
     if (this.propsDirty) this.renderPropShadows();
+    const now = performance.now();
+    // A model or a texture may arrive late: the shadow map is also refreshed once a second.
+    if (now - this.shadowMapAt > 1000) this.renderer.shadowMap.needsUpdate = true;
+    if (this.renderer.shadowMap.needsUpdate) this.shadowMapAt = now;
+    this.props?.mast?.animate(this.clock);
     this.camera.fov = this.look.fov;
     this.camera.rotation.set(this.look.pitch * D2R, -this.look.az * D2R, 0);
     this.camera.updateProjectionMatrix();
@@ -1055,32 +1081,65 @@ void main() {
     const glareBase = glareMat.userData.base as number | undefined;
     if (glareBase !== undefined) glareMat.opacity = glareBase * (1 - long);
     this.composer.render();
-    if (!insets.length) return;
+    const count = Math.min(insets.length, this.teleShots.length);
+    if (!count) return;
     const r = this.renderer;
     const height = r.domElement.clientHeight;
-    const glareWas = this.glare.visible;
-    this.glare.visible = false;
-    this.sunMat.uniforms.uGain.value = 2.2;
+
+    // Which windows show something that changed since they were drawn. One is redrawn per frame, the one
+    // waiting longest first, so a flowing clock costs one extra view per frame rather than two; a window
+    // never drawn is drawn at once, and all are refreshed twice a second for the small animations.
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    let due = -1;
+    for (let i = 0; i < count; i++) {
+      const inset = insets[i];
+      const shot = this.teleShots[i];
+      const px = Math.max(8, Math.round(inset.size * dpr));
+      if (shot.target.width !== px) {
+        shot.target.setSize(px, px);
+        shot.key = '';
+      }
+      const key = `${this.version}|${inset.az.toFixed(4)}|${inset.el.toFixed(4)}|${inset.fov}`;
+      const changed = shot.key !== key || now - shot.at > 500;
+      if (!changed) continue;
+      if (!shot.key) this.drawTele(i, inset, key, now);
+      else if (due < 0 || shot.at < this.teleShots[due].at) due = i;
+    }
+    if (due >= 0) this.drawTele(due, insets[due], `${this.version}|${insets[due].az.toFixed(4)}|${insets[due].el.toFixed(4)}|${insets[due].fov}`, now);
+
+    // Put the pictures on the screen, through the same tone curve as the main view.
     const exposure = r.toneMappingExposure;
     r.toneMappingExposure = Math.min(exposure, 1.6);
     r.autoClear = false;
-    r.setScissorTest(true);
-    for (const inset of insets) {
-      const y = height - inset.y - inset.size;
-      r.setViewport(inset.x, y, inset.size, inset.size);
-      r.setScissor(inset.x, y, inset.size, inset.size);
-      r.clear(true, true, false);
-      this.tele.fov = inset.fov;
-      this.tele.position.copy(this.camera.position);
-      this.tele.lookAt(direction(inset.az, inset.el, new THREE.Vector3()).multiplyScalar(1000).add(this.camera.position));
-      this.tele.updateProjectionMatrix();
-      r.render(this.scene, this.tele);
+    for (let i = 0; i < count; i++) {
+      const inset = insets[i];
+      r.setViewport(inset.x, height - inset.y - inset.size, inset.size, inset.size);
+      r.render(this.teleShots[i].scene, this.flat);
     }
-    r.setScissorTest(false);
     r.setViewport(0, 0, r.domElement.clientWidth, height);
     r.autoClear = true;
     r.toneMappingExposure = exposure;
+  }
+
+  /** Draws one telephoto window into its own picture: the Sun as through a filter, without glare. */
+  private drawTele(i: number, inset: { az: number; el: number; fov: number }, key: string, now: number): void {
+    const r = this.renderer;
+    const shot = this.teleShots[i];
+    const glareWas = this.glare.visible;
+    const gainWas = this.sunMat.uniforms.uGain.value as number;
+    this.glare.visible = false;
+    this.sunMat.uniforms.uGain.value = 2.2;
+    this.tele.fov = inset.fov;
+    this.tele.position.copy(this.camera.position);
+    this.tele.lookAt(direction(inset.az, inset.el, new THREE.Vector3()).multiplyScalar(1000).add(this.camera.position));
+    this.tele.updateProjectionMatrix();
+    r.setRenderTarget(shot.target);
+    r.render(this.scene, this.tele);
+    r.setRenderTarget(null);
     this.glare.visible = glareWas;
+    this.sunMat.uniforms.uGain.value = gainWas;
+    shot.key = key;
+    shot.at = now;
   }
 
   /** Screen position (0 to 1, origin top left) of a direction, or null when it is behind the camera. */
@@ -1097,6 +1156,7 @@ void main() {
     for (const t of this.heightTex) t.dispose();
     for (const t of this.shadowTargets) t.dispose();
     this.propTarget.dispose();
+    for (const s of this.teleShots) s.target.dispose();
     this.props?.dispose();
   }
 }

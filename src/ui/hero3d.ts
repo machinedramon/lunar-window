@@ -74,10 +74,15 @@ export function createHero3D(): Hero3D {
   let vehicleAz = 0;
   let visible = true;
   let running = 0;
+  /** Value of `running` while a frame is being drawn (not a real animation-frame handle). */
+  const DRAWING = -1;
   let last = 0;
   let idleSince = 0;
   let arriving = 0;
   let slow = 0.016;
+  let loweredAt = -1e9;
+  let raisedAt = -1e9;
+  let holdMs = 6000;
   let frames = 0;
   const target: Look = { az: 0, pitch: 4, fov: 46 };
   const api: Hero3D = { el, ok: () => !failed, setSite, setMoment, redraw: wake, onFail: null };
@@ -264,9 +269,11 @@ export function createHero3D(): Hero3D {
   }
 
   function tick(now: number): void {
-    running = 0;
+    // While a frame is being drawn the loop counts as running: anything that asks for a redraw in the
+    // meantime (a change of resolution, a model arriving) must not start a second loop beside this one.
+    running = DRAWING;
     if (!scene || !terrainKey || !el.isConnected || el.clientWidth < 10 || document.hidden) {
-      if (el.isConnected && visible && !document.hidden) running = requestAnimationFrame(tick);
+      running = el.isConnected && visible && !document.hidden ? requestAnimationFrame(tick) : 0;
       return;
     }
     const dt = Math.min(0.1, (now - last) / 1000);
@@ -300,13 +307,18 @@ export function createHero3D(): Hero3D {
       return;
     }
     // Keep it fluid on slower graphics: lower the resolution a step at a time, and raise it again when there is room.
-    slow += (dt - slow) * 0.08;
+    // A single long frame (a model arriving, a shader compiling) is not a slow machine.
+    slow += (Math.min(dt, 0.066) - slow) * 0.08;
     if (++frames % 40 === 0) {
-      if (slow > 0.045 && scene.quality > 0.5) {
-        scene.quality = Math.max(0.5, scene.quality * 0.82);
+      if (slow > 0.03 && scene.quality > 0.6) {
+        // If raising the resolution is what made it slow again, wait longer before the next try.
+        if (now - raisedAt < 5000) holdMs = Math.min(120000, holdMs * 2);
+        scene.quality = Math.max(0.6, scene.quality * 0.82);
+        loweredAt = now;
         resize();
-      } else if (slow < 0.019 && scene.quality < 1) {
+      } else if (slow < 0.019 && scene.quality < 1 && now - loweredAt > holdMs) {
         scene.quality = Math.min(1, scene.quality / 0.9);
+        raisedAt = now;
         resize();
       }
     }
@@ -482,6 +494,7 @@ export function createHero3D(): Hero3D {
 
   if (import.meta.env.DEV) {
     // Lets the development screenshot tool aim the camera.
+    (window as unknown as Record<string, unknown>).__lwScene = () => scene;
     (window as unknown as Record<string, unknown>).__lwFace = (which: 'sun' | 'earth', fov: number, lift = 0) => {
       if (!scene || !moment) return;
       const v = which === 'sun' ? moment.sun : moment.earth;
