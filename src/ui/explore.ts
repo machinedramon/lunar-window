@@ -12,6 +12,7 @@ import { clear, h, reducedMotion, setText } from './dom';
 import { EXPLORE_DAYS, elevationRange, momentAt, outlookFor, type Moment, type Outlook } from './exploreModel';
 import { createHero3D } from './hero3d';
 import { DAY_MS, HOUR_MS, compass, dayTime, deg, duration, isoMinute, latLon, monthShort, num, parseUtc, pct } from './format';
+import { REPLAYS } from './replays';
 import { linkTone, setSound, soundEnabled, soundPreferred, sunTone, tick } from './sound';
 import { MAX_MS, MIN_MS, type State } from './store';
 
@@ -88,6 +89,15 @@ export function createExplore(app: App): View {
     h('div', { class: 'grow' }),
     h('div', { class: 'field' }, h('span', null, T.height), heightSeg),
   );
+
+  // ----- real landings to replay
+  const replayRow = h('div', { class: 'replays', role: 'group', 'aria-label': T.replay.title }, h('span', { class: 'eyebrow' }, T.replay.title));
+  for (const r of REPLAYS) {
+    replayRow.append(
+      h('button', { class: 'chip', type: 'button', dataset: { replay: r.id }, title: r.when, onclick: () => store.set({ siteId: r.siteId, timeMs: r.timeMs }) }, r.label, h('span', { class: 'muted' }, ` ${r.year}`)),
+    );
+  }
+  const replayNote = h('div', { class: 'replay-note', hidden: true });
 
   // ----- verdict
   const where = h('p', { class: 'where' });
@@ -214,7 +224,7 @@ export function createExplore(app: App): View {
   });
 
   const facts = h('dl', { class: 'panel facts' });
-  const el = h('div', { class: 'explore' }, h('div', { class: 'panel panel-pad' }, controls, verdict), hero, stats, h('div', { class: 'lower' }, closeups, timeline), facts);
+  const el = h('div', { class: 'explore' }, h('div', { class: 'panel panel-pad' }, controls, replayRow, verdict, replayNote), hero, stats, h('div', { class: 'lower' }, closeups, timeline), facts);
 
   // ----- behaviour
   function togglePlay(force?: boolean): void {
@@ -329,6 +339,20 @@ export function createExplore(app: App): View {
     if (siteSelect.value !== site.id) siteSelect.value = site.id;
     if (document.activeElement !== timeInput) timeInput.value = isoMinute(state.timeMs);
     heightSeg.querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.mast === String(mast))));
+
+    // A real landing being replayed: what happened, next to what the tool says. The note stays while
+    // the visitor moves through the three weeks after the landing.
+    const replay = REPLAYS.find((r) => r.siteId === site.id && state.timeMs >= r.timeMs - HOUR_MS && state.timeMs <= r.timeMs + 21 * DAY_MS);
+    replayRow.querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', String(!!replay && b.dataset.replay === replay.id)));
+    replayNote.hidden = !replay;
+    if (replay && replayNote.dataset.id !== replay.id) {
+      replayNote.dataset.id = replay.id;
+      clear(replayNote);
+      replayNote.append(
+        h('div', null, h('span', { class: 'eyebrow' }, T.replay.happened), h('p', null, replay.happened, ' ', h('a', { href: replay.source.url, target: '_blank', rel: 'noopener' }, replay.source.label))),
+        h('div', null, h('span', { class: 'eyebrow' }, T.replay.look), h('p', null, replay.look)),
+      );
+    }
 
     // Verdict
     setText(where, T.at(site.name, dayTime(state.timeMs)));

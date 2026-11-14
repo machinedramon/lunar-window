@@ -1596,6 +1596,42 @@ table.compare td.best {
   }
 }
 
+/* ---------- replay of real landings ---------- */
+.replays {
+  margin-top: 14px;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 8px;
+}
+.replays .eyebrow {
+  margin-right: 6px;
+}
+.replays .chip {
+  padding: 5px 11px;
+  font-size: 12.5px;
+}
+.replay-note {
+  margin-top: 14px;
+  padding: 14px 16px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--radius-sm);
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 26px;
+  animation: view-in 0.3s ease;
+}
+.replay-note p {
+  margin-top: 6px;
+  font-size: 13.5px;
+  color: var(--text-2);
+}
+@media (max-width: 760px) {
+  .replay-note {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* ---------- footer ---------- */
 footer {
   border-top: 1px solid var(--line);

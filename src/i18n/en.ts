@@ -76,6 +76,7 @@ export const en = {
       viewTip: 'Switch between the 3D view from the site and the 360° panorama.',
       unavailable: '3D is not available in this browser; showing the panorama.',
     },
+    replay: { title: 'Replay a real landing', happened: 'What happened', look: 'What the tool shows' },
     panorama: 'Horizon panorama',
     panoramaNote: (stretch: string) => `360° of skyline seen from the site. Vertical scale stretched ${stretch}×; discs keep their true angular size.`,
     panoramaNoteFlat: '360° around the site.',
