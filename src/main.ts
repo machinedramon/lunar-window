@@ -1,5 +1,6 @@
 import './style.css';
 import { S } from './i18n/en';
+import { createAccuracy } from './ui/accuracy';
 import { App, type View } from './ui/app';
 import { loadSiteList } from './ui/data';
 import { clear, h } from './ui/dom';
@@ -49,6 +50,7 @@ async function boot(): Promise<void> {
   const factories: Partial<Record<Tab, () => View>> = {
     explore: () => createExplore(app),
     plan: () => createPlan(app, planner),
+    accuracy: () => createAccuracy(app),
   };
   const views = new Map<Tab, View>();
   const tabs = (Object.keys(factories) as Tab[]).map((tab) => {
