@@ -69,7 +69,10 @@ async function boot(): Promise<void> {
         views.set(tab, view);
       }
       clear(main);
+      view.el.classList.remove('view-in');
       main.append(view.el);
+      void view.el.offsetWidth;
+      view.el.classList.add('view-in');
       main.setAttribute('aria-labelledby', `tab-${tab}`);
       shown = tab;
       view.update(state, null);

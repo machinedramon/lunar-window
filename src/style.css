@@ -184,6 +184,38 @@ main {
   padding: 20px 24px 56px;
 }
 
+/* ---------- motion: everything arrives, nothing jumps ---------- */
+.view-in {
+  animation: view-in 0.32s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+@keyframes view-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+.pop {
+  animation: pop 0.34s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+@keyframes pop {
+  from {
+    opacity: 0.35;
+    transform: translateY(5px);
+  }
+}
+.panel {
+  transition: border-color 0.2s ease;
+}
+.sound-btn {
+  font-size: 12.5px;
+  padding: 5px 11px;
+  color: var(--text-2);
+}
+.sound-btn[aria-pressed='true'] {
+  color: var(--text);
+  border-color: #fff;
+}
+
 /* ---------- building blocks ---------- */
 .panel {
   background: linear-gradient(180deg, var(--panel-2), var(--panel));

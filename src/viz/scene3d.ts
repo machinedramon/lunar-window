@@ -462,6 +462,10 @@ void main() {
   float cloud = smoothstep(0.50, 0.74, swirl) * 0.92;
   vec3 col = mix(base, vec3(0.95), cloud);
   vec3 lit = col * (0.06 + 0.94 * max(ndl, 0.0)) * day * 1.9;
+  // Sunlight glinting off open water.
+  float water = smoothstep(0.02, 0.10, base.b - max(base.r, base.g) * 0.92) * (1.0 - cloud);
+  float glint = pow(max(dot(n, normalize(uSun + v)), 0.0), 70.0);
+  lit += vec3(1.0, 0.97, 0.90) * glint * water * day * 2.6;
   float rim = pow(1.0 - max(dot(n, v), 0.0), 2.6);
   lit += vec3(0.20, 0.46, 1.0) * rim * day * 1.25;
   lit += col * 0.0012;
@@ -474,17 +478,43 @@ void main() {
 const FINISH_FRAG = /* glsl */ `
 uniform sampler2D tDiffuse;
 uniform float uAspect;
+uniform vec2 uSunAt;
+uniform float uSunVis;
 varying vec2 vUv;
 float h(vec2 p) {
   vec3 p3 = fract(vec3(p.xyx) * 0.1031);
   p3 += dot(p3, p3.yzx + 33.33);
   return fract((p3.x + p3.y) * p3.z);
 }
+float ghost(vec2 uv, vec2 at, float radius, float ring) {
+  float r = length((uv - at) * vec2(uAspect, 1.0)) / radius;
+  float disc = smoothstep(1.0, 0.82, r);
+  return disc * mix(1.0, smoothstep(0.55, 1.0, r), ring);
+}
+// What a real lens does with a point as bright as the Sun: diffraction spikes from the
+// aperture blades, a horizontal streak, and faint reflections between the glass elements.
+vec3 flare(vec2 uv) {
+  vec2 d = (uv - uSunAt) * vec2(uAspect, 1.0);
+  float r = length(d);
+  float a = atan(d.y, d.x);
+  float spikes = 0.6 * pow(abs(cos(a * 4.0 + 0.35)), 70.0) + 0.3 * pow(abs(cos(a * 3.0 - 0.6)), 110.0);
+  float star = spikes * smoothstep(0.5, 0.0, r) / (1.0 + r * 26.0);
+  float streak = exp(-abs(d.y) * 190.0) * smoothstep(0.9, 0.0, abs(d.x)) * 0.2;
+  vec2 axis = vec2(0.5) - uSunAt;
+  vec3 g = vec3(0.0);
+  g += vec3(0.80, 0.90, 1.00) * ghost(uv, uSunAt + axis * 0.62, 0.030, 0.0) * 0.050;
+  g += vec3(1.00, 0.96, 0.88) * ghost(uv, uSunAt + axis * 1.18, 0.018, 0.0) * 0.060;
+  g += vec3(0.78, 0.88, 1.00) * ghost(uv, uSunAt + axis * 1.55, 0.070, 1.0) * 0.040;
+  g += vec3(0.92, 0.95, 1.00) * ghost(uv, uSunAt + axis * 1.90, 0.036, 0.0) * 0.035;
+  g += vec3(0.75, 0.86, 1.00) * ghost(uv, uSunAt + axis * 2.35, 0.120, 1.0) * 0.028;
+  return (vec3(star + streak) + g) * uSunVis;
+}
 void main() {
   vec4 c = texture2D(tDiffuse, vUv);
   vec2 d = (vUv - 0.5) * vec2(uAspect, 1.0);
   float vig = smoothstep(1.05, 0.25, length(d));
   c.rgb *= mix(0.72, 1.0, vig);
+  if (uSunVis > 0.001) c.rgb += flare(vUv);
   c.rgb += (h(gl_FragCoord.xy) - 0.5) * 0.012;
   gl_FragColor = c;
 }
@@ -659,6 +689,35 @@ void main() {
     this.earth = new THREE.Mesh(new THREE.SphereGeometry(1, 96, 48), this.earthMat);
     this.earth.frustumCulled = false;
     this.scene.add(this.earth);
+    // The atmosphere seen edge-on: a thin blue line just outside the limb, on the sunlit side.
+    const air = new THREE.Mesh(
+      new THREE.SphereGeometry(1.022, 96, 48),
+      new THREE.ShaderMaterial({
+        vertexShader: EARTH_VERT,
+        fragmentShader: `
+#include <common>
+#include <logdepthbuf_pars_fragment>
+uniform vec3 uSun;
+varying vec3 vNormalW;
+varying vec3 vPosW;
+void main() {
+  #include <logdepthbuf_fragment>
+  vec3 n = normalize(vNormalW);
+  vec3 v = normalize(cameraPosition - vPosW);
+  float edge = pow(1.0 - abs(dot(n, v)), 5.0);
+  float day = smoothstep(-0.25, 0.35, dot(n, uSun));
+  gl_FragColor = vec4(vec3(0.30, 0.56, 1.0) * edge * day * 2.2, 1.0);
+  #include <tonemapping_fragment>
+  #include <colorspace_fragment>
+}`,
+        uniforms: { uSun: light.uSun },
+        blending: THREE.AdditiveBlending,
+        transparent: true,
+        depthWrite: false,
+      }),
+    );
+    air.frustumCulled = false;
+    this.earth.add(air);
 
     // Stars: illustrative, and only visible when the Sun is hidden, as for a dark-adapted eye.
     const count = 2600;
@@ -686,7 +745,7 @@ void main() {
     this.composer.addPass(new RenderPass(this.scene, this.camera));
     this.bloom = new UnrealBloomPass(new THREE.Vector2(4, 4), 0.55, 0.7, 2.4);
     this.composer.addPass(this.bloom);
-    this.finish = new ShaderPass(new THREE.ShaderMaterial({ vertexShader: QUAD_VERT.replace('vec4(position.xy, 0.0, 1.0)', 'projectionMatrix * modelViewMatrix * vec4(position, 1.0)'), fragmentShader: FINISH_FRAG, uniforms: { tDiffuse: { value: null }, uAspect: { value: 2 } } }));
+    this.finish = new ShaderPass(new THREE.ShaderMaterial({ vertexShader: QUAD_VERT.replace('vec4(position.xy, 0.0, 1.0)', 'projectionMatrix * modelViewMatrix * vec4(position, 1.0)'), fragmentShader: FINISH_FRAG, uniforms: { tDiffuse: { value: null }, uAspect: { value: 2 }, uSunAt: { value: new THREE.Vector2(0.5, 0.5) }, uSunVis: { value: 0 } } }));
     // Tone mapping first, then the vignette and grain in display space.
     this.composer.addPass(new OutputPass());
     this.composer.addPass(this.finish);
@@ -948,6 +1007,14 @@ void main() {
     this.camera.fov = this.look.fov;
     this.camera.rotation.set(this.look.pitch * D2R, -this.look.az * D2R, 0);
     this.camera.updateProjectionMatrix();
+    // Where the Sun falls on the picture, for the lens flare; it fades as the Sun leaves the frame or the terrain covers it.
+    const fu = (this.finish.material as THREE.ShaderMaterial).uniforms;
+    const at = this.lastSky ? this.project(this.lastSky.sunAz, this.lastSky.sunEl) : null;
+    if (at && this.lastSky) {
+      (fu.uSunAt.value as THREE.Vector2).set(at.x, 1 - at.y);
+      const off = Math.max(Math.abs(at.x - 0.5), Math.abs(at.y - 0.5));
+      fu.uSunVis.value = this.lastSky.sunFrac * (1 - this.lastSky.eclipse) * Math.max(0, Math.min(1, (0.62 - off) / 0.14));
+    } else fu.uSunVis.value = 0;
     this.composer.render();
     if (!insets.length) return;
     const r = this.renderer;

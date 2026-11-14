@@ -12,6 +12,7 @@ import { clear, h, reducedMotion, setText } from './dom';
 import { EXPLORE_DAYS, elevationRange, momentAt, outlookFor, type Moment, type Outlook } from './exploreModel';
 import { createHero3D } from './hero3d';
 import { DAY_MS, HOUR_MS, compass, dayTime, deg, duration, isoMinute, latLon, monthShort, num, parseUtc, pct } from './format';
+import { linkTone, setSound, soundEnabled, soundPreferred, sunTone, tick } from './sound';
 import { MAX_MS, MIN_MS, type State } from './store';
 
 const T = S.explore;
@@ -26,6 +27,12 @@ export function createExplore(app: App): View {
   let stripGeo: StripGeometry | null = null;
   let timeGeo: TimelineGeometry | null = null;
   let playing = false;
+  /** Moment the 3D view is showing: it runs to the chosen time instead of jumping there. */
+  let shownMs = NaN;
+  let shownSite = '';
+  let flowFrame = 0;
+  let wasLinked: boolean | null = null;
+  let wasSunUp: boolean | null = null;
   let frame = 0;
   let lastTick = 0;
   let centerAz = 180;
@@ -98,8 +105,28 @@ export function createExplore(app: App): View {
   const view3dBtn = h('button', { type: 'button', onclick: () => store.set({ hero: '3d' }) }, T.three.view3d);
   const viewPanBtn = h('button', { type: 'button', onclick: () => store.set({ hero: 'panorama' }) }, T.panorama);
   viewSeg.append(view3dBtn, viewPanBtn);
+  const soundBtn = h('button', { class: 'btn ghost sound-btn', type: 'button', title: T.three.soundTip, 'aria-pressed': 'false' });
+  const syncSound = () => {
+    soundBtn.setAttribute('aria-pressed', String(soundEnabled()));
+    setText(soundBtn, soundEnabled() ? T.three.soundOn : T.three.soundOff);
+  };
+  soundBtn.addEventListener('click', () => {
+    setSound(!soundEnabled());
+    syncSound();
+    tick();
+  });
+  syncSound();
+  // A returning visitor who had sound on gets it back at the first click anywhere (browsers need a gesture).
+  if (soundPreferred()) {
+    const resume = () => {
+      setSound(true);
+      syncSound();
+      window.removeEventListener('pointerdown', resume);
+    };
+    window.addEventListener('pointerdown', resume);
+  }
   const stripWrap = h('div', { style: 'position:relative' }, stripCanvas, readout);
-  const hero = h('section', { class: 'panel hero', 'aria-label': T.panorama }, h('div', { class: 'hero-bar' }, viewSeg, heroNote), three.el, stripWrap);
+  const hero = h('section', { class: 'panel hero', 'aria-label': T.panorama }, h('div', { class: 'hero-bar' }, viewSeg, heroNote, h('div', { class: 'grow' }), soundBtn), three.el, stripWrap);
   three.onFail = () => {
     view3dBtn.disabled = true;
     view3dBtn.title = T.three.unavailable;
@@ -229,6 +256,54 @@ export function createExplore(app: App): View {
     );
   }
 
+  /** Shows one instant in the 3D view, and sounds the changes of sunlight and Earth contact. */
+  function showInThree(ms: number): void {
+    if (!loaded) return;
+    const site = loaded.site;
+    const mast = store.state.req.mast;
+    const m = momentAt(loaded, mast, ms);
+    // Earth's pole and Greenwich meridian in the local east-north-up frame of the site.
+    const axes = earthAxes(new Date(ms));
+    const f = siteFrame(site.lat, site.lon, 0);
+    const local = (v: readonly [number, number, number]): [number, number, number] => [
+      v[0] * f.east[0] + v[1] * f.east[1] + v[2] * f.east[2],
+      v[0] * f.north[0] + v[1] * f.north[1] + v[2] * f.north[2],
+      v[0] * f.up[0] + v[1] * f.up[1] + v[2] * f.up[2],
+    ];
+    three.setSite(loaded, mast);
+    three.setMoment(m, { north: local(axes.north), greenwich: local(axes.greenwich) }, dayTime(ms));
+    const linked = m.earthClear > 0;
+    const sunUp = m.sunFrac >= SUN_PRESENT;
+    if (shownSite === site.id) {
+      if (wasLinked !== null && linked !== wasLinked) linkTone(linked);
+      if (wasSunUp !== null && sunUp !== wasSunUp) sunTone(sunUp);
+    }
+    wasLinked = linked;
+    wasSunUp = sunUp;
+    shownSite = site.id;
+    shownMs = ms;
+  }
+
+  /** Time flows to the new moment: the Sun runs along the horizon and the shadows sweep, in about a second. */
+  function flowTo(targetMs: number): void {
+    cancelAnimationFrame(flowFrame);
+    const from = shownMs;
+    const sameSite = loaded !== null && shownSite === loaded.site.id;
+    if (!sameSite || !Number.isFinite(from) || playing || reducedMotion() || Math.abs(targetMs - from) < 20 * 60000) {
+      showInThree(targetMs);
+      return;
+    }
+    const t0 = performance.now();
+    const length = Math.min(1500, 520 + (Math.abs(targetMs - from) / DAY_MS) * 110);
+    const step = (now: number) => {
+      const k = Math.min(1, (now - t0) / length);
+      const eased = k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
+      showInThree(from + (targetMs - from) * eased);
+      if (k < 1) flowFrame = requestAnimationFrame(step);
+    };
+    flowFrame = requestAnimationFrame(step);
+  }
+
   function nextEvent(kinds: string[], fromMs: number) {
     return outlook?.events.find((e) => e.timeMs > fromMs && kinds.includes(e.kind));
   }
@@ -246,18 +321,7 @@ export function createExplore(app: App): View {
     }
     const m = moment;
     showHero();
-    if (use3d()) {
-      // Earth's pole and Greenwich meridian in the local east-north-up frame of the site.
-      const axes = earthAxes(new Date(state.timeMs));
-      const f = siteFrame(site.lat, site.lon, 0);
-      const local = (v: readonly [number, number, number]): [number, number, number] => [
-        v[0] * f.east[0] + v[1] * f.east[1] + v[2] * f.east[2],
-        v[0] * f.north[0] + v[1] * f.north[1] + v[2] * f.north[2],
-        v[0] * f.up[0] + v[1] * f.up[1] + v[2] * f.up[2],
-      ];
-      three.setSite(loaded, mast);
-      three.setMoment(m, { north: local(axes.north), greenwich: local(axes.greenwich) }, dayTime(state.timeMs));
-    }
+    if (use3d()) flowTo(state.timeMs);
     const sunUp = m.sunFrac >= SUN_PRESENT;
     const earthUp = m.earthClear > 0;
 
@@ -280,6 +344,12 @@ export function createExplore(app: App): View {
 
     // Cards
     const big = (node: HTMLElement, value: string, unit?: string) => {
+      // A changed number announces itself with a short rise, unless time is running.
+      if (!playing && node.textContent && node.textContent !== value + (unit ?? '')) {
+        node.classList.remove('pop');
+        void node.offsetWidth;
+        node.classList.add('pop');
+      }
       clear(node);
       node.append(value);
       if (unit) node.append(h('small', null, unit));
