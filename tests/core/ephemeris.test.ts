@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { eclipseCoverage, lookAt, separation, siteFrame, sky, type View } from '../../src/core/ephemeris';
+import { earthAxes, eclipseCoverage, lookAt, separation, siteFrame, sky, type View } from '../../src/core/ephemeris';
 
 type Row = [string, number, number, number];
 interface Golden {
@@ -59,5 +59,27 @@ describe('lunar eclipse of 14 March 2025, seen from the Blue Ghost landing site'
     expect(separation(during.sun, during.earth)).toBeLessThan(during.earth.radius - during.sun.radius);
     const before = lookAt(sky(new Date('2025-03-13T07:00Z')), frame);
     expect(eclipseCoverage(before.sun, before.earth)).toBe(0);
+  });
+});
+
+describe('orientation of the Earth', () => {
+  it('puts the right part of the Earth under the Moon', () => {
+    // 14 March 2025, 06:59 UTC: greatest eclipse, with the Moon overhead in the Pacific off Mexico (about 2.5 N, 105.7 W... the Americas saw it high in the sky).
+    const date = new Date('2025-03-14T06:59Z');
+    const { north, greenwich } = earthAxes(date);
+    const s = sky(date);
+    const toMoon = [-s.earth[0], -s.earth[1], -s.earth[2]];
+    const len = Math.hypot(toMoon[0], toMoon[1], toMoon[2]);
+    const east90 = [north[1] * greenwich[2] - north[2] * greenwich[1], north[2] * greenwich[0] - north[0] * greenwich[2], north[0] * greenwich[1] - north[1] * greenwich[0]];
+    const dotv = (a: number[], b: readonly number[]) => (a[0] * b[0] + a[1] * b[1] + a[2] * b[2]) / len;
+    const lat = (Math.asin(dotv(toMoon, north)) * 180) / Math.PI;
+    const lon = (Math.atan2(dotv(toMoon, east90), dotv(toMoon, greenwich)) * 180) / Math.PI;
+    console.log(`sub-lunar point at greatest eclipse: ${lat.toFixed(1)} deg latitude, ${lon.toFixed(1)} deg longitude`);
+    expect(Math.abs(lat)).toBeLessThan(6); // the Moon was close to the equator, opposite the March Sun
+    expect(lon).toBeGreaterThan(-125);
+    expect(lon).toBeLessThan(-85); // over the eastern Pacific and the Americas
+    // The two axes are perpendicular unit vectors.
+    expect(Math.hypot(...north)).toBeCloseTo(1, 6);
+    expect(north[0] * greenwich[0] + north[1] * greenwich[1] + north[2] * greenwich[2]).toBeCloseTo(0, 6);
   });
 });

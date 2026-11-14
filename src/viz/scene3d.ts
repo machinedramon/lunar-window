@@ -1,0 +1,793 @@
+// First-person 3D view from the landing site.
+//
+// What is real: the terrain (NASA LOLA elevation, three nested grids with the curvature of the
+// Moon built in), the skyline (the same horizon profile the planner uses), the directions and
+// angular sizes of the Sun and the Earth, the phase and the face of the Earth, and the shadows
+// (marched through the elevation data towards the Sun, with the penumbra of a 0.53 degree disc).
+// What is illustrative: surface relief finer than the 50 m grid, the clouds on the Earth and
+// the stars.
+import * as THREE from 'three';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+
+export const TERRAIN_N = 257;
+export const TERRAIN_HALF_M = [6400, 51200, 307200];
+export const TERRAIN_UNIT_M = [0.25, 0.5, 2.5];
+const SHADOW_N = 512;
+const FAR_M = 400000;
+const SKY_M = 380000;
+const D2R = Math.PI / 180;
+
+export interface SceneSky {
+  sunAz: number;
+  sunEl: number;
+  sunRadius: number;
+  /** Visible fraction of the solar disc, 0 to 1 (drives the glare). */
+  sunFrac: number;
+  /** Fraction of the Sun hidden by the Earth. */
+  eclipse: number;
+  earthAz: number;
+  earthEl: number;
+  earthRadius: number;
+  /** Unit vectors of the Earth's north pole and Greenwich meridian in the local frame: [east, north, up]. */
+  earthNorth: [number, number, number];
+  earthGreenwich: [number, number, number];
+}
+
+/** Direction in scene coordinates (x east, y up, z south) of an azimuth and elevation in degrees. */
+export function direction(az: number, el: number, out = new THREE.Vector3()): THREE.Vector3 {
+  const a = az * D2R;
+  const e = el * D2R;
+  return out.set(Math.cos(e) * Math.sin(a), Math.sin(e), -Math.cos(e) * Math.cos(a));
+}
+
+const HEIGHTS = /* glsl */ `
+uniform sampler2D tH0;
+uniform sampler2D tH1;
+uniform sampler2D tH2;
+const vec3 HALF = vec3(6400.0, 51200.0, 307200.0);
+const float GN = 257.0;
+float texH(sampler2D t, vec2 p, float halfSize) {
+  vec2 uv = (p / halfSize * 0.5 + 0.5) * ((GN - 1.0) / GN) + 0.5 / GN;
+  return texture2D(t, uv).r;
+}
+// Ground height (metres above the plane tangent at the site) at a point given as (east, north).
+// The finest grid that contains the point is used, blended into the next one near its edge.
+float heightAt(vec2 p) {
+  float m = max(abs(p.x), abs(p.y));
+  float h = texH(tH2, clamp(p, -HALF.z, HALF.z), HALF.z);
+  if (m < HALF.y) {
+    h = mix(texH(tH1, p, HALF.y), h, smoothstep(0.84 * HALF.y, 0.97 * HALF.y, m));
+    if (m < HALF.x) {
+      h = mix(texH(tH0, p, HALF.x), h, smoothstep(0.84 * HALF.x, 0.97 * HALF.x, m));
+    }
+  }
+  return h;
+}
+`;
+
+const NOISE = /* glsl */ `
+float hash12(vec2 p) {
+  vec3 p3 = fract(vec3(p.xyx) * 0.1031);
+  p3 += dot(p3, p3.yzx + 33.33);
+  return fract((p3.x + p3.y) * p3.z);
+}
+float vnoise(vec2 x, out vec2 g);
+vec3 hash32(vec2 p) {
+  vec3 p3 = fract(vec3(p.xyx) * vec3(0.1031, 0.1030, 0.0973));
+  p3 += dot(p3, p3.yxz + 33.33);
+  return fract((p3.xxy + p3.yzz) * p3.zyx);
+}
+// One size class of small craters (illustrative: they are below the resolution of the data).
+// Adds their slopes to grad and multiplies lit by the shadow that the sunward rim casts in each bowl.
+void craters(vec2 p, float cell, float density, float weight, float tanSun, vec2 sunDir, inout vec2 grad, inout float lit) {
+  vec2 ip = floor(p / cell);
+  for (int j = -1; j <= 1; j++) {
+    for (int i = -1; i <= 1; i++) {
+      vec2 c = ip + vec2(float(i), float(j));
+      vec3 r = hash32(c + cell * 3.7);
+      if (r.z > density) continue;
+      vec2 q = p - (c + 0.5 + (r.xy - 0.5) * 0.62) * cell;
+      float k = fract(r.z * 7.31);
+      float radius = cell * (0.10 + 0.26 * k * k);
+      // No lunar crater is a perfect circle: bend the outline a little.
+      vec2 wg;
+      float bend = vnoise(q / radius * 1.3 + r.xy * 40.0, wg);
+      q *= 1.0 + 0.22 * (bend - 0.5);
+      float d2 = dot(q, q);
+      float rr = sqrt(d2) / radius;
+      if (rr > 2.2) continue;
+      // Depth to diameter from 0.03 (old, worn) to 0.2 (fresh); most small lunar craters are worn.
+      float fresh = fract(r.z * 13.7);
+      float depth = radius * (0.035 + 0.36 * fresh * fresh * fresh * fresh);
+      float rim = depth * 0.16;
+      float dz = rr < 1.0 ? 2.0 * depth * rr * (1.0 - 0.35 * rr * rr) : -rim / 0.7 * exp(-(rr - 1.0) / 0.7);
+      grad += weight * (dz / radius) * q / max(1e-4, sqrt(d2));
+      if (rr < 1.0) {
+        float b = dot(q, sunDir);
+        float toRim = -b + sqrt(max(0.0, b * b - (d2 - radius * radius)));
+        float below = depth * (1.0 - rr * rr);
+        float clearance = (toRim * tanSun - below) / max(toRim, 1e-3);
+        lit *= mix(1.0, smoothstep(-0.006, 0.006, clearance), weight);
+      }
+    }
+  }
+}
+// Boulders (illustrative): a small bright dome and the long shadow it throws when the Sun is low.
+void boulders(vec2 p, float cell, float weight, float tanSun, vec2 sunDir, inout vec2 grad, inout float lit) {
+  vec2 ip = floor(p / cell);
+  for (int j = -1; j <= 1; j++) {
+    for (int i = -1; i <= 1; i++) {
+      vec2 c = ip + vec2(float(i), float(j));
+      vec3 r = hash32(c + cell * 11.3 + 71.0);
+      if (r.z > 0.34) continue;
+      vec2 q = p - (c + 0.5 + (r.xy - 0.5) * 0.8) * cell;
+      float size = cell * (0.012 + 0.05 * r.x * r.y);
+      float height = size * (0.7 + 0.8 * fract(r.z * 9.1));
+      float rr = length(q) / size;
+      if (rr < 1.0) grad += weight * (-2.2 * height * rr / size) * q / max(1e-4, length(q));
+      float reach = min(height / max(tanSun, 0.012), cell * 1.35);
+      float along = -dot(q, sunDir);
+      float across = abs(q.x * sunDir.y - q.y * sunDir.x);
+      float taper = size * (1.0 - 0.55 * clamp(along / reach, 0.0, 1.0));
+      float inShadow = smoothstep(0.0, size * 0.5, along) * (1.0 - smoothstep(reach * 0.82, reach, along)) * (1.0 - smoothstep(taper * 0.7, taper, across));
+      lit *= 1.0 - weight * inShadow;
+    }
+  }
+}
+// Value noise and its gradient.
+float vnoise(vec2 x, out vec2 g) {
+  vec2 i = floor(x);
+  vec2 f = fract(x);
+  vec2 u = f * f * f * (f * (f * 6.0 - 15.0) + 10.0);
+  vec2 du = 30.0 * f * f * (f * (f - 2.0) + 1.0);
+  float a = hash12(i);
+  float b = hash12(i + vec2(1.0, 0.0));
+  float c = hash12(i + vec2(0.0, 1.0));
+  float d = hash12(i + vec2(1.0, 1.0));
+  g = du * (vec2(b - a, c - a) + (a - b - c + d) * u.yx);
+  return a + (b - a) * u.x + (c - a) * u.y + (a - b - c + d) * u.x * u.y;
+}
+`;
+
+const TERRAIN_VERT = /* glsl */ `
+#include <common>
+#include <logdepthbuf_pars_vertex>
+${HEIGHTS}
+uniform float uHalf;
+varying vec3 vPos;
+void main() {
+  vec2 p = position.xy * 2.0 * uHalf;
+  vPos = vec3(p.x, heightAt(p), -p.y);
+  gl_Position = projectionMatrix * viewMatrix * vec4(vPos, 1.0);
+  #include <logdepthbuf_vertex>
+}
+`;
+
+const TERRAIN_FRAG = /* glsl */ `
+#include <common>
+#include <logdepthbuf_pars_fragment>
+${HEIGHTS}
+${NOISE}
+uniform sampler2D tS0;
+uniform sampler2D tS1;
+uniform sampler2D tS2;
+uniform float uInner;
+uniform vec3 uSun;
+uniform float uSunPower;
+uniform vec3 uEarth;
+uniform float uEarthshine;
+varying vec3 vPos;
+
+vec2 slopeOf(sampler2D t, vec2 p, float halfSize, float e) {
+  return vec2(texH(t, p + vec2(e, 0.0), halfSize) - texH(t, p - vec2(e, 0.0), halfSize),
+              texH(t, p + vec2(0.0, e), halfSize) - texH(t, p - vec2(0.0, e), halfSize)) / (2.0 * e);
+}
+float texS(sampler2D t, vec2 p, float halfSize) {
+  return texture2D(t, p / halfSize * 0.5 + 0.5).r;
+}
+float shadowAt(vec2 p) {
+  float m = max(abs(p.x), abs(p.y));
+  float s = texS(tS2, clamp(p, -HALF.z, HALF.z), HALF.z);
+  if (m < HALF.y) {
+    s = mix(texS(tS1, p, HALF.y), s, smoothstep(0.84 * HALF.y, 0.97 * HALF.y, m));
+    if (m < HALF.x) {
+      s = mix(texS(tS0, p, HALF.x), s, smoothstep(0.84 * HALF.x, 0.97 * HALF.x, m));
+    }
+  }
+  return s;
+}
+
+void main() {
+  #include <logdepthbuf_fragment>
+  vec2 p = vec2(vPos.x, -vPos.z);
+  float m = max(abs(p.x), abs(p.y));
+  if (m < uInner) discard;
+
+  // Slope of the real terrain, from the finest grid available here. The slopes of two grids are
+  // blended where they meet (blending the heights would add a false slope there).
+  float footprint = max(length(dFdx(p)), length(dFdy(p)));
+  vec2 slope = slopeOf(tH2, clamp(p, -HALF.z, HALF.z), HALF.z, max(1900.0, 1.5 * footprint));
+  if (m < HALF.y) {
+    slope = mix(slopeOf(tH1, p, HALF.y, max(320.0, 1.5 * footprint)), slope, smoothstep(0.84 * HALF.y, 0.97 * HALF.y, m));
+    if (m < HALF.x) {
+      slope = mix(slopeOf(tH0, p, HALF.x, max(40.0, 1.5 * footprint)), slope, smoothstep(0.84 * HALF.x, 0.97 * HALF.x, m));
+    }
+  }
+  float dE = slope.x;
+  float dN = slope.y;
+
+  vec3 nMacro = normalize(vec3(-dE, 1.0, dN));
+  float muMacro = dot(nMacro, uSun);
+  float tanSun = muMacro / sqrt(max(1e-4, 1.0 - muMacro * muMacro));
+  vec2 sunDir = normalize(vec2(uSun.x, -uSun.z) + 1e-6);
+
+  // Relief below the resolution of the data: illustrative, faded out before it can alias.
+  vec2 micro = vec2(0.0);
+  float craterLit = 1.0;
+  float cell = 46.0;
+  // Share of a bowl that its own rim shadows, for craters too small to resolve at this distance.
+  float hidden = clamp(1.0 - 6.0 * max(tanSun, 0.0), 0.0, 1.0);
+  for (int o = 0; o < 6; o++) {
+    float density = o < 2 ? 0.2 : 0.36;
+    float w = smoothstep(0.42 * cell, 0.12 * cell, footprint);
+    if (w > 0.002) craters(p, cell, density, w, tanSun, sunDir, micro, craterLit);
+    craterLit *= 1.0 - (1.0 - w) * 0.05 * hidden;
+    cell *= 0.4;
+  }
+  float block = 30.0;
+  for (int o = 0; o < 4; o++) {
+    float w = smoothstep(0.03 * block, 0.008 * block, footprint);
+    if (w > 0.002) boulders(p, block, w, tanSun, sunDir, micro, craterLit);
+    block *= 0.34;
+  }
+  float albedoNoise = 0.0;
+  float lambda = 34.0;
+  float amp = 0.005;
+  mat2 turn = mat2(0.8, 0.6, -0.6, 0.8);
+  vec2 pr = p;
+  for (int o = 0; o < 7; o++) {
+    float w = smoothstep(1.6 * footprint, 5.0 * footprint, lambda);
+    if (w > 0.0) {
+      vec2 g;
+      float v = vnoise(pr / lambda + float(o) * 19.7, g);
+      micro += w * amp * (g * turn);
+      if (o < 3) albedoNoise += w * (v - 0.5) * 0.2;
+    }
+    pr = turn * pr;
+    turn = turn * mat2(0.8, 0.6, -0.6, 0.8);
+    lambda *= 0.41;
+    amp *= 1.32;
+  }
+  vec3 n = normalize(vec3(-(dE + micro.x), 1.0, dN + micro.y));
+  vec3 v = normalize(cameraPosition - vPos);
+
+  // Lunar-Lambert photometry: the Moon has no limb darkening, grazing ground stays bright.
+  float mu0 = dot(n, uSun);
+  float mu = max(dot(n, v), 0.0);
+  float direct = 0.0;
+  if (mu0 > 0.0) direct = 0.72 * 2.0 * mu0 / (mu0 + mu + 1e-4) + 0.28 * mu0;
+  // Regolith scatters light back towards the Sun: bright down-Sun, dim when looking into the Sun.
+  float cosPhase = dot(v, uSun);
+  float phase = 0.22 + 0.78 * pow(0.5 + 0.5 * cosPhase, 1.5) + 0.35 * exp(-acos(clamp(cosPhase, -1.0, 1.0)) / 0.09);
+  float shadow = shadowAt(p) * craterLit;
+
+  float albedo = 0.125 * (1.0 + albedoNoise);
+  vec3 col = vec3(albedo) * (7.5 * direct * phase * shadow * uSunPower);
+  col += vec3(0.80, 0.88, 1.0) * albedo * uEarthshine * (0.35 + 0.65 * max(dot(n, uEarth), 0.0));
+  col += vec3(albedo) * 0.012 * uSunPower;
+  gl_FragColor = vec4(col, 1.0);
+  #include <tonemapping_fragment>
+  #include <colorspace_fragment>
+}
+`;
+
+const SHADOW_FRAG = /* glsl */ `
+${HEIGHTS}
+uniform vec3 uSun;
+uniform float uHalfLevel;
+uniform float uStart;
+varying vec2 vUv;
+void main() {
+  vec2 p = (vUv - 0.5) * 2.0 * uHalfLevel;
+  float h = heightAt(p) + 0.6;
+  float flat_ = max(1e-5, length(uSun.xz));
+  vec2 dir = vec2(uSun.x, -uSun.z) / flat_;
+  float slope = uSun.y / flat_;
+  float t = uStart;
+  float clearance = 1.0;
+  for (int i = 0; i < 80; i++) {
+    vec2 q = p + dir * t;
+    if (max(abs(q.x), abs(q.y)) > HALF.z) break;
+    clearance = min(clearance, (h + t * slope - heightAt(q)) / t);
+    t *= 1.135;
+  }
+  // The Sun is a disc 0.266 degrees in radius: the shadow edge is a penumbra that wide.
+  float s = smoothstep(-0.00465, 0.00465, clearance);
+  gl_FragColor = vec4(s, s, s, 1.0);
+}
+`;
+
+const QUAD_VERT = /* glsl */ `
+varying vec2 vUv;
+void main() {
+  vUv = uv;
+  gl_Position = vec4(position.xy, 0.0, 1.0);
+}
+`;
+
+const SKYLINE_VERT = /* glsl */ `
+#include <common>
+#include <logdepthbuf_pars_vertex>
+varying vec3 vPos;
+void main() {
+  vPos = position;
+  gl_Position = projectionMatrix * viewMatrix * vec4(position, 1.0);
+  #include <logdepthbuf_vertex>
+}
+`;
+
+const SKYLINE_FRAG = /* glsl */ `
+#include <common>
+#include <logdepthbuf_pars_fragment>
+uniform vec3 uSun;
+uniform float uSunPower;
+varying vec3 vPos;
+void main() {
+  #include <logdepthbuf_fragment>
+  // Distant ridges: lit when the Sun is behind the viewer, a dark silhouette against the Sun.
+  vec2 toRidge = normalize(vPos.xz);
+  vec2 toSun = normalize(uSun.xz + 1e-6);
+  float facing = smoothstep(-0.15, 0.75, -dot(toRidge, toSun));
+  float up = smoothstep(-0.02, 0.02, uSun.y);
+  vec3 col = vec3(0.125) * (0.006 + 2.6 * facing * up * uSunPower);
+  gl_FragColor = vec4(col, 1.0);
+  #include <tonemapping_fragment>
+  #include <colorspace_fragment>
+}
+`;
+
+const EARTH_VERT = /* glsl */ `
+#include <common>
+#include <logdepthbuf_pars_vertex>
+varying vec2 vUv;
+varying vec3 vNormalW;
+varying vec3 vNormalO;
+varying vec3 vPosW;
+void main() {
+  vUv = uv;
+  vNormalO = normal;
+  vNormalW = normalize(mat3(modelMatrix) * normal);
+  vec4 w = modelMatrix * vec4(position, 1.0);
+  vPosW = w.xyz;
+  gl_Position = projectionMatrix * viewMatrix * w;
+  #include <logdepthbuf_vertex>
+}
+`;
+
+const EARTH_FRAG = /* glsl */ `
+#include <common>
+#include <logdepthbuf_pars_fragment>
+uniform sampler2D map;
+uniform vec3 uSun;
+varying vec2 vUv;
+varying vec3 vNormalW;
+varying vec3 vNormalO;
+varying vec3 vPosW;
+float hash13(vec3 p) {
+  p = fract(p * 0.1031);
+  p += dot(p, p.zyx + 31.32);
+  return fract((p.x + p.y) * p.z);
+}
+float noise3(vec3 x) {
+  vec3 i = floor(x);
+  vec3 f = fract(x);
+  f = f * f * (3.0 - 2.0 * f);
+  return mix(mix(mix(hash13(i), hash13(i + vec3(1, 0, 0)), f.x), mix(hash13(i + vec3(0, 1, 0)), hash13(i + vec3(1, 1, 0)), f.x), f.y),
+             mix(mix(hash13(i + vec3(0, 0, 1)), hash13(i + vec3(1, 0, 1)), f.x), mix(hash13(i + vec3(0, 1, 1)), hash13(i + vec3(1, 1, 1)), f.x), f.y), f.z);
+}
+float fbm(vec3 p) {
+  float s = 0.0;
+  float a = 0.5;
+  for (int i = 0; i < 6; i++) {
+    s += a * noise3(p);
+    p = p * 2.03 + 7.1;
+    a *= 0.5;
+  }
+  return s;
+}
+void main() {
+  #include <logdepthbuf_fragment>
+  vec3 n = normalize(vNormalW);
+  vec3 v = normalize(cameraPosition - vPosW);
+  float ndl = dot(n, uSun);
+  float day = smoothstep(-0.10, 0.22, ndl);
+  vec3 base = texture2D(map, vUv).rgb;
+  // Clouds are procedural (illustrative): swirls stretched along latitude.
+  vec3 q = normalize(vNormalO);
+  float swirl = fbm(vec3(q.x * 3.2, q.y * 5.5, q.z * 3.2) + fbm(q * 2.1) * 1.6);
+  float cloud = smoothstep(0.50, 0.74, swirl) * 0.92;
+  vec3 col = mix(base, vec3(0.95), cloud);
+  vec3 lit = col * (0.06 + 0.94 * max(ndl, 0.0)) * day * 1.9;
+  float rim = pow(1.0 - max(dot(n, v), 0.0), 2.6);
+  lit += vec3(0.20, 0.46, 1.0) * rim * day * 1.25;
+  lit += col * 0.0012;
+  gl_FragColor = vec4(lit, 1.0);
+  #include <tonemapping_fragment>
+  #include <colorspace_fragment>
+}
+`;
+
+const FINISH_FRAG = /* glsl */ `
+uniform sampler2D tDiffuse;
+uniform float uAspect;
+varying vec2 vUv;
+float h(vec2 p) {
+  vec3 p3 = fract(vec3(p.xyx) * 0.1031);
+  p3 += dot(p3, p3.yzx + 33.33);
+  return fract((p3.x + p3.y) * p3.z);
+}
+void main() {
+  vec4 c = texture2D(tDiffuse, vUv);
+  vec2 d = (vUv - 0.5) * vec2(uAspect, 1.0);
+  float vig = smoothstep(1.05, 0.25, length(d));
+  c.rgb *= mix(0.72, 1.0, vig);
+  c.rgb += (h(gl_FragCoord.xy) - 0.5) * 0.012;
+  gl_FragColor = c;
+}
+`;
+
+function glareTexture(): THREE.Texture {
+  const size = 256;
+  const c = document.createElement('canvas');
+  c.width = c.height = size;
+  const ctx = c.getContext('2d')!;
+  const g = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+  for (let i = 0; i <= 24; i++) {
+    const t = i / 24;
+    // Smooth fall-off, as the veiling glare of a lens: no visible ring.
+    g.addColorStop(t, `rgba(255,255,255,${(Math.pow(1 - t, 3.2) * 0.9).toFixed(4)})`);
+  }
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, size, size);
+  // A faint horizontal streak, as a real lens gives.
+  const s = ctx.createLinearGradient(0, 0, size, 0);
+  s.addColorStop(0, 'rgba(255,255,255,0)');
+  s.addColorStop(0.5, 'rgba(255,255,255,0.16)');
+  s.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = s;
+  ctx.fillRect(0, size / 2 - 1.5, size, 3);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+
+export class LunarScene {
+  readonly renderer: THREE.WebGLRenderer;
+  private readonly scene = new THREE.Scene();
+  private readonly camera = new THREE.PerspectiveCamera(45, 2, 0.4, FAR_M);
+  private readonly tele = new THREE.PerspectiveCamera(5, 1, 0.4, FAR_M);
+  private readonly composer: EffectComposer;
+  private readonly bloom: UnrealBloomPass;
+  private readonly finish: ShaderPass;
+  private readonly heightTex: THREE.DataTexture[] = [];
+  private readonly shadowTargets: THREE.WebGLRenderTarget[] = [];
+  private readonly shadowScene = new THREE.Scene();
+  private readonly shadowCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+  private readonly shadowMat: THREE.ShaderMaterial;
+  private readonly terrainMats: THREE.ShaderMaterial[] = [];
+  private readonly skylineMat: THREE.ShaderMaterial;
+  private skyline: THREE.Mesh | null = null;
+  private readonly sun: THREE.Mesh;
+  private readonly sunMat: THREE.ShaderMaterial;
+  private readonly glare: THREE.Sprite;
+  private readonly earth: THREE.Mesh;
+  private readonly earthMat: THREE.ShaderMaterial;
+  private readonly stars: THREE.Points;
+  private readonly sunDir = new THREE.Vector3(0, 0.02, -1);
+  private readonly shadowSun = new THREE.Vector3();
+  private shadowsDirty = true;
+  private eye = 2;
+  /** Where the camera looks: azimuth and pitch in degrees, vertical field of view in degrees. */
+  look = { az: 0, pitch: 4, fov: 46 };
+
+  constructor(canvas: HTMLCanvasElement) {
+    this.renderer = new THREE.WebGLRenderer({ canvas, antialias: false, logarithmicDepthBuffer: true, powerPreference: 'high-performance' });
+    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    this.renderer.toneMappingExposure = 1.0;
+    this.renderer.setClearColor(0x000000, 1);
+    const linear = this.renderer.extensions.has('OES_texture_float_linear');
+
+    for (let i = 0; i < 3; i++) {
+      const tex = new THREE.DataTexture(new Float32Array(TERRAIN_N * TERRAIN_N), TERRAIN_N, TERRAIN_N, THREE.RedFormat, THREE.FloatType);
+      tex.minFilter = tex.magFilter = linear ? THREE.LinearFilter : THREE.NearestFilter;
+      tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping;
+      tex.needsUpdate = true;
+      this.heightTex.push(tex);
+      this.shadowTargets.push(new THREE.WebGLRenderTarget(SHADOW_N, SHADOW_N, { depthBuffer: false, minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter }));
+    }
+    const heights = { tH0: { value: this.heightTex[0] }, tH1: { value: this.heightTex[1] }, tH2: { value: this.heightTex[2] } };
+    const shadows = { tS0: { value: this.shadowTargets[0].texture }, tS1: { value: this.shadowTargets[1].texture }, tS2: { value: this.shadowTargets[2].texture } };
+    const light = { uSun: { value: this.sunDir }, uSunPower: { value: 1 }, uEarth: { value: new THREE.Vector3(0, 0.1, -1) }, uEarthshine: { value: 0.012 } };
+
+    this.shadowMat = new THREE.ShaderMaterial({
+      vertexShader: QUAD_VERT,
+      fragmentShader: SHADOW_FRAG,
+      uniforms: { ...heights, uSun: { value: this.shadowSun }, uHalfLevel: { value: 1 }, uStart: { value: 1 } },
+      depthTest: false,
+      depthWrite: false,
+    });
+    this.shadowScene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), this.shadowMat));
+
+    const grid = new THREE.PlaneGeometry(1, 1, TERRAIN_N - 1, TERRAIN_N - 1);
+    for (let i = 0; i < 3; i++) {
+      const mat = new THREE.ShaderMaterial({
+        vertexShader: TERRAIN_VERT,
+        fragmentShader: TERRAIN_FRAG,
+        uniforms: { ...heights, ...shadows, ...light, uHalf: { value: TERRAIN_HALF_M[i] }, uInner: { value: i ? TERRAIN_HALF_M[i - 1] * 0.985 : 0 } },
+        side: THREE.DoubleSide,
+        polygonOffset: i > 0,
+        polygonOffsetFactor: i,
+        polygonOffsetUnits: i,
+      });
+      const mesh = new THREE.Mesh(grid, mat);
+      mesh.frustumCulled = false;
+      this.terrainMats.push(mat);
+      this.scene.add(mesh);
+    }
+
+    this.skylineMat = new THREE.ShaderMaterial({ vertexShader: SKYLINE_VERT, fragmentShader: SKYLINE_FRAG, uniforms: { uSun: light.uSun, uSunPower: light.uSunPower }, side: THREE.DoubleSide });
+
+    this.sunMat = new THREE.ShaderMaterial({
+      uniforms: { uGain: { value: 60 } },
+      vertexShader: `
+#include <common>
+#include <logdepthbuf_pars_vertex>
+varying vec2 vDisc;
+void main() {
+  vDisc = position.xy;
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+  #include <logdepthbuf_vertex>
+}`,
+      fragmentShader: `
+#include <common>
+#include <logdepthbuf_pars_fragment>
+uniform float uGain;
+varying vec2 vDisc;
+void main() {
+  #include <logdepthbuf_fragment>
+  // Limb darkening of the photosphere.
+  float mu = sqrt(max(0.0, 1.0 - dot(vDisc, vDisc)));
+  gl_FragColor = vec4(vec3(uGain * (0.4 + 0.6 * mu)), 1.0);
+  #include <tonemapping_fragment>
+  #include <colorspace_fragment>
+}`,
+    });
+    this.sun = new THREE.Mesh(new THREE.CircleGeometry(1, 96), this.sunMat);
+    this.sun.frustumCulled = false;
+    this.scene.add(this.sun);
+    this.glare = new THREE.Sprite(new THREE.SpriteMaterial({ map: glareTexture(), blending: THREE.AdditiveBlending, depthTest: false, depthWrite: false, transparent: true, color: new THREE.Color(2.2, 2.2, 2.15) }));
+    this.glare.renderOrder = 10;
+    this.scene.add(this.glare);
+
+    const earthMap = new THREE.TextureLoader().load(`${import.meta.env.BASE_URL}textures/earth.jpg`, () => this.onChange?.());
+    earthMap.colorSpace = THREE.SRGBColorSpace;
+    earthMap.anisotropy = 4;
+    this.earthMat = new THREE.ShaderMaterial({ vertexShader: EARTH_VERT, fragmentShader: EARTH_FRAG, uniforms: { map: { value: earthMap }, uSun: light.uSun } });
+    this.earth = new THREE.Mesh(new THREE.SphereGeometry(1, 96, 48), this.earthMat);
+    this.earth.frustumCulled = false;
+    this.scene.add(this.earth);
+
+    // Stars: illustrative, and only visible when the Sun is hidden, as for a dark-adapted eye.
+    const count = 2600;
+    const pos = new Float32Array(count * 3);
+    const col = new Float32Array(count * 3);
+    let seed = 12345;
+    const rnd = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296);
+    for (let i = 0; i < count; i++) {
+      const z = rnd() * 2 - 1;
+      const a = rnd() * Math.PI * 2;
+      const r = Math.sqrt(1 - z * z);
+      pos.set([r * Math.cos(a) * SKY_M, z * SKY_M, r * Math.sin(a) * SKY_M], i * 3);
+      const b = 0.25 + 0.75 * Math.pow(rnd(), 5);
+      col.set([b, b, b * (0.92 + 0.16 * rnd())], i * 3);
+    }
+    const starGeo = new THREE.BufferGeometry();
+    starGeo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    starGeo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    this.stars = new THREE.Points(starGeo, new THREE.PointsMaterial({ size: 1.7, sizeAttenuation: false, vertexColors: true, transparent: true, opacity: 0, depthWrite: false }));
+    this.stars.frustumCulled = false;
+    this.scene.add(this.stars);
+
+    const target = new THREE.WebGLRenderTarget(4, 4, { type: THREE.HalfFloatType, samples: 4 });
+    this.composer = new EffectComposer(this.renderer, target);
+    this.composer.addPass(new RenderPass(this.scene, this.camera));
+    this.bloom = new UnrealBloomPass(new THREE.Vector2(4, 4), 0.55, 0.7, 2.4);
+    this.composer.addPass(this.bloom);
+    this.finish = new ShaderPass(new THREE.ShaderMaterial({ vertexShader: QUAD_VERT.replace('vec4(position.xy, 0.0, 1.0)', 'projectionMatrix * modelViewMatrix * vec4(position, 1.0)'), fragmentShader: FINISH_FRAG, uniforms: { tDiffuse: { value: null }, uAspect: { value: 2 } } }));
+    // Tone mapping first, then the vignette and grain in display space.
+    this.composer.addPass(new OutputPass());
+    this.composer.addPass(this.finish);
+    this.camera.rotation.order = 'YXZ';
+  }
+
+  /** Called when something loaded asynchronously and the picture should be redrawn. */
+  onChange: (() => void) | null = null;
+
+  /**
+   * @param tiles    the three grids of public/data/terrain/<id>.bin, or null for a smooth sphere
+   * @param profile  horizon elevation in degrees per azimuth step, for the current observer height
+   * @param distKm   distance of the terrain point that sets the horizon, same indexing; null for a sphere
+   */
+  setTerrain(tiles: Int16Array | null, profile: ArrayLike<number> | null, distKm: ArrayLike<number> | null, stepDeg: number, eyeM: number): void {
+    const n2 = TERRAIN_N * TERRAIN_N;
+    for (let level = 0; level < 3; level++) {
+      const data = this.heightTex[level].image.data as Float32Array;
+      if (tiles) {
+        const unit = TERRAIN_UNIT_M[level];
+        for (let i = 0; i < n2; i++) data[i] = tiles[level * n2 + i] * unit;
+      } else {
+        // Smooth sphere: only the curvature of the Moon.
+        const spacing = (TERRAIN_HALF_M[level] * 2) / (TERRAIN_N - 1);
+        for (let j = 0; j < TERRAIN_N; j++) {
+          for (let i = 0; i < TERRAIN_N; i++) {
+            const x = (i - 128) * spacing;
+            const y = (j - 128) * spacing;
+            data[j * TERRAIN_N + i] = 1737400 * (Math.cos(Math.hypot(x, y) / 1737400) - 1);
+          }
+        }
+      }
+      this.heightTex[level].needsUpdate = true;
+    }
+    this.eye = Math.max(1.6, eyeM);
+    this.camera.position.set(0, this.eye, 0);
+
+    if (this.skyline) {
+      this.scene.remove(this.skyline);
+      this.skyline.geometry.dispose();
+      this.skyline = null;
+    }
+    if (profile && distKm) {
+      const count = profile.length;
+      const verts = new Float32Array(count * 6);
+      const d = new THREE.Vector3();
+      for (let i = 0; i < count; i++) {
+        const dist = Math.max(60, distKm[i] * 1000) * 1.004;
+        direction(i * stepDeg, profile[i], d);
+        const range = dist / Math.max(0.2, Math.cos(profile[i] * D2R));
+        const lower = direction(i * stepDeg, profile[i] - 0.45, new THREE.Vector3()).multiplyScalar(range);
+        verts.set([d.x * range, this.eye + d.y * range, d.z * range, lower.x, this.eye + lower.y, lower.z], i * 6);
+      }
+      const index: number[] = [];
+      for (let i = 0; i < count; i++) {
+        const a = i * 2;
+        const b = ((i + 1) % count) * 2;
+        index.push(a, a + 1, b, b, a + 1, b + 1);
+      }
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.BufferAttribute(verts, 3));
+      geo.setIndex(index);
+      this.skyline = new THREE.Mesh(geo, this.skylineMat);
+      this.skyline.frustumCulled = false;
+      this.scene.add(this.skyline);
+    }
+    this.shadowsDirty = true;
+  }
+
+  setSky(s: SceneSky): void {
+    direction(s.sunAz, s.sunEl, this.sunDir);
+    const power = 1 - s.eclipse;
+    for (const m of this.terrainMats) {
+      m.uniforms.uSunPower.value = power;
+      direction(s.earthAz, s.earthEl, m.uniforms.uEarth.value as THREE.Vector3);
+      m.uniforms.uEarthshine.value = s.earthEl > -1 ? 0.012 : 0.002;
+    }
+    this.skylineMat.uniforms.uSunPower.value = power;
+    if (this.sunDir.angleTo(this.shadowSun) > 0.00012) this.shadowsDirty = true;
+
+    this.sun.position.copy(this.sunDir).multiplyScalar(SKY_M * 0.96).add(this.camera.position);
+    this.sun.scale.setScalar(SKY_M * 0.96 * Math.tan(s.sunRadius * D2R));
+    this.sun.lookAt(this.camera.position);
+    this.sun.visible = power > 0.001;
+    this.glare.position.copy(this.sun.position);
+    const visible = s.sunFrac;
+    this.glare.scale.setScalar(SKY_M * 0.96 * Math.tan(4.5 * D2R) * 2 * (0.55 + 0.45 * visible));
+    (this.glare.material as THREE.SpriteMaterial).opacity = Math.min(1, visible * 1.4) * 0.8;
+    this.glare.visible = visible > 0.002;
+
+    const e = direction(s.earthAz, s.earthEl, new THREE.Vector3());
+    this.earth.position.copy(e).multiplyScalar(SKY_M * 0.9).add(this.camera.position);
+    this.earth.scale.setScalar(SKY_M * 0.9 * Math.tan(s.earthRadius * D2R));
+    // Texture: Greenwich meridian on +X of the sphere, north on +Y.
+    const toScene = (v: [number, number, number]) => new THREE.Vector3(v[0], v[2], -v[1]);
+    const y = toScene(s.earthNorth).normalize();
+    const x = toScene(s.earthGreenwich).normalize();
+    const z = new THREE.Vector3().crossVectors(x, y).normalize();
+    this.earth.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(x, y, z));
+
+    // Exposure opens up when the Sun is hidden, as a camera (or an eye) would, so that earthshine shows.
+    this.renderer.toneMappingExposure = 1.0 + 5.0 * Math.pow(1 - Math.min(1, visible * power), 3);
+    (this.stars.material as THREE.PointsMaterial).opacity = Math.max(0, 1 - visible * 6) * 0.9;
+    this.stars.position.copy(this.camera.position);
+  }
+
+  resize(width: number, height: number): void {
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    this.renderer.setPixelRatio(dpr);
+    this.renderer.setSize(width, height, false);
+    this.composer.setPixelRatio(dpr);
+    this.composer.setSize(width, height);
+    this.camera.aspect = width / height;
+    (this.finish.material as THREE.ShaderMaterial).uniforms.uAspect.value = width / height;
+  }
+
+  private renderShadows(): void {
+    this.shadowSun.copy(this.sunDir);
+    const starts = [22, 180, 1100];
+    for (let level = 0; level < 3; level++) {
+      this.shadowMat.uniforms.uHalfLevel.value = TERRAIN_HALF_M[level];
+      this.shadowMat.uniforms.uStart.value = starts[level];
+      this.renderer.setRenderTarget(this.shadowTargets[level]);
+      this.renderer.render(this.shadowScene, this.shadowCamera);
+    }
+    this.renderer.setRenderTarget(null);
+    this.shadowsDirty = false;
+  }
+
+  /**
+   * @param insets  telephoto windows drawn over the picture: position in CSS pixels from the top left
+   *                of the canvas, and the direction and field of view (degrees) of each lens
+   */
+  render(insets: { x: number; y: number; size: number; az: number; el: number; fov: number }[] = []): void {
+    if (this.shadowsDirty) this.renderShadows();
+    this.camera.fov = this.look.fov;
+    this.camera.rotation.set(this.look.pitch * D2R, -this.look.az * D2R, 0);
+    this.camera.updateProjectionMatrix();
+    this.composer.render();
+    if (!insets.length) return;
+    const r = this.renderer;
+    const height = r.domElement.clientHeight;
+    const glareWas = this.glare.visible;
+    this.glare.visible = false;
+    this.sunMat.uniforms.uGain.value = 2.2;
+    const exposure = r.toneMappingExposure;
+    r.toneMappingExposure = Math.min(exposure, 1.6);
+    r.autoClear = false;
+    r.setScissorTest(true);
+    for (const inset of insets) {
+      const y = height - inset.y - inset.size;
+      r.setViewport(inset.x, y, inset.size, inset.size);
+      r.setScissor(inset.x, y, inset.size, inset.size);
+      r.clear(true, true, false);
+      this.tele.fov = inset.fov;
+      this.tele.position.copy(this.camera.position);
+      this.tele.lookAt(direction(inset.az, inset.el, new THREE.Vector3()).multiplyScalar(1000).add(this.camera.position));
+      this.tele.updateProjectionMatrix();
+      r.render(this.scene, this.tele);
+    }
+    r.setScissorTest(false);
+    r.setViewport(0, 0, r.domElement.clientWidth, height);
+    r.autoClear = true;
+    r.toneMappingExposure = exposure;
+    this.sunMat.uniforms.uGain.value = 60;
+    this.glare.visible = glareWas;
+  }
+
+  /** Screen position (0 to 1, origin top left) of a direction, or null when it is behind the camera. */
+  project(az: number, el: number): { x: number; y: number } | null {
+    const v = direction(az, el, new THREE.Vector3()).multiplyScalar(1000).add(this.camera.position);
+    this.camera.updateMatrixWorld();
+    v.project(this.camera);
+    if (v.z > 1 || v.z < -1) return null;
+    return { x: (v.x + 1) / 2, y: (1 - v.y) / 2 };
+  }
+
+  dispose(): void {
+    this.renderer.dispose();
+    for (const t of this.heightTex) t.dispose();
+    for (const t of this.shadowTargets) t.dispose();
+  }
+}

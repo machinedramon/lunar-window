@@ -48,6 +48,10 @@ export class Horizon {
     return new Horizon('terrain', d.stepDeg, d.elevDeg.map((row) => Float32Array.from(row)));
   }
 
+  static fromDegrees(stepDeg: number, rows: number[][]): Horizon {
+    return new Horizon('terrain', stepDeg, rows.map((row) => Float32Array.from(row)));
+  }
+
   static fromCentidegrees(stepDeg: number, rows: number[][]): Horizon {
     return new Horizon('terrain', stepDeg, rows.map((row) => Float32Array.from(row, (v) => v / 100)));
   }

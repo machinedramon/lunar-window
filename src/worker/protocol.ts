@@ -7,7 +7,9 @@ export interface WorkerPoint {
   lat: number;
   lon: number;
   elevationM: number;
-  /** Horizon in hundredths of a degree, [mast][azimuth]; null = smooth sphere. */
+  /** Horizon in degrees, [mast][azimuth] (the site itself). */
+  elevDeg: number[][] | null;
+  /** Horizon in hundredths of a degree (ring points). Both null = smooth sphere. */
   elevCdeg: number[][] | null;
   stepDeg: number;
 }
@@ -35,6 +37,8 @@ export interface WindowRequest {
   /** Step index, in the grid of the last compute, where the window starts. */
   fromStep: number;
   steps: number;
+  /** When set, the verdict of each landing time of this day is returned too. */
+  day?: number;
 }
 
 export type Request = { type: 'sites'; sites: WorkerSite[] } | ComputeRequest | WindowRequest;
@@ -45,6 +49,8 @@ export interface DayDetail {
   times: CellResult[];
   /** Viable points (site plus ring) at each landing time. */
   robust: number[];
+  /** Which points are viable at each landing time: bit 0 is the site, bits 1 to 8 the ring points in bearing order. */
+  robustMask: number[];
 }
 
 export interface ComputeResult {
@@ -66,6 +72,7 @@ export interface WindowResult {
   earthClear: Float32Array;
   eclipse: Float32Array;
   events: SkyEvent[];
+  detail: DayDetail | null;
 }
 
 export type Response = ComputeResult | WindowResult;

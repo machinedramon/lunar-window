@@ -1,4 +1,5 @@
 // Explore: pick a site and a moment, see the Sun and the Earth against the real skyline.
+import { earthAxes, siteFrame } from '../core/ephemeris';
 import { MAST_HEIGHTS_M } from '../core/horizon';
 import { SUN_PRESENT } from '../core/requirements';
 import { S } from '../i18n/en';
@@ -9,6 +10,7 @@ import type { App, View } from './app';
 import { CATEGORY_LABEL, type LoadedSite, type Site } from './data';
 import { clear, h, reducedMotion, setText } from './dom';
 import { EXPLORE_DAYS, elevationRange, momentAt, outlookFor, type Moment, type Outlook } from './exploreModel';
+import { createHero3D } from './hero3d';
 import { DAY_MS, HOUR_MS, compass, dayTime, deg, duration, isoMinute, latLon, monthShort, num, parseUtc, pct } from './format';
 import { MAX_MS, MIN_MS, type State } from './store';
 
@@ -91,12 +93,27 @@ export function createExplore(app: App): View {
   const stripCanvas = h('canvas', { role: 'img', 'aria-label': T.panorama });
   const readout = h('div', { class: 'readout', hidden: true });
   const heroNote = h('span', { class: 'hero-note' });
-  const hero = h(
-    'section',
-    { class: 'panel hero', 'aria-label': T.panorama },
-    h('div', { class: 'hero-bar' }, h('span', { class: 'eyebrow' }, T.panorama), heroNote),
-    h('div', { style: 'position:relative' }, stripCanvas, readout),
-  );
+  const three = createHero3D();
+  const viewSeg = h('div', { class: 'seg', role: 'group', 'aria-label': T.three.viewTip, title: T.three.viewTip });
+  const view3dBtn = h('button', { type: 'button', onclick: () => store.set({ hero: '3d' }) }, T.three.view3d);
+  const viewPanBtn = h('button', { type: 'button', onclick: () => store.set({ hero: 'panorama' }) }, T.panorama);
+  viewSeg.append(view3dBtn, viewPanBtn);
+  const stripWrap = h('div', { style: 'position:relative' }, stripCanvas, readout);
+  const hero = h('section', { class: 'panel hero', 'aria-label': T.panorama }, h('div', { class: 'hero-bar' }, viewSeg, heroNote), three.el, stripWrap);
+  three.onFail = () => {
+    view3dBtn.disabled = true;
+    view3dBtn.title = T.three.unavailable;
+    showHero();
+    draw();
+  };
+  const use3d = () => store.state.hero === '3d' && three.ok();
+  function showHero(): void {
+    const on = use3d();
+    three.el.hidden = !on;
+    stripWrap.hidden = on;
+    view3dBtn.setAttribute('aria-pressed', String(on));
+    viewPanBtn.setAttribute('aria-pressed', String(!on));
+  }
   stripCanvas.addEventListener('mousemove', (ev) => {
     if (!stripGeo || !loaded) return;
     const box = stripCanvas.getBoundingClientRect();
@@ -228,6 +245,19 @@ export function createExplore(app: App): View {
       centerAz = loaded.horizon.kind === 'sphere' ? 180 : Math.round(outlook.earthAz / 10) * 10;
     }
     const m = moment;
+    showHero();
+    if (use3d()) {
+      // Earth's pole and Greenwich meridian in the local east-north-up frame of the site.
+      const axes = earthAxes(new Date(state.timeMs));
+      const f = siteFrame(site.lat, site.lon, 0);
+      const local = (v: readonly [number, number, number]): [number, number, number] => [
+        v[0] * f.east[0] + v[1] * f.east[1] + v[2] * f.east[2],
+        v[0] * f.north[0] + v[1] * f.north[1] + v[2] * f.north[2],
+        v[0] * f.up[0] + v[1] * f.up[1] + v[2] * f.up[2],
+      ];
+      three.setSite(loaded, mast);
+      three.setMoment(m, { north: local(axes.north), greenwich: local(axes.greenwich) });
+    }
     const sunUp = m.sunFrac >= SUN_PRESENT;
     const earthUp = m.earthClear > 0;
 
@@ -286,7 +316,10 @@ export function createExplore(app: App): View {
     if (!loaded || !moment || !outlook || !el.isConnected) return;
     const mast = store.state.req.mast;
     const [elMin, elMax] = elevationRange(loaded, mast);
-    stripGeo = drawStrip(
+    if (use3d()) {
+      setText(heroNote, T.three.note);
+      three.redraw();
+    } else stripGeo = drawStrip(
       stripCanvas,
       {
         horizon: loaded.horizon,
@@ -305,10 +338,12 @@ export function createExplore(app: App): View {
       },
       STRIP_H,
     );
-    const stretch = stripGeo.plotH / (elMax - elMin) / (stripGeo.plotW / 360);
-    setText(heroNote, stretch > 1.5 ? T.panoramaNote(stretch.toFixed(0)) : T.panoramaNoteFlat);
-    drawCloseup(sunCanvas, { horizon: loaded.horizon, mast, body: moment.sun, span: 3.2, inner: '#fff8de', outer: COLORS.sunDeep, glow: 'rgba(255,207,102,0.35)', scaleLabel: T.oneDegree }, CLOSE_H);
-    drawCloseup(earthCanvas, { horizon: loaded.horizon, mast, body: moment.earth, span: 7.5, inner: '#d6e9ff', outer: COLORS.earthDeep, glow: 'rgba(111,180,255,0.22)', scaleLabel: T.oneDegree }, CLOSE_H);
+    if (!use3d() && stripGeo) {
+      const stretch = stripGeo.plotH / (elMax - elMin) / (stripGeo.plotW / 360);
+      setText(heroNote, stretch > 1.5 ? T.panoramaNote(stretch.toFixed(0)) : T.panoramaNoteFlat);
+    }
+    drawCloseup(sunCanvas, { horizon: loaded.horizon, mast, body: moment.sun, span: 3.2, inner: '#ffffff', outer: '#ececee', glow: 'rgba(255,255,255,0.4)', scaleLabel: T.oneDegree }, CLOSE_H);
+    drawCloseup(earthCanvas, { horizon: loaded.horizon, mast, body: moment.earth, span: 7.5, inner: '#dcecff', outer: COLORS.earthDeep, glow: 'rgba(125,184,255,0.24)', scaleLabel: T.oneDegree }, CLOSE_H);
     timeGeo = drawTimeline(timeCanvas, {
       startMs: outlook.grid.startMs,
       stepMs: outlook.grid.stepMs,
@@ -341,7 +376,7 @@ export function createExplore(app: App): View {
         else void app.site(id).then(apply);
         return;
       }
-      if (changed.has('timeMs') || changed.has('req') || changed.has('tab')) render();
+      if (changed.has('timeMs') || changed.has('req') || changed.has('tab') || changed.has('hero')) render();
     },
     hide() {
       if (playing) togglePlay(false);

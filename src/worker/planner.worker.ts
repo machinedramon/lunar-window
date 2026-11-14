@@ -5,7 +5,7 @@ import { buildCalendar, LANDING_STEPS } from '../core/calendar';
 import { siteFrame, type SiteFrame } from '../core/ephemeris';
 import { findEvents } from '../core/events';
 import { Horizon, MAST_HEIGHTS_M } from '../core/horizon';
-import { evaluate, prepare, type Prepared } from '../core/requirements';
+import { evaluate, prepare, type Prepared, type Requirements } from '../core/requirements';
 import { DAY_STEPS, pointSeries, sampleSky, STEP_MS, type PointSeries, type SkySamples } from '../core/series';
 import type { ComputeRequest, DayDetail, Request, Response, WindowRequest, WorkerSite } from './protocol';
 
@@ -25,6 +25,8 @@ let preparedKey = '';
 let prepared: Prepared[][] = [];
 let mastInUse = 1;
 let marginInUse = 0;
+let reqInUse: Requirements | null = null;
+let daysInUse = 0;
 
 function setSites(list: WorkerSite[]): void {
   sites = list.map((s) => ({
@@ -33,7 +35,7 @@ function setSites(list: WorkerSite[]): void {
       lat: p.lat,
       lon: p.lon,
       elevationM: p.elevationM,
-      horizon: p.elevCdeg ? Horizon.fromCentidegrees(p.stepDeg, p.elevCdeg) : Horizon.sphere(),
+      horizon: p.elevDeg ? Horizon.fromDegrees(p.stepDeg, p.elevDeg) : p.elevCdeg ? Horizon.fromCentidegrees(p.stepDeg, p.elevCdeg) : Horizon.sphere(),
     })),
   }));
   skyKey = seriesKey = preparedKey = '';
@@ -64,18 +66,25 @@ function compute(msg: ComputeRequest): Response {
     preparedKey = pk;
     marginInUse = msg.req.earthMarginDeg;
   }
+  reqInUse = msg.req;
+  daysInUse = msg.days;
   const calendars = sites.map((site, i) => {
     const points = prepared[i];
-    const details: DayDetail[] = msg.detailDays
-      .filter((d) => d >= 0 && d < msg.days)
-      .map((d) => {
-        const times = LANDING_STEPS.map((k) => evaluate(points[0], d * DAY_STEPS + k, msg.req));
-        const robust = LANDING_STEPS.map((k) => points.reduce((n, p) => n + (evaluate(p, d * DAY_STEPS + k, msg.req).status !== 'fail' ? 1 : 0), 0));
-        return { day: d, times, robust };
-      });
+    const details = msg.detailDays.filter((d) => d >= 0 && d < msg.days).map((d) => dayDetail(points, d, msg.req));
     return { siteId: site.id, cal: buildCalendar(points, msg.req, 0, msg.days), details };
   });
   return { type: 'result', id: msg.id, startMs: msg.startMs, days: msg.days, calendars, elapsedMs: performance.now() - t0 };
+}
+
+function dayDetail(points: Prepared[], day: number, req: Requirements): DayDetail {
+  const times = LANDING_STEPS.map((k) => evaluate(points[0], day * DAY_STEPS + k, req));
+  const robustMask = LANDING_STEPS.map((k) => points.reduce((mask, p, i) => mask | (evaluate(p, day * DAY_STEPS + k, req).status !== 'fail' ? 1 << i : 0), 0));
+  const robust = robustMask.map((mask) => {
+    let n = 0;
+    for (let b = mask; b; b >>= 1) n += b & 1;
+    return n;
+  });
+  return { day, times, robust, robustMask };
 }
 
 function windowOf(msg: WindowRequest): Response | null {
@@ -95,6 +104,7 @@ function windowOf(msg: WindowRequest): Response | null {
     earthClear: s.earthClear.slice(from, to),
     eclipse: s.eclipse.slice(from, to),
     events: findEvents(s, samples.grid, frameOf(p, mastInUse), p.horizon, mastInUse, marginInUse, from, to),
+    detail: msg.day !== undefined && reqInUse && msg.day >= 0 && msg.day < daysInUse ? dayDetail(prepared[i], msg.day, reqInUse) : null,
   };
 }
 

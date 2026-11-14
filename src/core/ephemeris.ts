@@ -5,7 +5,7 @@
 // in tests/golden. Frame: Moon-fixed, built from the IAU north pole and prime-meridian
 // angle of the Moon (it matches MOON_ME to a few thousandths of a degree), sphere of
 // radius 1737.4 km, the same reference as the LOLA elevation data.
-import { Body, GeoMoon, GeoVector, MakeTime, RotationAxis } from 'astronomy-engine';
+import { Body, GeoMoon, GeoVector, MakeTime, RotateVector, Rotation_EQD_EQJ, RotationAxis, SiderealTime, Vector } from 'astronomy-engine';
 
 export type Vec3 = readonly [number, number, number];
 
@@ -28,11 +28,10 @@ export interface Sky {
   earth: Vec3;
 }
 
-/**
- * One call per instant serves every site: the per-site work is only a change of basis.
- */
-export function sky(date: Date): Sky {
-  const time = MakeTime(date);
+type Time = ReturnType<typeof MakeTime>;
+
+/** Axes of the Moon-fixed frame, expressed in J2000 equatorial coordinates. */
+function moonFrame(time: Time): { x: Vec3; y: Vec3; z: Vec3 } {
   const axis = RotationAxis(Body.Moon, time);
   const z = unit([axis.north.x, axis.north.y, axis.north.z]);
   const node = unit(cross([0, 0, 1], z)); // ascending node of the lunar equator on the J2000 equator
@@ -41,13 +40,37 @@ export function sky(date: Date): Sky {
   const cw = Math.cos(w);
   const sw = Math.sin(w);
   const x: Vec3 = [node[0] * cw + m[0] * sw, node[1] * cw + m[1] * sw, node[2] * cw + m[2] * sw];
-  const y = cross(z, x);
+  return { x, y: cross(z, x), z };
+}
 
+/**
+ * One call per instant serves every site: the per-site work is only a change of basis.
+ */
+export function sky(date: Date): Sky {
+  const time = MakeTime(date);
+  const { x, y, z } = moonFrame(time);
   const moon = GeoMoon(time); // geocentric, J2000 equatorial, au
   const sunGeo = GeoVector(Body.Sun, time, true);
   const s: Vec3 = [(sunGeo.x - moon.x) * KM_PER_AU, (sunGeo.y - moon.y) * KM_PER_AU, (sunGeo.z - moon.z) * KM_PER_AU];
   const e: Vec3 = [-moon.x * KM_PER_AU, -moon.y * KM_PER_AU, -moon.z * KM_PER_AU];
   return { sun: [dot(s, x), dot(s, y), dot(s, z)], earth: [dot(e, x), dot(e, y), dot(e, z)] };
+}
+
+/**
+ * Orientation of the Earth, in the Moon-fixed frame: its north pole and the point of its
+ * equator on the Greenwich meridian. Used to show the right face of the Earth in the 3D view.
+ */
+export function earthAxes(date: Date): { north: Vec3; greenwich: Vec3 } {
+  const time = MakeTime(date);
+  const f = moonFrame(time);
+  const toJ2000 = Rotation_EQD_EQJ(time);
+  const theta = SiderealTime(time) * 15 * D2R; // Greenwich apparent sidereal time
+  const inMoon = (vx: number, vy: number, vz: number): Vec3 => {
+    const v = RotateVector(toJ2000, new Vector(vx, vy, vz, time));
+    const j: Vec3 = [v.x, v.y, v.z];
+    return [dot(j, f.x), dot(j, f.y), dot(j, f.z)];
+  };
+  return { north: inMoon(0, 0, 1), greenwich: inMoon(Math.cos(theta), Math.sin(theta), 0) };
 }
 
 /** Local directions of a site, in the Moon-fixed frame, and its position in km. */

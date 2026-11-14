@@ -53,8 +53,8 @@ export function drawStrip(canvas: HTMLCanvasElement, m: StripInput, cssHeight: n
 
   // Sky
   const sky = ctx.createLinearGradient(0, PAD.top, 0, PAD.top + plotH);
-  sky.addColorStop(0, '#03050a');
-  sky.addColorStop(1, '#0a1020');
+  sky.addColorStop(0, '#000000');
+  sky.addColorStop(1, '#08080a');
   ctx.fillStyle = sky;
   ctx.fillRect(PAD.left, PAD.top, plotW, plotH);
 
@@ -101,8 +101,8 @@ export function drawStrip(canvas: HTMLCanvasElement, m: StripInput, cssHeight: n
     ctx.stroke();
     ctx.setLineDash([]);
   };
-  path(m.sunPath, 'rgba(255,207,102,0.5)');
-  path(m.earthPath, 'rgba(111,180,255,0.55)');
+  path(m.sunPath, 'rgba(255,255,255,0.5)');
+  path(m.earthPath, 'rgba(125,184,255,0.6)');
 
   // Discs at their true angular size (the vertical scale is stretched, so they look tall)
   const disc = (v: View, inner: string, outer: string, glow: string, glowR: number) => {
@@ -128,12 +128,12 @@ export function drawStrip(canvas: HTMLCanvasElement, m: StripInput, cssHeight: n
       ctx.fill();
     }
   };
-  disc(m.earth, '#bcdcff', COLORS.earthDeep, 'rgba(111,180,255,0.32)', 26);
-  disc(m.sun, '#fff6d6', COLORS.sunDeep, 'rgba(255,207,102,0.5)', 34);
+  disc(m.earth, '#cfe4ff', COLORS.earthDeep, 'rgba(125,184,255,0.32)', 26);
+  disc(m.sun, '#ffffff', '#f1f1f1', 'rgba(255,255,255,0.55)', 34);
 
   // Terrain: lighter where the ridge that sets the skyline is far away (smoothed, so it reads as haze, not stripes)
-  const near: [number, number, number] = [44, 52, 70];
-  const far: [number, number, number] = [104, 116, 142];
+  const near: [number, number, number] = [46, 46, 49];
+  const far: [number, number, number] = [128, 128, 134];
   const dist = m.data ? m.data.distKm[m.mast] : null;
   const n = m.horizon.count;
   const cols = Math.ceil(plotW) + 1;
@@ -174,12 +174,12 @@ export function drawStrip(canvas: HTMLCanvasElement, m: StripInput, cssHeight: n
   let top = Infinity;
   for (let x = 0; x < cols; x++) top = Math.min(top, ridge[x]);
   const shade = ctx.createLinearGradient(0, top, 0, PAD.top + plotH);
-  shade.addColorStop(0, 'rgba(8,11,18,0)');
-  shade.addColorStop(1, 'rgba(8,11,18,0.82)');
+  shade.addColorStop(0, 'rgba(0,0,0,0)');
+  shade.addColorStop(1, 'rgba(0,0,0,0.85)');
   ctx.fillStyle = shade;
   ctx.fillRect(PAD.left, PAD.top, plotW, plotH);
   ctx.restore();
-  ctx.strokeStyle = 'rgba(205,215,236,0.8)';
+  ctx.strokeStyle = 'rgba(235,235,238,0.85)';
   ctx.lineWidth = 1.1;
   ctx.lineJoin = 'round';
   ctx.beginPath();
@@ -202,8 +202,8 @@ export function drawStrip(canvas: HTMLCanvasElement, m: StripInput, cssHeight: n
     ctx.stroke();
     ctx.setLineDash([]);
   };
-  outline(m.sun, m.sunFrac < 0.999, 'rgba(255,207,102,0.9)');
-  outline(m.earth, m.earthClear < m.earth.radius, 'rgba(111,180,255,0.9)');
+  outline(m.sun, m.sunFrac < 0.999, 'rgba(255,255,255,0.9)');
+  outline(m.earth, m.earthClear < m.earth.radius, 'rgba(125,184,255,0.9)');
 
   // Labels
   const label = (v: View, text: string, color: string, hidden: boolean) => {
@@ -216,13 +216,13 @@ export function drawStrip(canvas: HTMLCanvasElement, m: StripInput, cssHeight: n
     ctx.font = `600 12px ${FONT}`;
     ctx.textAlign = 'center';
     ctx.lineWidth = 4;
-    ctx.strokeStyle = 'rgba(4,6,10,0.85)';
+    ctx.strokeStyle = 'rgba(0,0,0,0.85)';
     ctx.strokeText(full, x, y);
     ctx.fillStyle = color;
     ctx.fillText(full, x, y);
   };
-  if (m.earth.el > m.elMin && m.earth.el < m.elMax) label(m.earth, m.labels.earth, '#a9d2ff', m.earthClear <= 0);
-  if (m.sun.el > m.elMin && m.sun.el < m.elMax) label(m.sun, m.labels.sun, '#ffe2a0', m.sunFrac <= 0);
+  if (m.earth.el > m.elMin && m.earth.el < m.elMax) label(m.earth, m.labels.earth, '#a9d0ff', m.earthClear <= 0);
+  if (m.sun.el > m.elMin && m.sun.el < m.elMax) label(m.sun, m.labels.sun, '#ffffff', m.sunFrac <= 0);
 
   if (m.horizon.kind === 'sphere') {
     ctx.font = `500 12px ${FONT}`;
@@ -286,8 +286,8 @@ export function drawCloseup(canvas: HTMLCanvasElement, m: CloseupInput, cssHeigh
   const yOf = (el: number) => h / 2 - (el - mid) * ppd;
 
   const sky = ctx.createLinearGradient(0, 0, 0, h);
-  sky.addColorStop(0, '#03050a');
-  sky.addColorStop(1, '#0a1020');
+  sky.addColorStop(0, '#000000');
+  sky.addColorStop(1, '#08080a');
   ctx.fillStyle = sky;
   ctx.fillRect(0, 0, w, h);
 
@@ -320,11 +320,11 @@ export function drawCloseup(canvas: HTMLCanvasElement, m: CloseupInput, cssHeigh
   ctx.lineTo(w, h);
   ctx.closePath();
   const rock = ctx.createLinearGradient(0, yOf(ground) - 20, 0, h);
-  rock.addColorStop(0, '#4a556d');
-  rock.addColorStop(1, '#161b27');
+  rock.addColorStop(0, '#5a5a5f');
+  rock.addColorStop(1, '#0e0e10');
   ctx.fillStyle = rock;
   ctx.fill();
-  ctx.strokeStyle = 'rgba(200,210,232,0.8)';
+  ctx.strokeStyle = 'rgba(235,235,238,0.85)';
   ctx.lineWidth = 1.1;
   ctx.beginPath();
   for (let px = 0; px <= w; px += 1) {

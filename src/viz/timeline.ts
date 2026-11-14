@@ -45,7 +45,7 @@ export function drawTimeline(canvas: HTMLCanvasElement, m: TimelineInput): Timel
   const endMs = m.startMs + n * m.stepMs;
   const xOf = (ms: number) => LEFT + ((ms - m.startMs) / (endMs - m.startMs)) * plotW;
   const rowY = (r: number) => TOP + r * (ROW + GAP);
-  const off: [number, number, number] = [36, 44, 60];
+  const off: [number, number, number] = [26, 26, 29];
 
   if (m.span) {
     const a = Math.max(LEFT, xOf(m.span.fromMs));
@@ -68,11 +68,11 @@ export function drawTimeline(canvas: HTMLCanvasElement, m: TimelineInput): Timel
       both += s >= SUN_PRESENT && e ? 1 : 0;
     }
     const k = Math.max(1, Math.min(i1, n) - i0);
-    ctx.fillStyle = mix(off, [255, 207, 102], sun / k);
+    ctx.fillStyle = mix(off, [255, 255, 255], sun / k);
     ctx.fillRect(LEFT + px, rowY(0), 1.5, ROW);
-    ctx.fillStyle = mix(off, [111, 180, 255], earth / k);
+    ctx.fillStyle = mix(off, [125, 184, 255], earth / k);
     ctx.fillRect(LEFT + px, rowY(1), 1.5, ROW);
-    ctx.fillStyle = mix(off, [159, 232, 201], both / k);
+    ctx.fillStyle = mix(off, [215, 231, 255], both / k);
     ctx.fillRect(LEFT + px, rowY(2), 1.5, ROW);
   }
 

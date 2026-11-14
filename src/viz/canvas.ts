@@ -38,20 +38,20 @@ export function onResize(el: Element, draw: () => void): () => void {
 }
 
 export const COLORS = {
-  sun: '#ffcf66',
-  sunDeep: '#f59f3a',
-  earth: '#6fb4ff',
-  earthDeep: '#3b7de0',
-  both: '#9fe8c9',
-  ok: '#35c9a8',
-  warn: '#f3b440',
-  bad: '#ee7a62',
-  off: '#2a3244',
-  text: '#eaeef6',
-  text2: '#b9c3d6',
-  muted: '#8a97ae',
+  sun: '#ffffff',
+  sunDeep: '#d9d9dc',
+  earth: '#7db8ff',
+  earthDeep: '#2f6fd6',
+  both: '#d7e7ff',
+  ok: '#ffffff',
+  warn: '#a9a9ae',
+  bad: '#8f8f96',
+  off: '#1d1d20',
+  text: '#f6f6f6',
+  text2: '#c6c6ca',
+  muted: '#8f8f96',
   grid: 'rgba(255,255,255,0.07)',
-  gridStrong: 'rgba(255,255,255,0.22)',
+  gridStrong: 'rgba(255,255,255,0.24)',
 };
 
 export const FONT = "'Inter Variable', system-ui, sans-serif";
