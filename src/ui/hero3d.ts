@@ -276,6 +276,12 @@ export function createHero3D(): Hero3D {
       running = el.isConnected && visible && !document.hidden ? requestAnimationFrame(tick) : 0;
       return;
     }
+    // A slow, cinematic picture gains nothing beyond about 80 frames a second: on fast displays every
+    // second or third refresh is drawn, which spares the graphics card and the battery.
+    if (now - last < 10.5) {
+      running = requestAnimationFrame(tick);
+      return;
+    }
     const dt = Math.min(0.1, (now - last) / 1000);
     last = now;
     scene.clock += dt;

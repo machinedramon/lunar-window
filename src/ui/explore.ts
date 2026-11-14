@@ -117,7 +117,9 @@ export function createExplore(app: App): View {
   const headline = h('h1', { 'aria-live': 'polite' });
   const sunPill = h('span', { class: 'pill' });
   const earthPill = h('span', { class: 'pill' });
-  const verdict = h('div', { class: 'verdict' }, h('div', null, where, headline), h('div', { class: 'pills' }, sunPill, earthPill));
+  // The next step of the story, for a first visit: from one moment at one site to every landing day of the year.
+  const nextStep = h('button', { class: 'next-step', type: 'button', onclick: () => store.set({ tab: 'plan' }) }, T.nextStep, h('span', { 'aria-hidden': 'true' }, ' →'));
+  const verdict = h('div', { class: 'verdict' }, h('div', null, where, headline), h('div', { class: 'verdict-side' }, h('div', { class: 'pills' }, sunPill, earthPill), nextStep));
 
   // ----- hero: panorama
   const stripCanvas = h('canvas', { role: 'img', 'aria-label': T.panorama });

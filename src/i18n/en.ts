@@ -79,6 +79,7 @@ export const en = {
       unavailable: '3D is not available in this browser; showing the panorama.',
     },
     replay: { title: 'Replay a real landing', happened: 'What happened', look: 'What the tool shows' },
+    nextStep: 'What if the launch slips? Plan the mission',
     custom: {
       group: 'Your own point',
       option: 'Custom coordinates…',

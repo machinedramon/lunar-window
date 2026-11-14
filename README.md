@@ -11,7 +11,7 @@ Built for the NASA Space Apps Challenge 2026, challenge *Lunar Landing Site Navi
 | | |
 |---|---|
 | ![A ridge hides part of the Sun, seen through a long lens](docs/img/ridge.jpg) | ![The landing-window calendar after a launch slip](docs/img/planner.jpg) |
-| *One ridge decides: the Sun through a long lens, with the share of the disc that clears the terrain.* | *Plan a mission: every site and landing day of a year, and what a slip does to them.* |
+| *One ridge decides: the Sun through a long lens, with the share of the disc that clears the terrain.* | *Plan a mission: every site and landing day of a year, what a slip does to them, and the sites on a map of the south pole.* |
 
 Most tools ask you to pick a landing site and a date, then show you the sky. Lunar Window starts from
 what a mission needs — sunlight at landing, hours of continuous power, Earth in view for

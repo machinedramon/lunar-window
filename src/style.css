@@ -434,6 +434,27 @@ input:hover {
   flex-wrap: wrap;
   justify-content: flex-end;
 }
+.verdict-side {
+  display: grid;
+  gap: 10px;
+  justify-items: end;
+}
+.next-step {
+  appearance: none;
+  background: none;
+  border: 0;
+  border-bottom: 1px solid var(--line-2);
+  padding: 2px 0;
+  font: 500 13.5px var(--font);
+  color: var(--text-2);
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+.next-step:hover,
+.next-step:focus-visible {
+  color: var(--text);
+  border-color: #fff;
+}
 
 .hero {
   margin-top: 16px;
