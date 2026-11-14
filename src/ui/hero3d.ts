@@ -77,6 +77,8 @@ export function createHero3D(): Hero3D {
   let last = 0;
   let idleSince = 0;
   let arriving = 0;
+  let slow = 0.016;
+  let frames = 0;
   const target: Look = { az: 0, pitch: 4, fov: 46 };
   const api: Hero3D = { el, ok: () => !failed, setSite, setMoment, redraw: wake, onFail: null };
 
@@ -207,10 +209,14 @@ export function createHero3D(): Hero3D {
     const earthUp = m.earth.el > -6;
     target.fov = 46;
     const half = hFov() / 2;
-    if (earthUp) {
+    if (earthUp && m.earth.el < 22) {
       const lean = sunUp ? Math.max(-half * 0.62, Math.min(half * 0.62, -dAz)) : 0;
       target.az = (m.earth.az + lean * (Math.abs(dAz) < half * 1.5 ? 1 : 0.35) + 360) % 360;
       target.pitch = Math.max(1, Math.min(30, m.earth.el * 0.45 + 1.5));
+    } else if (sunUp && m.sun.el > 6) {
+      // Away from the poles the Sun and the Earth ride high: frame the ground instead, lit from the side.
+      target.az = (m.sun.az + 115) % 360;
+      target.pitch = 3;
     } else {
       target.az = m.sun.az;
       target.pitch = Math.max(1.5, Math.min(40, m.sun.el + 3));
@@ -287,6 +293,17 @@ export function createHero3D(): Hero3D {
     } catch (err) {
       fail(err);
       return;
+    }
+    // Keep it fluid on slower graphics: lower the resolution a step at a time, and raise it again when there is room.
+    slow += (dt - slow) * 0.08;
+    if (++frames % 40 === 0) {
+      if (slow > 0.045 && scene.quality > 0.5) {
+        scene.quality = Math.max(0.5, scene.quality * 0.82);
+        resize();
+      } else if (slow < 0.019 && scene.quality < 1) {
+        scene.quality = Math.min(1, scene.quality / 0.9);
+        resize();
+      }
     }
     overlay();
     running = requestAnimationFrame(tick);

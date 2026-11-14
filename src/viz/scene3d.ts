@@ -974,8 +974,11 @@ void main() {
     this.stars.position.copy(this.camera.position);
   }
 
+  /** Share of the full resolution to draw at: lowered on slow graphics to keep the motion fluid. */
+  quality = 1;
+
   resize(width: number, height: number): void {
-    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    const dpr = Math.min(2, window.devicePixelRatio || 1) * this.quality;
     this.renderer.setPixelRatio(dpr);
     this.renderer.setSize(width, height, false);
     this.composer.setPixelRatio(dpr);
