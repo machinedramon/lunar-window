@@ -88,6 +88,8 @@ async function boot(): Promise<void> {
     views.get(tab)?.update(state, changed);
   };
   store.subscribe(render);
+  // Lets the development recording script drive the app.
+  if (import.meta.env.DEV) (window as unknown as Record<string, unknown>).__lwStore = store;
   render(store.state, null);
 
   window.addEventListener('hashchange', () => {

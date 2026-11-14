@@ -152,7 +152,11 @@ export function createHero3D(): Hero3D {
     // Rocks, vehicle and mast: the same arrangement every time for a given site.
     let seed = 7;
     for (const ch of target0.site.id) seed = (seed * 31 + ch.charCodeAt(0)) >>> 0;
-    void scene.setProps(key, seed, vehicleAz, target0.site.category === 'apollo', MAST_HEIGHTS_M[targetMast]);
+    // NASA's concept rover and our solar mast where a mission is still to come; the Lunar Module at the Apollo
+    // sites; only the mast where a real robotic lander stood on real terrain; nothing at the other real sites.
+    const s0 = target0.site;
+    const kind = s0.category === 'apollo' ? 'apollo' : s0.status === 'candidate' || s0.status === 'planned' ? 'rover' : s0.horizon !== 'sphere' ? 'mast' : 'none';
+    void scene.setProps(key, seed, vehicleAz, kind, MAST_HEIGHTS_M[targetMast]);
     wake();
   }
 
@@ -478,6 +482,15 @@ export function createHero3D(): Hero3D {
 
   if (import.meta.env.DEV) {
     // Lets the development screenshot tool aim the camera.
+    (window as unknown as Record<string, unknown>).__lwFace = (which: 'sun' | 'earth', fov: number, lift = 0) => {
+      if (!scene || !moment) return;
+      const v = which === 'sun' ? moment.sun : moment.earth;
+      Object.assign(target, { az: v.az, pitch: v.el + lift, fov });
+      Object.assign(scene.look, target);
+      idleSince = performance.now() + 1e9;
+      arriving = 0;
+      wake();
+    };
     (window as unknown as Record<string, unknown>).__lwLook = (az: number, pitch: number, fov: number) => {
       if (!scene) return;
       Object.assign(target, { az, pitch, fov });

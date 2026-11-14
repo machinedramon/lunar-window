@@ -829,11 +829,11 @@ void main() {
    * @param key        identifies the arrangement (site and mast height)
    * @param vehicleAz  azimuth at which the lander stands, degrees
    */
-  async setProps(key: string, seed: number, vehicleAz: number, apollo: boolean, mastM: number): Promise<void> {
+  async setProps(key: string, seed: number, vehicleAz: number, vehicleKind: 'rover' | 'apollo' | 'mast' | 'none', mastM: number): Promise<void> {
     if (key === this.propsKey) return;
     this.propsKey = key;
     try {
-      const made = await createProps((e, n) => this.groundAt(e, n), seed, vehicleAz, apollo, mastM);
+      const made = await createProps((e, n) => this.groundAt(e, n), seed, vehicleAz, vehicleKind, mastM);
       if (this.propsKey !== key) {
         made.dispose();
         return;
@@ -973,7 +973,7 @@ void main() {
     this.glare.position.copy(this.sun.position);
     const visible = s.sunFrac;
     this.glare.scale.setScalar(SKY_M * 0.96 * Math.tan(4.5 * D2R) * 2 * (0.55 + 0.45 * visible));
-    (this.glare.material as THREE.SpriteMaterial).opacity = Math.min(1, visible * 1.4) * 0.8;
+    (this.glare.material as THREE.SpriteMaterial).userData.base = Math.min(1, visible * 1.4) * 0.8;
     this.glare.visible = visible > 0.002;
 
     const e = direction(s.earthAz, s.earthEl, new THREE.Vector3());
@@ -1041,11 +1041,19 @@ void main() {
     // Where the Sun falls on the picture, for the lens flare; it fades as the Sun leaves the frame or the terrain covers it.
     const fu = (this.finish.material as THREE.ShaderMaterial).uniforms;
     const at = this.lastSky ? this.project(this.lastSky.sunAz, this.lastSky.sunEl) : null;
+    // Through a long lens the Sun is shot as it would be with a solar filter: a clean disc against the
+    // ridge, without the glare and flare that would wash the frame out.
+    const long = 1 - Math.max(0, Math.min(1, (this.look.fov - 8) / 20));
     if (at && this.lastSky) {
       (fu.uSunAt.value as THREE.Vector2).set(at.x, 1 - at.y);
       const off = Math.max(Math.abs(at.x - 0.5), Math.abs(at.y - 0.5));
-      fu.uSunVis.value = this.lastSky.sunFrac * (1 - this.lastSky.eclipse) * Math.max(0, Math.min(1, (0.62 - off) / 0.14));
+      fu.uSunVis.value = this.lastSky.sunFrac * (1 - this.lastSky.eclipse) * Math.max(0, Math.min(1, (0.62 - off) / 0.14)) * (1 - long);
     } else fu.uSunVis.value = 0;
+    this.sunMat.uniforms.uGain.value = 60 + (2.4 - 60) * long;
+    this.bloom.strength = 0.55 * (1 - 0.8 * long);
+    const glareMat = this.glare.material as THREE.SpriteMaterial;
+    const glareBase = glareMat.userData.base as number | undefined;
+    if (glareBase !== undefined) glareMat.opacity = glareBase * (1 - long);
     this.composer.render();
     if (!insets.length) return;
     const r = this.renderer;
@@ -1072,7 +1080,6 @@ void main() {
     r.setViewport(0, 0, r.domElement.clientWidth, height);
     r.autoClear = true;
     r.toneMappingExposure = exposure;
-    this.sunMat.uniforms.uGain.value = 60;
     this.glare.visible = glareWas;
   }
 
