@@ -25,8 +25,6 @@ let preparedKey = '';
 let prepared: Prepared[][] = [];
 let mastInUse = 1;
 let marginInUse = 0;
-let reqInUse: Requirements | null = null;
-let daysInUse = 0;
 
 function setSites(list: WorkerSite[]): void {
   sites = list.map((s) => ({
@@ -43,31 +41,34 @@ function setSites(list: WorkerSite[]): void {
 
 const frameOf = (p: Point, mast: number): SiteFrame => siteFrame(p.lat, p.lon, p.elevationM + MAST_HEIGHTS_M[mast]);
 
-function compute(msg: ComputeRequest): Response {
-  const t0 = performance.now();
-  const count = (msg.days + Math.ceil(msg.req.durationDays) + 2) * DAY_STEPS;
-  const sk = `${msg.startMs}/${count}`;
+/** Makes sure the series in memory are those of this period, mast height and Earth margin. Cached. */
+function ready(startMs: number, days: number, req: Requirements): void {
+  const count = (days + Math.ceil(req.durationDays) + 2) * DAY_STEPS;
+  const sk = `${startMs}/${count}`;
   if (sk !== skyKey || !samples) {
-    samples = sampleSky({ startMs: msg.startMs, stepMs: STEP_MS, count });
+    samples = sampleSky({ startMs, stepMs: STEP_MS, count });
     skyKey = sk;
     seriesKey = '';
   }
-  const se = `${sk}/${msg.req.mast}`;
+  const se = `${sk}/${req.mast}`;
   if (se !== seriesKey) {
     const s = samples;
-    series = sites.map((site) => site.points.map((p) => pointSeries(s, frameOf(p, msg.req.mast), p.horizon, msg.req.mast)));
+    series = sites.map((site) => site.points.map((p) => pointSeries(s, frameOf(p, req.mast), p.horizon, req.mast)));
     seriesKey = se;
     preparedKey = '';
-    mastInUse = msg.req.mast;
+    mastInUse = req.mast;
   }
-  const pk = `${se}/${msg.req.earthMarginDeg}`;
+  const pk = `${se}/${req.earthMarginDeg}`;
   if (pk !== preparedKey) {
-    prepared = series.map((points) => points.map((ps) => prepare(ps, msg.req.earthMarginDeg)));
+    prepared = series.map((points) => points.map((ps) => prepare(ps, req.earthMarginDeg)));
     preparedKey = pk;
-    marginInUse = msg.req.earthMarginDeg;
+    marginInUse = req.earthMarginDeg;
   }
-  reqInUse = msg.req;
-  daysInUse = msg.days;
+}
+
+function compute(msg: ComputeRequest): Response {
+  const t0 = performance.now();
+  ready(msg.startMs, msg.days, msg.req);
   const calendars = sites.map((site, i) => {
     const points = prepared[i];
     const details = msg.detailDays.filter((d) => d >= 0 && d < msg.days).map((d) => dayDetail(points, d, msg.req));
@@ -89,7 +90,9 @@ function dayDetail(points: Prepared[], day: number, req: Requirements): DayDetai
 
 function windowOf(msg: WindowRequest): Response | null {
   const i = sites.findIndex((s) => s.id === msg.siteId);
-  if (i < 0 || !samples || !series[i]) return null;
+  if (i < 0) return null;
+  ready(msg.startMs, msg.days, msg.req);
+  if (!samples || !series[i]) return null;
   const s = series[i][0];
   const from = Math.max(0, Math.min(msg.fromStep, s.sunFrac.length - 1));
   const to = Math.min(s.sunFrac.length, from + msg.steps);
@@ -104,7 +107,7 @@ function windowOf(msg: WindowRequest): Response | null {
     earthClear: s.earthClear.slice(from, to),
     eclipse: s.eclipse.slice(from, to),
     events: findEvents(s, samples.grid, frameOf(p, mastInUse), p.horizon, mastInUse, marginInUse, from, to),
-    detail: msg.day !== undefined && reqInUse && msg.day >= 0 && msg.day < daysInUse ? dayDetail(prepared[i], msg.day, reqInUse) : null,
+    detail: msg.day !== undefined && msg.day >= 0 && msg.day < msg.days ? dayDetail(prepared[i], msg.day, msg.req) : null,
   };
 }
 

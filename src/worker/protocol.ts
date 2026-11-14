@@ -34,7 +34,11 @@ export interface WindowRequest {
   type: 'window';
   id: number;
   siteId: string;
-  /** Step index, in the grid of the last compute, where the window starts. */
+  /** The period and requirements the window belongs to (as in a compute request). */
+  startMs: number;
+  days: number;
+  req: Requirements;
+  /** Step index, counted from startMs, where the window starts. */
   fromStep: number;
   steps: number;
   /** When set, the verdict of each landing time of this day is returned too. */

@@ -51,8 +51,8 @@ export class Planner {
     return this.ask<ComputeResult>((id) => ({ type: 'compute', id, startMs, days, req, detailDays }));
   }
 
-  /** Series of one site inside the last computed period, and optionally the verdict of one day. */
-  window(siteId: string, fromStep: number, steps: number, day?: number): Promise<WindowResult> {
-    return this.ask<WindowResult>((id) => ({ type: 'window', id, siteId, fromStep, steps, day }));
+  /** Series of one site inside a period, and optionally the verdict of one day of it. */
+  window(startMs: number, days: number, req: Requirements, siteId: string, fromStep: number, steps: number, day?: number): Promise<WindowResult> {
+    return this.ask<WindowResult>((id) => ({ type: 'window', id, startMs, days, req, siteId, fromStep, steps, day }));
   }
 }

@@ -87,7 +87,8 @@ export function drawTimeline(canvas: HTMLCanvasElement, m: TimelineInput): Timel
 
   // Day ticks
   const days = (endMs - m.startMs) / 86400000;
-  const every = days > 200 ? 30 : days > 70 ? 14 : days > 24 ? 5 : days > 10 ? 2 : 1;
+  // Labels at least 52 px apart, on a round number of days.
+  const every = [1, 2, 5, 7, 14, 30, 60].find((n) => (plotW / days) * n >= 52) ?? 90;
   const axisY = rowY(2) + ROW + 6;
   ctx.textBaseline = 'alphabetic';
   ctx.textAlign = 'center';

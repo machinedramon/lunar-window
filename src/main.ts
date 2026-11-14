@@ -1,6 +1,8 @@
 import './style.css';
 import { S } from './i18n/en';
 import { createAccuracy } from './ui/accuracy';
+import { createCompare } from './ui/compare';
+import { createMissions } from './ui/missions';
 import { App, type View } from './ui/app';
 import { loadSiteList } from './ui/data';
 import { clear, h } from './ui/dom';
@@ -50,6 +52,8 @@ async function boot(): Promise<void> {
   const factories: Partial<Record<Tab, () => View>> = {
     explore: () => createExplore(app),
     plan: () => createPlan(app, planner),
+    compare: () => createCompare(app, planner),
+    missions: () => createMissions(app, planner),
     accuracy: () => createAccuracy(app),
   };
   const views = new Map<Tab, View>();

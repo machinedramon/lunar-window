@@ -438,7 +438,7 @@ export function createPlan(app: App, planner: Planner): View {
       win = null;
       timeIdx = cal.bestTime[dayIdx];
       const steps = durationSteps(req) + 3 * DAY_STEPS;
-      void planner.window(d.siteId, Math.max(0, (dayIdx - 1) * DAY_STEPS), steps, dayIdx).then((res) => {
+      void planner.window(startMs(), DAYS, req, d.siteId, Math.max(0, (dayIdx - 1) * DAY_STEPS), steps, dayIdx).then((res) => {
         if (winKey !== k) return;
         win = res;
         renderDetail();

@@ -22,6 +22,8 @@ export interface CalendarInput {
   cursor: { row: number; day: number } | null;
   /** Cell open in the detail panel. */
   selected: { row: number; day: number } | null;
+  /** When set, only these days can be chosen: the others are dimmed. */
+  allowed?: { from: number; to: number };
   labels: { planned: string; slipped: string; days: (n: number) => string; month: (ms: number) => string };
 }
 
@@ -142,6 +144,12 @@ export function drawCalendar(canvas: HTMLCanvasElement, m: CalendarInput): Calen
     ctx.fillText(r.cal ? m.labels.days(viable) : '…', w, top + ROW / 2 + 0.5);
     ctx.textBaseline = 'alphabetic';
   });
+
+  if (m.allowed) {
+    ctx.fillStyle = 'rgba(0,0,0,0.62)';
+    if (m.allowed.from > 0) ctx.fillRect(LEFT, AXIS, xOf(m.allowed.from) - LEFT, bottom - AXIS);
+    if (m.allowed.to < m.days - 1) ctx.fillRect(xOf(m.allowed.to + 1), AXIS, LEFT + plotW - xOf(m.allowed.to + 1), bottom - AXIS);
+  }
 
   // Planned and slipped dates
   const marker = (day: number, color: string, text: string, dashed: boolean, level: number) => {
