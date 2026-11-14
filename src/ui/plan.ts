@@ -7,6 +7,7 @@ import { DAY_STEPS, STEP_MS } from '../core/series';
 import { S } from '../i18n/en';
 import { onResize } from '../viz/canvas';
 import { calendarCell, drawCalendar, type CalendarGeometry, type CalendarRow } from '../viz/calendar';
+import { drawPoleMap, mapHit, type MapGeometry } from '../viz/polemap';
 import { drawTimeline } from '../viz/timeline';
 import type { ComputeResult, WindowResult } from '../worker/protocol';
 import type { App, View } from './app';
@@ -147,6 +148,52 @@ export function createPlan(app: App, planner: Planner): View {
   );
   const summary = h('div', { class: 'summary', 'aria-live': 'polite' });
 
+  // ---------- map of the south pole
+  const mapCanvas = h('canvas', { class: 'map-canvas', role: 'img', 'aria-label': T.map.aria });
+  const mapImage = new Image();
+  mapImage.src = `${import.meta.env.BASE_URL}data/southpole.jpg`;
+  mapImage.addEventListener('load', () => drawMap());
+  let mapGeo: MapGeometry | null = null;
+  let mapHover: string | null = null;
+  const mapPanel = h(
+    'section',
+    { class: 'panel map', 'aria-label': T.map.title },
+    h('div', { class: 'cap' }, T.map.title, h('span', { class: 'muted small' }, T.map.note)),
+    mapCanvas,
+    h('p', { class: 'small muted map-legend' }, T.map.legend),
+  );
+  function drawMap(): void {
+    if (!mapCanvas.isConnected) return;
+    const d1 = slippedDay();
+    mapGeo = drawPoleMap(mapCanvas, {
+      image: mapImage,
+      sites: terrain.map((s) => ({ id: s.id, name: s.name.replace(/ \(.*\)$/, ''), lat: s.lat, lon: s.lon, status: calOf(s.id)?.status[d1] ?? null })),
+      hover: mapHover,
+      selected: store.state.detail?.siteId ?? null,
+      labels: { earth: T.map.earth, pole: T.map.pole, off: T.map.off },
+    });
+  }
+  mapCanvas.addEventListener('mousemove', (ev) => {
+    if (!mapGeo) return;
+    const box = mapCanvas.getBoundingClientRect();
+    const id = mapHit(mapGeo, ev.clientX - box.left, ev.clientY - box.top);
+    mapCanvas.style.cursor = id ? 'pointer' : 'default';
+    if (id !== mapHover) {
+      mapHover = id;
+      drawMap();
+    }
+  });
+  mapCanvas.addEventListener('mouseleave', () => {
+    mapHover = null;
+    drawMap();
+  });
+  mapCanvas.addEventListener('click', (ev) => {
+    if (!mapGeo) return;
+    const box = mapCanvas.getBoundingClientRect();
+    const id = mapHit(mapGeo, ev.clientX - box.left, ev.clientY - box.top);
+    if (id) store.set({ detail: { siteId: id, dayMs: startMs() + slippedDay() * DAY_MS } });
+  });
+
   // ---------- calendar
   const calCanvas = h('canvas', { class: 'cal-canvas', tabindex: '0', role: 'application', 'aria-label': `${T.calendarTitle}. ${T.calendarHelp}` });
   const tip = h('div', { class: 'readout', hidden: true });
@@ -272,7 +319,7 @@ export function createPlan(app: App, planner: Planner): View {
     if (ev.key === 'Escape' && store.state.detail && store.state.tab === 'plan') store.set({ detail: null });
   });
 
-  const el = h('div', { class: 'plan' }, form, h('div', { class: 'plan-main' }, slipBar, summary, calPanel, tablePanel), drawer);
+  const el = h('div', { class: 'plan' }, form, h('div', { class: 'plan-main' }, h('div', { class: 'plan-top' }, h('div', { class: 'plan-lead' }, slipBar, summary), mapPanel), calPanel, tablePanel), drawer);
 
   // ---------- rendering
   function syncForm(s: State): void {
@@ -378,6 +425,7 @@ export function createPlan(app: App, planner: Planner): View {
 
   function draw(): void {
     if (!el.isConnected) return;
+    drawMap();
     const d = store.state.detail;
     const selected = d ? { row: sites.findIndex((s) => s.id === d.siteId), day: Math.round((d.dayMs - startMs()) / DAY_MS) } : null;
     geo = drawCalendar(calCanvas, {

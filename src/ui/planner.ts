@@ -29,6 +29,8 @@ export class Planner {
       done?.(ev.data);
     };
     this.ready = app.all().then((all) => this.post({ type: 'sites', sites: all.map(toWorker) }));
+    // A failed download is reported where the result is awaited, not as an unhandled error.
+    this.ready.catch(() => undefined);
   }
 
   private post(msg: Request): void {

@@ -1632,6 +1632,32 @@ table.compare td.best {
   }
 }
 
+/* ---------- planner: lead row with the map ---------- */
+.plan-top {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 440px);
+  gap: 14px;
+  align-items: start;
+}
+.plan-lead {
+  display: grid;
+  gap: 16px;
+  align-content: start;
+  min-width: 0;
+}
+.map-canvas {
+  display: block;
+  width: 100%;
+}
+.map-legend {
+  padding: 9px 14px 12px;
+}
+@media (max-width: 1280px) {
+  .plan-top {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* ---------- footer ---------- */
 footer {
   border-top: 1px solid var(--line);

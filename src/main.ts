@@ -99,7 +99,7 @@ async function boot(): Promise<void> {
   });
 
   // Warm the cache of every site so that switching sites and the planner respond at once.
-  void app.all();
+  void app.all().catch(() => undefined);
 }
 
 void boot();
