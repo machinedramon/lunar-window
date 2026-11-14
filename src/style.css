@@ -1633,6 +1633,62 @@ table.compare td.best {
 }
 
 /* ---------- planner: lead row with the map ---------- */
+.site-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 0 4px;
+}
+.site-chip {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font: 500 12.5px var(--font);
+  color: var(--text-2);
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 5px 11px 5px 9px;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+}
+.site-chip i {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 1.5px solid currentColor;
+  flex: none;
+}
+.site-chip[data-status='ok'] {
+  color: var(--text);
+  border-color: var(--line-2);
+}
+.site-chip[data-status='ok'] i {
+  background: #fff;
+  border-color: #fff;
+}
+.site-chip[data-status='marginal'] i {
+  background: linear-gradient(90deg, #fff 50%, transparent 50%);
+  border-color: #fff;
+}
+.site-chip[data-status='fail'],
+.site-chip[data-status='wait'] {
+  color: var(--muted);
+}
+.site-chip[data-status='fail'] i {
+  background:
+    linear-gradient(45deg, transparent 42%, currentColor 42%, currentColor 58%, transparent 58%),
+    linear-gradient(-45deg, transparent 42%, currentColor 42%, currentColor 58%, transparent 58%);
+}
+.site-chip:hover,
+.site-chip:focus-visible,
+.site-chip.hot {
+  color: var(--text);
+  border-color: #fff;
+  background: rgb(255 255 255 / 0.08);
+}
+
 .plan-top {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(320px, 440px);

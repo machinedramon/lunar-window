@@ -192,6 +192,7 @@ export const en = {
     map: {
       title: 'The south pole',
       note: 'click a site',
+      chips: 'The south-pole sites on the landing day',
       aria: 'Map of the lunar south pole with the sites and whether each one works on the landing day.',
       legend: 'Filled: viable on the landing day. Half: marginal. Crossed: not viable. Black ground is in permanent shadow (NASA LOLA illumination map, to 85°S). Relief: NASA LOLA.',
       earth: 'towards the Earth',

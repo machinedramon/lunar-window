@@ -147,6 +147,9 @@ export function createPlan(app: App, planner: Planner): View {
     h('div', { class: 'slip-read' }, slipValue, slipDate),
   );
   const summary = h('div', { class: 'summary', 'aria-live': 'polite' });
+  /** One chip per polar site, mirroring the markers of the map: the same glyph, the same click. */
+  const siteChips = h('div', { class: 'site-chips', role: 'group', 'aria-label': T.map.chips });
+  const chipOf = new Map<string, HTMLElement>();
 
   // ---------- map of the south pole
   const mapCanvas = h('canvas', { class: 'map-canvas', role: 'img', 'aria-label': T.map.aria });
@@ -164,6 +167,7 @@ export function createPlan(app: App, planner: Planner): View {
   );
   function drawMap(): void {
     if (!mapCanvas.isConnected) return;
+    renderChips();
     const d1 = slippedDay();
     mapGeo = drawPoleMap(mapCanvas, {
       image: mapImage,
@@ -178,15 +182,36 @@ export function createPlan(app: App, planner: Planner): View {
     const box = mapCanvas.getBoundingClientRect();
     const id = mapHit(mapGeo, ev.clientX - box.left, ev.clientY - box.top);
     mapCanvas.style.cursor = id ? 'pointer' : 'default';
-    if (id !== mapHover) {
-      mapHover = id;
-      drawMap();
-    }
+    if (id !== mapHover) setMapHover(id);
   });
-  mapCanvas.addEventListener('mouseleave', () => {
-    mapHover = null;
+  mapCanvas.addEventListener('mouseleave', () => setMapHover(null));
+  function setMapHover(id: string | null): void {
+    if (id === mapHover) return;
+    mapHover = id;
+    for (const [site, chip] of chipOf) chip.classList.toggle('hot', site === id);
     drawMap();
-  });
+  }
+  function renderChips(): void {
+    const d1 = slippedDay();
+    for (const t of terrain) {
+      let chip = chipOf.get(t.id);
+      if (!chip) {
+        chip = h('button', { class: 'site-chip', type: 'button' }, h('i', { 'aria-hidden': 'true' }), h('span', null, t.name.replace(/ \(.*\)$/, '')));
+        chip.addEventListener('click', () => store.set({ detail: { siteId: t.id, dayMs: startMs() + slippedDay() * DAY_MS } }));
+        chip.addEventListener('mouseenter', () => setMapHover(t.id));
+        chip.addEventListener('mouseleave', () => setMapHover(null));
+        chip.addEventListener('focus', () => setMapHover(t.id));
+        chip.addEventListener('blur', () => setMapHover(null));
+        chipOf.set(t.id, chip);
+        siteChips.append(chip);
+      }
+      const status = calOf(t.id)?.status[d1];
+      const word = status === undefined ? 'wait' : status === 2 ? 'ok' : status === 1 ? 'marginal' : 'fail';
+      chip.dataset.status = word;
+      chip.title = status === undefined ? T.computing : `${t.name}: ${S.status[word]}`;
+      chip.setAttribute('aria-label', chip.title);
+    }
+  }
   mapCanvas.addEventListener('click', (ev) => {
     if (!mapGeo) return;
     const box = mapCanvas.getBoundingClientRect();
@@ -319,7 +344,7 @@ export function createPlan(app: App, planner: Planner): View {
     if (ev.key === 'Escape' && store.state.detail && store.state.tab === 'plan') store.set({ detail: null });
   });
 
-  const el = h('div', { class: 'plan' }, form, h('div', { class: 'plan-main' }, h('div', { class: 'plan-top' }, h('div', { class: 'plan-lead' }, slipBar, summary), mapPanel), calPanel, tablePanel), drawer);
+  const el = h('div', { class: 'plan' }, form, h('div', { class: 'plan-main' }, h('div', { class: 'plan-top' }, h('div', { class: 'plan-lead' }, slipBar, summary, siteChips), mapPanel), calPanel, tablePanel), drawer);
 
   // ---------- rendering
   function syncForm(s: State): void {

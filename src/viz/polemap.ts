@@ -33,7 +33,7 @@ export interface MapGeometry {
 const LABEL: Record<string, [number, number, CanvasTextAlign]> = {
   cr1: [-14, 16, 'right'],
   'shackleton-rim': [14, 18, 'left'],
-  'de-gerlache-rim2': [-14, 4, 'right'],
+  'de-gerlache-rim2': [-14, -5, 'right'],
   haworth: [-14, 4, 'right'],
   malapert: [-14, -8, 'right'],
   'mons-mouton': [-14, 12, 'right'],
@@ -86,10 +86,10 @@ export function drawPoleMap(canvas: HTMLCanvasElement, m: MapInput): MapGeometry
     ctx.beginPath();
     ctx.arc(X(0), Y(0), r * kx, 0, Math.PI * 2);
     ctx.stroke();
-    ctx.fillStyle = 'rgba(255,255,255,0.42)';
+    // Latitude labels where the circles cross the 90°W meridian: no site label lies there.
+    ctx.fillStyle = 'rgba(255,255,255,0.5)';
     ctx.textAlign = 'left';
-    const a = (118 * Math.PI) / 180;
-    ctx.fillText(`${-lat}°S`, X(r * Math.sin(a)) + 3, Y(r * Math.cos(a)));
+    if (X(-r) > 8) ctx.fillText(`${-lat}°S`, X(-r) + 4, Y(0) - 8);
   }
   for (let lon = 0; lon < 360; lon += 30) {
     const a = (lon * Math.PI) / 180;
@@ -106,10 +106,10 @@ export function drawPoleMap(canvas: HTMLCanvasElement, m: MapInput): MapGeometry
   ctx.fillStyle = 'rgba(255,255,255,0.8)';
   ctx.textAlign = 'left';
   ctx.fillText(m.labels.pole, X(0) + 6, Y(0) + 9);
-  ctx.textAlign = 'center';
+  ctx.textAlign = 'left';
   ctx.font = `600 10.5px ${FONT}`;
   ctx.fillStyle = COLORS.earth;
-  ctx.fillText(`↑ ${m.labels.earth}`, w / 2, 11);
+  ctx.fillText(`↑ ${m.labels.earth}`, 10, 13);
 
   // Sites
   const points: MapGeometry['points'] = [];
