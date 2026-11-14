@@ -5,7 +5,7 @@
 // in tests/golden. Frame: Moon-fixed, built from the IAU north pole and prime-meridian
 // angle of the Moon (it matches MOON_ME to a few thousandths of a degree), sphere of
 // radius 1737.4 km, the same reference as the LOLA elevation data.
-import { Body, GeoMoon, GeoVector, MakeTime, RotateVector, Rotation_EQD_EQJ, RotationAxis, SiderealTime, Vector } from 'astronomy-engine';
+import { Body, GeoMoon, GeoVector, Illumination, MakeTime, RotateVector, Rotation_EQD_EQJ, RotationAxis, SiderealTime, Vector } from 'astronomy-engine';
 
 export type Vec3 = readonly [number, number, number];
 
@@ -77,11 +77,36 @@ export function earthAxes(date: Date): { north: Vec3; greenwich: Vec3 } {
  * The local directions of a site (east, north, up) expressed in J2000 equatorial coordinates.
  * With them a star of known right ascension and declination can be placed in the site's sky.
  */
-export function localAxesJ2000(date: Date, latDeg: number, lonDeg: number): { east: Vec3; north: Vec3; up: Vec3 } {
-  const f = moonFrame(MakeTime(date));
+export function localAxesJ2000(date: Date, latDeg: number, lonDeg: number): { east: Vec3; north: Vec3; up: Vec3; planets: Planet[] } {
+  const time = MakeTime(date);
+  const f = moonFrame(time);
   const s = siteFrame(latDeg, lonDeg, 0);
   const out = (v: Vec3): Vec3 => [v[0] * f.x[0] + v[1] * f.y[0] + v[2] * f.z[0], v[0] * f.x[1] + v[1] * f.y[1] + v[2] * f.z[1], v[0] * f.x[2] + v[1] * f.y[2] + v[2] * f.z[2]];
-  return { east: out(s.east), north: out(s.north), up: out(s.up) };
+  return { east: out(s.east), north: out(s.north), up: out(s.up), planets: planetsFromMoon(time) };
+}
+
+/** A planet in the lunar sky: unit direction from the Moon in J2000 equatorial coordinates, and visual magnitude. */
+export interface Planet {
+  name: string;
+  dir: Vec3;
+  mag: number;
+}
+
+const NAKED_EYE_PLANETS: [string, Body][] = [
+  ['Mercury', Body.Mercury],
+  ['Venus', Body.Venus],
+  ['Mars', Body.Mars],
+  ['Jupiter', Body.Jupiter],
+  ['Saturn', Body.Saturn],
+];
+
+/** The five planets visible to the eye, where they stand among the stars as seen from the Moon. */
+function planetsFromMoon(time: Time): Planet[] {
+  const moon = GeoMoon(time);
+  return NAKED_EYE_PLANETS.map(([name, body]) => {
+    const g = GeoVector(body, time, true);
+    return { name, dir: unit([g.x - moon.x, g.y - moon.y, g.z - moon.z]), mag: Illumination(body, time).mag };
+  });
 }
 
 /** Local directions of a site, in the Moon-fixed frame, and its position in km. */

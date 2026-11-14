@@ -3,7 +3,7 @@
 // a title card, and the view never sits completely still.
 import { MAST_HEIGHTS_M } from '../core/horizon';
 import { S } from '../i18n/en';
-import { FONT } from '../viz/canvas';
+import { FONT, MONO } from '../viz/canvas';
 import type { LunarScene, SceneSky } from '../viz/scene3d';
 import type { LoadedSite } from './data';
 import { h, reducedMotion, setText } from './dom';
@@ -30,9 +30,42 @@ interface Look {
 
 const shortest = (from: number, to: number): number => ((to - from + 540) % 360) - 180;
 
+/** Names written on the night sky: the brightest stars and the two Magellanic Clouds. Right ascension and declination, degrees, J2000. */
+const NAMED_SKY: [string, number, number][] = [
+  ['Sirius', 101.287, -16.716],
+  ['Canopus', 95.988, -52.696],
+  ['Alpha Centauri', 219.902, -60.834],
+  ['Arcturus', 213.915, 19.182],
+  ['Vega', 279.235, 38.784],
+  ['Capella', 79.172, 45.998],
+  ['Rigel', 78.634, -8.202],
+  ['Procyon', 114.825, 5.225],
+  ['Achernar', 24.429, -57.237],
+  ['Betelgeuse', 88.793, 7.407],
+  ['Hadar', 210.956, -60.373],
+  ['Altair', 297.696, 8.868],
+  ['Acrux', 186.65, -63.099],
+  ['Aldebaran', 68.98, 16.509],
+  ['Antares', 247.352, -26.432],
+  ['Spica', 201.298, -11.161],
+  ['Pollux', 116.329, 28.026],
+  ['Fomalhaut', 344.413, -29.622],
+  ['Deneb', 310.358, 45.28],
+  ['Regulus', 152.093, 11.967],
+  ['Polaris', 37.954, 89.264],
+  ['Large Magellanic Cloud', 80.89, -69.76],
+  ['Small Magellanic Cloud', 13.19, -72.83],
+];
+const NAMED_DIRS: [string, number[]][] = NAMED_SKY.map(([name, ra, dec]) => {
+  const a = (ra * Math.PI) / 180;
+  const d = (dec * Math.PI) / 180;
+  return [name, [Math.cos(d) * Math.cos(a), Math.cos(d) * Math.sin(a), Math.sin(d)]];
+});
+
 export function createHero3D(): Hero3D {
   const canvas = h('canvas', { class: 'three-canvas', tabindex: '0', role: 'img', 'aria-label': T.aria });
   const tape = h('canvas', { class: 'three-tape', 'aria-hidden': 'true' });
+  const skyNames = h('canvas', { class: 'three-sky', 'aria-hidden': 'true' });
   const sunLabel = h('div', { class: 'three-label sun', hidden: true });
   const earthLabel = h('div', { class: 'three-label earth', hidden: true });
   const caption = h('div', { class: 'three-caption' });
@@ -58,7 +91,7 @@ export function createHero3D(): Hero3D {
   const sunInset = inset('sun', T.teleSun);
   const earthInset = inset('earth', T.teleEarth);
   const insets = h('div', { class: 'three-insets' }, sunInset.frame, earthInset.frame);
-  const el = h('div', { class: 'three' }, canvas, tape, sunLabel, earthLabel, insets, caption, controls, title, fade, loading, h('div', { class: 'three-hint' }, T.hint));
+  const el = h('div', { class: 'three' }, canvas, skyNames, tape, sunLabel, earthLabel, insets, caption, controls, title, fade, loading, h('div', { class: 'three-hint' }, T.hint));
 
   let scene: LunarScene | null = null;
   let failed = false;
@@ -369,9 +402,57 @@ export function createHero3D(): Hero3D {
     label.style.top = `${(p.y * 100).toFixed(2)}%`;
   }
 
+  /** Names of the planets and of the brightest stars, when the night sky shows: proof that it is the real one. */
+  function nameSky(): void {
+    if (!scene) return;
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    const w = el.clientWidth;
+    const ht = el.clientHeight;
+    if (skyNames.width !== Math.round(w * dpr) || skyNames.height !== Math.round(ht * dpr)) {
+      skyNames.width = Math.round(w * dpr);
+      skyNames.height = Math.round(ht * dpr);
+    }
+    const ctx = skyNames.getContext('2d')!;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, w, ht);
+    const level = scene.starLevel;
+    if (level < 0.2 || !sky || !site) return;
+    const ax = sky.starAxes;
+    const dot = (a: readonly number[], b: readonly number[]) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+    // On a wide window the corners belong to the instruments; names keep clear of them.
+    const wide = w >= 1100;
+    const busy = (x: number, y: number) => wide && ((x < 360 && y < 300) || (x > w - 470 && y < 400) || (x < 660 && y > ht - 240) || (x > w - 480 && y > ht - 240));
+    ctx.font = `500 9.5px ${MONO}`;
+    ctx.textBaseline = 'middle';
+    ctx.lineWidth = 1;
+    const one = (name: string, d: readonly number[], strong: boolean) => {
+      const up = dot(d, ax.up);
+      const elv = (Math.asin(Math.max(-1, Math.min(1, up))) * 180) / Math.PI;
+      const az = ((Math.atan2(dot(d, ax.east), dot(d, ax.north)) * 180) / Math.PI + 360) % 360;
+      if (elv < site!.horizon.at(az, mast) + 0.4) return;
+      const p = scene!.project(az, elv);
+      if (!p || p.x < 0.02 || p.x > 0.94 || p.y < 0.07 || p.y > 0.97) return;
+      const x = p.x * w;
+      const y = p.y * ht;
+      if (busy(x, y)) return;
+      const a = level * (strong ? 0.85 : 0.5);
+      ctx.strokeStyle = `rgba(255,255,255,${(a * 0.7).toFixed(3)})`;
+      ctx.beginPath();
+      ctx.moveTo(x + 6, y - 6);
+      ctx.lineTo(x + 14, y - 14);
+      ctx.lineTo(x + 20, y - 14);
+      ctx.stroke();
+      ctx.fillStyle = `rgba(255,255,255,${a.toFixed(3)})`;
+      ctx.fillText(name.toUpperCase().split('').join('\u200a'), x + 24, y - 14);
+    };
+    for (const [name, d] of NAMED_DIRS) one(name, d, false);
+    for (const p of ax.planets ?? []) one(p.name, p.dir, true);
+  }
+
   function overlay(): void {
     if (!scene || !moment) return;
     const m = moment;
+    nameSky();
     place(sunLabel, m.sun.az, m.sun.el + m.sun.radius, m.eclipse > 0.5 ? T.sunEclipsed : m.sunFrac <= 0 ? T.sunHidden : T.sunLabel(pct(m.sunFrac)));
     place(earthLabel, m.earth.az, m.earth.el + m.earth.radius, m.earthClear > 0 ? T.earthLabel(deg(m.earthClear, 1)) : T.earthHidden);
 

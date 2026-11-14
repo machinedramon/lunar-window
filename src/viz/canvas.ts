@@ -54,7 +54,8 @@ export const COLORS = {
   gridStrong: 'rgba(255,255,255,0.24)',
 };
 
-export const FONT = "'Inter Variable', system-ui, sans-serif";
+export const FONT = "'Geist Variable', system-ui, sans-serif";
+export const MONO = "'Geist Mono Variable', ui-monospace, monospace";
 
 export function mix(a: [number, number, number], b: [number, number, number], t: number): string {
   const k = Math.max(0, Math.min(1, t));

@@ -122,9 +122,11 @@ export function drawPoleMap(canvas: HTMLCanvasElement, m: MapInput): MapGeometry
     }
     points.push({ id: s.id, x: X(kmx), y: Y(kmy) });
   }
+  // A small map is a minimap: markers only, and the name of the site under the pointer or selected.
+  const compact = w < 380;
   const draw = (s: MapSite, x: number, y: number, edge: boolean) => {
     const active = s.id === m.hover || s.id === m.selected;
-    const r = active ? 8 : 6.5;
+    const r = compact ? (active ? 7 : 5.5) : active ? 8 : 6.5;
     ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.arc(x, y, r + 2.5, 0, Math.PI * 2);
@@ -163,17 +165,24 @@ export function drawPoleMap(canvas: HTMLCanvasElement, m: MapInput): MapGeometry
       ctx.arc(x, y, r + 5.5, 0, Math.PI * 2);
       ctx.stroke();
     }
+    if (compact && !active) return;
     const [dx, dy, align] = edge ? [12, 14, 'left' as CanvasTextAlign] : (LABEL[s.id] ?? [14, 4, 'left' as CanvasTextAlign]);
     const text = edge ? m.labels.off(s.name) : s.name;
     ctx.font = `${active ? 700 : 600} 11.5px ${FONT}`;
-    ctx.textAlign = align;
+    // The name never leaves the frame.
+    const tw = ctx.measureText(text).width;
+    const left = Math.max(6, Math.min(w - tw - 6, align === 'right' ? x + dx - tw : align === 'center' ? x + dx - tw / 2 : x + dx));
+    const ty = Math.max(12, Math.min(h - 10, y + dy));
+    ctx.textAlign = 'left';
     ctx.lineWidth = 3.5;
     ctx.strokeStyle = 'rgba(0,0,0,0.9)';
-    ctx.strokeText(text, x + dx, y + dy);
+    ctx.strokeText(text, left, ty);
     ctx.fillStyle = '#fff';
-    ctx.fillText(text, x + dx, y + dy);
+    ctx.fillText(text, left, ty);
   };
-  for (const s of m.sites) {
+  // The site under the pointer and the selected one are drawn last, over their neighbours.
+  const isActive = (s: MapSite) => s.id === m.hover || s.id === m.selected;
+  for (const s of [...m.sites].sort((a, b) => Number(isActive(a)) - Number(isActive(b)))) {
     const p = points.find((q) => q.id === s.id);
     if (p) draw(s, p.x, p.y, false);
   }

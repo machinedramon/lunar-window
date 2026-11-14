@@ -117,6 +117,7 @@ export function createMissions(app: App, planner: Planner): View {
         h('span', { class: 'mission-tag' }, t.tagline),
         h('span', { class: 'mission-meta' }, t.meta),
         h('span', { class: 'mission-stars', 'aria-label': T.starsLabel(got) }, '★'.repeat(got) + '☆'.repeat(3 - got)),
+        h('span', { class: 'mission-go', 'aria-hidden': 'true' }, T.go, ' →'),
       );
     });
     el.append(

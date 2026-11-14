@@ -63,7 +63,7 @@ export function createPlan(app: App, planner: Planner): View {
     return { input, el: h('label', { class: 'switch', title: tip }, input, h('span', { class: 'track', 'aria-hidden': 'true' }), h('span', null, label)) };
   };
   const seg = (values: { label: string; value: number }[], label: string, tip: string, onValue: (v: number) => void) => {
-    const el = h('div', { class: 'seg', role: 'group', 'aria-label': label, title: tip });
+    const el = h('div', { class: 'seg units', role: 'group', 'aria-label': label, title: tip });
     for (const v of values) el.append(h('button', { type: 'button', dataset: { v: String(v.value) }, onclick: () => onValue(v.value) }, v.label));
     return el;
   };
@@ -89,7 +89,9 @@ export function createPlan(app: App, planner: Planner): View {
     else done();
   });
   const unit = (text: string) => h('span', { class: 'unit' }, text);
-  const line = (...nodes: (Node | string)[]) => h('div', { class: 'req-line' }, ...nodes);
+  /** One requirement per line: what it is on the left, its value on the right. */
+  const row = (label: Node, ...controls: Node[]) => h('div', { class: 'req-row' }, label, controls.length ? h('div', { class: 'req-val' }, ...controls) : null);
+  const lab = (text: string, tip: string) => h('span', { class: 'req-label', title: tip }, text);
   const form = h(
     'aside',
     { class: 'panel reqs', 'aria-label': T.reqTitle },
@@ -97,28 +99,24 @@ export function createPlan(app: App, planner: Planner): View {
     h('div', { class: 'eyebrow' }, T.profiles),
     h('div', { class: 'profiles' }, ...profileButtons),
     h('p', { class: 'small muted' }, T.profileNote),
-    h('div', { class: 'req-group' }, h('div', { class: 'eyebrow' }, T.duration), line(durationIn, unit(T.days))),
+    h('div', { class: 'req-group' }, row(h('span', { class: 'eyebrow' }, T.duration), durationIn, unit(T.days))),
     h(
       'div',
       { class: 'req-group' },
-      h('div', { class: 'eyebrow' }, h('span', { class: 'dot sun' }), ' ', T.power),
-      sunLanding.el,
-      darkOn.el,
-      line(darkIn, unit(T.hours)),
-      h('label', { class: 'req-label', title: T.minSunTip }, T.minSun),
-      line(minSunIn, unit(T.hours)),
+      h('div', { class: 'eyebrow' }, h('span', { class: 'dot sun' }), T.power),
+      row(sunLanding.el),
+      row(darkOn.el, darkIn, unit(T.hours)),
+      row(lab(T.minSun, T.minSunTip), minSunIn, unit(T.hours)),
     ),
     h(
       'div',
       { class: 'req-group' },
-      h('div', { class: 'eyebrow' }, h('span', { class: 'dot earth' }), ' ', T.comms),
-      earthLanding.el,
-      blackOn.el,
-      line(blackIn, unit(T.hours)),
-      h('span', { class: 'req-label', title: T.marginTip }, T.margin),
-      marginSeg,
+      h('div', { class: 'eyebrow' }, h('span', { class: 'dot earth' }), T.comms),
+      row(earthLanding.el),
+      row(blackOn.el, blackIn, unit(T.hours)),
+      row(lab(T.margin, T.marginTip), marginSeg),
     ),
-    h('div', { class: 'req-group' }, h('div', { class: 'eyebrow' }, T.hardware), h('span', { class: 'req-label', title: S.explore.heightTip }, T.height), heightSeg),
+    h('div', { class: 'req-group' }, row(h('span', { class: 'eyebrow', title: S.explore.heightTip }, T.height), heightSeg)),
     copyBtn,
   );
 
@@ -163,7 +161,7 @@ export function createPlan(app: App, planner: Planner): View {
     { class: 'panel map', 'aria-label': T.map.title },
     h('div', { class: 'cap' }, T.map.title, h('span', { class: 'muted small' }, T.map.note)),
     mapCanvas,
-    h('p', { class: 'small muted map-legend' }, T.map.legend),
+    h('p', { class: 'small muted map-legend', title: T.map.legend }, T.map.legendShort),
   );
   function drawMap(): void {
     if (!mapCanvas.isConnected) return;
@@ -229,7 +227,7 @@ export function createPlan(app: App, planner: Planner): View {
     h('span', null, h('i', { class: 'sw ok' }), `${S.statusMark.ok} ${T.legendOk}`),
     h('span', null, h('i', { class: 'sw warn' }), `${S.statusMark.marginal} ${T.legendMarginal}`),
     h('span', null, h('i', { class: 'sw off' }), `${S.statusMark.fail} ${T.legendFail}`),
-    h('span', { class: 'muted' }, T.legendRobust),
+    h('span', { class: 'muted', title: T.legendRobustTip }, T.legendRobust),
   );
   const csvBtn = h('button', { class: 'btn', type: 'button', title: T.csvTip }, T.csv);
   csvBtn.addEventListener('click', () => {
@@ -253,13 +251,6 @@ export function createPlan(app: App, planner: Planner): View {
     a.remove();
     window.setTimeout(() => URL.revokeObjectURL(url), 2000);
   });
-  const calPanel = h(
-    'section',
-    { class: 'panel cal', 'aria-label': T.calendarTitle },
-    h('div', { class: 'cap' }, T.calendarTitle, h('span', { class: 'muted small' }, T.calendarHelp)),
-    h('div', { class: 'cal-wrap' }, calCanvas, tip),
-    h('div', { class: 'cal-foot' }, legend, h('div', { class: 'row' }, stamp, csvBtn)),
-  );
   const rows = (): CalendarRow[] =>
     sites.map((s, i) => ({
       id: s.id,
@@ -330,7 +321,21 @@ export function createPlan(app: App, planner: Planner): View {
 
   // ---------- table
   const table = h('table', { class: 'sites' });
-  const tablePanel = h('section', { class: 'panel', 'aria-label': 'Sites' }, h('div', { class: 'table-wrap' }, table));
+  // The calendar and the table are two readings of the same result: one panel, two panes.
+  const paneCal = h('div', { class: 'plan-pane' }, h('div', { class: 'cal-wrap' }, calCanvas, tip), h('div', { class: 'cal-foot' }, legend, h('div', { class: 'row' }, stamp, csvBtn)));
+  const paneTable = h('div', { class: 'plan-pane', hidden: true }, h('div', { class: 'table-wrap' }, table));
+  const tabCal = h('button', { type: 'button', 'aria-pressed': 'true', onclick: () => showPane('cal') }, T.calendarTitle);
+  const tabTable = h('button', { type: 'button', 'aria-pressed': 'false', onclick: () => showPane('table') }, T.tableTitle);
+  const paneHelp = h('span', { class: 'muted small' }, T.calendarHelp);
+  function showPane(which: 'cal' | 'table'): void {
+    paneCal.hidden = which !== 'cal';
+    paneTable.hidden = which !== 'table';
+    tabCal.setAttribute('aria-pressed', String(which === 'cal'));
+    tabTable.setAttribute('aria-pressed', String(which === 'table'));
+    setText(paneHelp, which === 'cal' ? T.calendarHelp : T.tableHelp);
+    if (which === 'cal') draw();
+  }
+  const dataPanel = h('section', { class: 'panel plan-data', 'aria-label': T.calendarTitle }, h('div', { class: 'cap' }, h('div', { class: 'seg', role: 'group', 'aria-label': T.calendarTitle }, tabCal, tabTable), paneHelp), paneCal, paneTable);
 
   // ---------- detail drawer
   const drawer = h('aside', { class: 'drawer', hidden: true, 'aria-label': T.table.details });
@@ -344,7 +349,7 @@ export function createPlan(app: App, planner: Planner): View {
     if (ev.key === 'Escape' && store.state.detail && store.state.tab === 'plan') store.set({ detail: null });
   });
 
-  const el = h('div', { class: 'plan' }, form, h('div', { class: 'plan-main' }, h('div', { class: 'plan-top' }, h('div', { class: 'plan-lead' }, slipBar, summary, siteChips), mapPanel), calPanel, tablePanel), drawer);
+  const el = h('div', { class: 'plan' }, form, h('div', { class: 'plan-main' }, h('div', { class: 'plan-top' }, h('div', { class: 'plan-lead' }, slipBar, summary, siteChips), mapPanel), dataPanel), drawer);
 
   // ---------- rendering
   function syncForm(s: State): void {

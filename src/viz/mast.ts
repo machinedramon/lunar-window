@@ -1,4 +1,4 @@
-// A vertical solar array on a mast, with a dish: the piece of hardware that the "panel and
+// A vertical solar array on a mast, with a dish on top: the piece of hardware that the "panel and
 // antenna height" requirement is about. The panel stands at the chosen height and turns to the
 // Sun; the dish points at the Earth and shows a symbolic radio link when the Earth is in view.
 // Original design, loosely after NASA's vertical solar array concept for the lunar south pole;
@@ -115,7 +115,10 @@ export function createMast(mastM: number): Mast {
   const tall = mastM >= 8;
   const panelW = tall ? 2.6 : 1.7;
   const panelH = tall ? 3.6 : 1.05;
-  const centre = Math.max(0.62, mastM);
+  // Nothing may cross anything else while the array turns: the deck is low, the array starts above
+  // it, and the dish stands on the axis of rotation, above the sweep of the array.
+  const DECK = 0.5;
+  const centre = Math.max(DECK + 0.14 + panelH / 2, mastM);
 
   const foil = keep(new THREE.MeshStandardMaterial({ color: 0xb9b9bd, metalness: 0.85, roughness: 0.42, normalMap: keep(foilNormals()), normalScale: new THREE.Vector2(0.32, 0.32) }));
   const white = keep(new THREE.MeshStandardMaterial({ color: 0xa2a2a6, metalness: 0.05, roughness: 0.7 }));
@@ -136,26 +139,27 @@ export function createMast(mastM: number): Mast {
     m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), to.clone().sub(from).normalize());
   };
 
-  // Base: an equipment box on three outriggers
-  add(new THREE.BoxGeometry(0.9, 0.42, 0.9), foil, 0, 0.5, 0);
-  add(new THREE.BoxGeometry(0.96, 0.04, 0.96), white, 0, 0.73, 0);
+  // Base: a low equipment box on three outriggers
+  add(new THREE.BoxGeometry(0.9, 0.3, 0.9), foil, 0, 0.33, 0);
+  add(new THREE.BoxGeometry(0.96, 0.04, 0.96), white, 0, DECK, 0);
   for (let i = 0; i < 3; i++) {
     const a = (i / 3) * Math.PI * 2 + 0.3;
     const foot = new THREE.Vector3(Math.cos(a) * 1.45, 0.05, Math.sin(a) * 1.45);
     add(new THREE.CylinderGeometry(0.17, 0.2, 0.06, 18), metal, foot.x, 0.04, foot.z);
-    beam(new THREE.Vector3(Math.cos(a) * 0.42, 0.62, Math.sin(a) * 0.42), foot, 0.03);
-    beam(new THREE.Vector3(Math.cos(a) * 0.42, 0.32, Math.sin(a) * 0.42), foot, 0.018);
+    beam(new THREE.Vector3(Math.cos(a) * 0.42, 0.44, Math.sin(a) * 0.42), foot, 0.03);
+    beam(new THREE.Vector3(Math.cos(a) * 0.42, 0.24, Math.sin(a) * 0.42), foot, 0.018);
   }
 
-  // Telescoping mast up to the bottom of the array
-  const top = Math.max(0.78, centre - panelH / 2 + 0.1);
-  const sections = Math.max(1, Math.round((top - 0.75) / 2.2));
+  // Telescoping mast from the deck up to the bottom of the array
+  const foot = DECK + 0.02;
+  const top = centre - panelH / 2 - 0.03;
+  const sections = Math.max(1, Math.round((top - foot) / 2.2));
   for (let k = 0; k < sections; k++) {
-    const y0 = 0.75 + ((top - 0.75) * k) / sections;
-    const y1 = 0.75 + ((top - 0.75) * (k + 1)) / sections;
+    const y0 = foot + ((top - foot) * k) / sections;
+    const y1 = foot + ((top - foot) * (k + 1)) / sections;
     const r = 0.07 - (0.035 * k) / sections;
     add(new THREE.CylinderGeometry(r * 0.86, r, y1 - y0, 14), k % 2 ? metal : white, 0, (y0 + y1) / 2, 0);
-    add(new THREE.CylinderGeometry(r * 1.25, r * 1.25, 0.05, 14), metal, 0, y0 + 0.02, 0);
+    add(new THREE.CylinderGeometry(r * 1.25, r * 1.25, 0.04, 14), metal, 0, y0 + 0.02, 0);
   }
 
   // The array turns about the mast to face the Sun
@@ -166,29 +170,38 @@ export function createMast(mastM: number): Mast {
   add(new THREE.PlaneGeometry(panelW - 0.08, panelH - 0.08), cells, 0, 0, -0.01, head);
   add(new THREE.BoxGeometry(panelW + 0.04, 0.05, 0.06), metal, 0, panelH / 2, -0.03, head);
   add(new THREE.BoxGeometry(panelW + 0.04, 0.05, 0.06), metal, 0, -panelH / 2, -0.03, head);
-  add(new THREE.SphereGeometry(0.035, 12, 8), beacon, 0, panelH / 2 + 0.09, -0.03, head);
+  // Stiffeners on the back of the array, so that it reads as a structure from behind as well
+  for (const x of [-panelW / 3, 0, panelW / 3]) add(new THREE.BoxGeometry(0.035, panelH - 0.06, 0.03), metal, x, 0, -0.062, head);
+  const rows = tall ? 5 : 2;
+  for (let i = 1; i <= rows; i++) add(new THREE.BoxGeometry(panelW - 0.04, 0.025, 0.022), metal, 0, -panelH / 2 + (panelH * i) / (rows + 1), -0.058, head);
+  add(new THREE.BoxGeometry(0.22, 0.16, 0.07), foil, 0, -panelH / 2 + 0.14, -0.1, head); // drive and harness box
+  // Beacon on a short stalk at a top corner of the array, clear of the dish
+  add(new THREE.CylinderGeometry(0.008, 0.008, 0.1, 6), metal, panelW / 2 - 0.06, panelH / 2 + 0.07, -0.03, head);
+  add(new THREE.SphereGeometry(0.035, 12, 8), beacon, panelW / 2 - 0.06, panelH / 2 + 0.14, -0.03, head);
 
-  // Dish on a side arm, at the height of the array
-  const arm = new THREE.Group();
-  arm.position.set(0, Math.max(0.95, centre - panelH / 2 - 0.1), 0);
-  group.add(arm);
-  beam(new THREE.Vector3(0, 0, 0), new THREE.Vector3(0.55, 0.12, 0), 0.02, arm);
+  // Dish on a post above the array, on the axis the array turns about: the two can never meet.
+  const DISH_R = 0.36;
+  const dishY = centre + panelH / 2 + 0.03 + DISH_R + 0.2;
+  const postFoot = centre + panelH / 2 + 0.025;
+  add(new THREE.CylinderGeometry(0.02, 0.028, dishY - postFoot, 12), metal, 0, (dishY + postFoot) / 2, 0);
+  add(new THREE.CylinderGeometry(0.05, 0.05, 0.03, 16), metal, 0, postFoot + 0.015, 0);
+  add(new THREE.SphereGeometry(0.055, 14, 10), dark, 0, dishY, 0);
   const dish = new THREE.Group();
-  dish.position.set(0.55, 0.2, 0);
-  arm.add(dish);
+  dish.position.set(0, dishY, 0);
+  group.add(dish);
   const profile: THREE.Vector2[] = [];
   for (let i = 0; i <= 12; i++) {
-    const r = (0.36 * i) / 12;
+    const r = (DISH_R * i) / 12;
     profile.push(new THREE.Vector2(r, (r * r) / (4 * 0.3)));
   }
-  const bowl = add(new THREE.LatheGeometry(profile, 40), white, 0, 0, 0, dish);
+  const bowl = add(new THREE.LatheGeometry(profile, 40), white, 0, 0, 0.05, dish);
   (bowl.material as THREE.Material).side = THREE.DoubleSide;
   bowl.rotation.x = Math.PI / 2; // the axis of the bowl along +Z
   for (let i = 0; i < 3; i++) {
     const a = (i / 3) * Math.PI * 2;
-    beam(new THREE.Vector3(Math.cos(a) * 0.3, Math.sin(a) * 0.3, 0.075), new THREE.Vector3(0, 0, 0.3), 0.006, dish);
+    beam(new THREE.Vector3(Math.cos(a) * 0.3, Math.sin(a) * 0.3, 0.125), new THREE.Vector3(0, 0, 0.35), 0.006, dish);
   }
-  add(new THREE.SphereGeometry(0.03, 10, 8), dark, 0, 0, 0.3, dish);
+  add(new THREE.SphereGeometry(0.03, 10, 8), dark, 0, 0, 0.35, dish);
 
   // Symbolic radio link: a thin beam of pulses from the dish towards the Earth
   const linkMat = keep(
@@ -199,7 +212,7 @@ export function createMast(mastM: number): Mast {
   linkGeo.rotateX(Math.PI / 2); // along +Z, starting at the dish
   const link = new THREE.Mesh(linkGeo, linkMat);
   link.frustumCulled = false;
-  link.position.set(0, 0, 0.3);
+  link.position.set(0, 0, 0.35);
   dish.add(link);
   link.userData.noShadow = true;
 

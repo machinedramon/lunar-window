@@ -12,6 +12,7 @@ Every external resource used by the project: data, 3D assets, code and reading.
 | JPL Horizons System | Reference positions of the Sun and the Earth seen from the lunar surface (validation tables in `tests/golden`) | NASA JPL Solar System Dynamics — https://ssd.jpl.nasa.gov/horizons/ |
 | LROC "Anthropogenic Features on the Moon" | Coordinates of real landing sites | LROC, Arizona State University — https://data.lroc.im-ldi.com/lroc/view_rdr/SHAPEFILE_ANTHROPOGENIC_OBJECTS |
 | Yale Bright Star Catalogue, 5th revised edition (Hoffleit and Warren 1991), stars to magnitude 5.6 | Stars of the 3D view, at their true positions | Yale University Observatory / NASA ADC catalogue V/50; JSON edition by Bretton Wade (MIT) — https://github.com/brettonw/YaleBrightStarCatalog |
+| Deep Star Maps 2020, Milky Way layer (built from the Hipparcos-2, Tycho-2 and Gaia DR2 catalogues) | The Milky Way of the 3D night sky, in J2000 coordinates | NASA/Goddard Space Flight Center Scientific Visualization Studio; Gaia DR2: ESA/Gaia/DPAC — https://svs.gsfc.nasa.gov/4851 |
 | Blue Marble: Land Surface, Shallow Water, and Shaded Topography (2048 x 1024) | Texture of the Earth in the 3D view | NASA Goddard Space Flight Center, image by Reto Stöckli — https://visibleearth.nasa.gov/images/57730 (file obtained from the Wikimedia Commons copy, `Land_ocean_ice_2048.jpg`) |
 
 ## 3D models and textures
@@ -33,7 +34,7 @@ Other candidate sites come from Wueller et al. 2026 (see Reading).
 |---|---|---|
 | [astronomy-engine](https://github.com/cosinekitty/astronomy) | MIT | Positions of the Sun, Earth and Moon and the lunar rotation, in the browser |
 | [three.js](https://threejs.org) | MIT | 3D view |
-| [Inter](https://rsms.me/inter/) and [Space Grotesk](https://github.com/floriankarsten/space-grotesk), via Fontsource | OFL 1.1 | Typefaces |
+| [Geist and Geist Mono](https://github.com/vercel/geist-font), via Fontsource | OFL 1.1 | Typefaces |
 | [Vite](https://vitejs.dev), [TypeScript](https://www.typescriptlang.org), [Vitest](https://vitest.dev), [Playwright](https://playwright.dev) | MIT / Apache-2.0 | Build, tests and development screenshots |
 | [NumPy](https://numpy.org), [tifffile](https://github.com/cgohlke/tifffile), [Pillow](https://python-pillow.org) | BSD / BSD / MIT-CMU | Offline tools: horizons, terrain tiles, textures |
 | [glTF-Transform](https://gltf-transform.dev) | MIT | Re-encoding the NASA models for the web |

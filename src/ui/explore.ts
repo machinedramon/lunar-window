@@ -13,12 +13,14 @@ import { EXPLORE_DAYS, elevationRange, momentAt, outlookFor, type Moment, type O
 import { createHero3D } from './hero3d';
 import { DAY_MS, HOUR_MS, compass, dayTime, deg, duration, isoMinute, latLon, monthShort, num, parseUtc, pct } from './format';
 import { REPLAYS } from './replays';
-import { linkTone, setSound, soundEnabled, soundPreferred, sunTone, tick } from './sound';
+import { linkTone, sunTone } from './sound';
 import { CUSTOM_SITE, MAX_MS, MIN_MS, type State } from './store';
 
 const T = S.explore;
 const STRIP_H = 330;
-const CLOSE_H = 210;
+const CLOSE_H = 128;
+/** Rows of the list of coming events: always the same number, so that the dock never changes height. */
+const EVENT_ROWS = 4;
 
 export function createExplore(app: App): View {
   const { store } = app;
@@ -77,81 +79,96 @@ export function createExplore(app: App): View {
   const step = (label: string, delta: number, tip: string) =>
     h('button', { class: 'btn icon', type: 'button', title: tip, onclick: () => setTime(store.state.timeMs + delta) }, label);
   const playBtn = h('button', { class: 'btn primary', type: 'button', title: T.playTip, onclick: () => togglePlay() }, T.play);
-  const heightSeg = h('div', { class: 'seg', role: 'group', 'aria-label': T.height, title: T.heightTip });
+  const heightSeg = h('div', { class: 'seg units', role: 'group', 'aria-label': T.height, title: T.heightTip });
   MAST_HEIGHTS_M.forEach((m, i) => {
     heightSeg.appendChild(
       h('button', { type: 'button', title: T.heights[i], onclick: () => store.set({ req: { ...store.state.req, mast: i } }), dataset: { mast: String(i) } }, `${m} m`),
     );
   });
 
-  const controls = h(
-    'div',
-    { class: 'controls' },
-    h('div', { class: 'field' }, h('label', { for: 'site' }, T.site), siteSelect),
-    customField,
-    h('div', { class: 'field' }, h('label', { for: 'time' }, T.time), timeInput),
-    h(
-      'div',
-      { class: 'stepper' },
-      step(T.back1d, -DAY_MS, 'One day earlier'),
-      step(T.back1h, -HOUR_MS, 'One hour earlier'),
-      step(T.fwd1h, HOUR_MS, 'One hour later'),
-      step(T.fwd1d, DAY_MS, 'One day later'),
-    ),
-    playBtn,
-    h('div', { class: 'grow' }),
-    h('div', { class: 'field' }, h('span', null, T.height), heightSeg),
-  );
-
   // ----- real landings to replay
-  const replayRow = h('div', { class: 'replays', role: 'group', 'aria-label': T.replay.title }, h('span', { class: 'eyebrow' }, T.replay.title));
+  const replayList = h('div', { class: 'replay-list', role: 'group', 'aria-label': T.replay.title });
   for (const r of REPLAYS) {
-    replayRow.append(
-      h('button', { class: 'chip', type: 'button', dataset: { replay: r.id }, title: r.when, onclick: () => store.set({ siteId: r.siteId, timeMs: r.timeMs }) }, r.label, h('span', { class: 'muted' }, ` ${r.year}`)),
+    replayList.append(
+      h(
+        'button',
+        {
+          class: 'replay-item',
+          type: 'button',
+          dataset: { replay: r.id },
+          onclick: () => {
+            noteClosed = '';
+            store.set({ siteId: r.siteId, timeMs: r.timeMs });
+            openSheet(null);
+          },
+        },
+        h('b', null, r.label),
+        h('i', null, r.year),
+        h('span', null, r.when),
+      ),
     );
   }
   const replayNote = h('div', { class: 'replay-note', hidden: true });
+  /** Replay whose note the visitor closed: it stays closed until another landing is chosen. */
+  let noteClosed = '';
+
+  // ----- the site block: where we are, and two sheets that open beside it
+  const facts = h('dl', { class: 'facts' });
+  const siteMeta = h('div', { class: 'site-meta' });
+  const sheet = (title: string, body: HTMLElement) =>
+    h(
+      'div',
+      { class: 'sheet', hidden: true },
+      h('div', { class: 'sheet-head' }, h('span', { class: 'eyebrow' }, title), h('button', { class: 'btn icon', type: 'button', 'aria-label': T.close, title: T.close, onclick: () => openSheet(null) }, '✕')),
+      body,
+    );
+  const factsSheet = sheet(T.facts.about, facts);
+  const replaySheet = sheet(T.replay.title, replayList);
+  const factsBtn = h('button', { class: 'btn', type: 'button', 'aria-expanded': 'false', onclick: () => openSheet(factsSheet.hidden ? 'facts' : null) }, T.siteFile);
+  const replayBtn = h('button', { class: 'btn', type: 'button', 'aria-expanded': 'false', title: T.replay.title, onclick: () => openSheet(replaySheet.hidden ? 'replay' : null) }, T.replay.button);
+  function openSheet(which: 'facts' | 'replay' | null): void {
+    factsSheet.hidden = which !== 'facts';
+    replaySheet.hidden = which !== 'replay';
+    factsBtn.setAttribute('aria-expanded', String(which === 'facts'));
+    replayBtn.setAttribute('aria-expanded', String(which === 'replay'));
+  }
+  const hudSite = h(
+    'div',
+    { class: 'hud hud-site' },
+    h('div', { class: 'field site-field' }, h('label', { for: 'site' }, T.site), siteSelect),
+    siteMeta,
+    customField,
+    h('div', { class: 'hud-row' }, h('span', { class: 'eyebrow', title: T.heightTip }, T.height), heightSeg),
+    h('div', { class: 'hud-actions' }, factsBtn, replayBtn),
+    factsSheet,
+    replaySheet,
+  );
+  document.addEventListener('pointerdown', (ev) => {
+    if ((!factsSheet.hidden || !replaySheet.hidden) && ev.target instanceof Node && !hudSite.contains(ev.target)) openSheet(null);
+  });
+  window.addEventListener('keydown', (ev) => {
+    if (ev.key === 'Escape') openSheet(null);
+  });
 
   // ----- verdict
   const where = h('p', { class: 'where' });
   const headline = h('h1', { 'aria-live': 'polite' });
-  const sunPill = h('span', { class: 'pill' });
-  const earthPill = h('span', { class: 'pill' });
+  const sunPill = h('div', { class: 'pill' });
+  const earthPill = h('div', { class: 'pill' });
   // The next step of the story, for a first visit: from one moment at one site to every landing day of the year.
   const nextStep = h('button', { class: 'next-step', type: 'button', onclick: () => store.set({ tab: 'plan' }) }, T.nextStep, h('span', { 'aria-hidden': 'true' }, ' →'));
-  const verdict = h('div', { class: 'verdict' }, h('div', null, where, headline), h('div', { class: 'verdict-side' }, h('div', { class: 'pills' }, sunPill, earthPill), nextStep));
+  const hudVerdict = h('div', { class: 'hud hud-verdict' }, replayNote, where, headline, h('div', { class: 'status-rows' }, sunPill, earthPill), nextStep);
 
   // ----- hero: panorama
   const stripCanvas = h('canvas', { role: 'img', 'aria-label': T.panorama });
   const readout = h('div', { class: 'readout', hidden: true });
-  const heroNote = h('span', { class: 'hero-note' });
+  const heroNote = h('p', { class: 'stage-note' });
   const three = createHero3D();
   const viewSeg = h('div', { class: 'seg', role: 'group', 'aria-label': T.three.viewTip, title: T.three.viewTip });
   const view3dBtn = h('button', { type: 'button', onclick: () => store.set({ hero: '3d' }) }, T.three.view3d);
   const viewPanBtn = h('button', { type: 'button', onclick: () => store.set({ hero: 'panorama' }) }, T.panorama);
   viewSeg.append(view3dBtn, viewPanBtn);
-  const soundBtn = h('button', { class: 'btn ghost sound-btn', type: 'button', title: T.three.soundTip, 'aria-pressed': 'false' });
-  const syncSound = () => {
-    soundBtn.setAttribute('aria-pressed', String(soundEnabled()));
-    setText(soundBtn, soundEnabled() ? T.three.soundOn : T.three.soundOff);
-  };
-  soundBtn.addEventListener('click', () => {
-    setSound(!soundEnabled());
-    syncSound();
-    tick();
-  });
-  syncSound();
-  // A returning visitor who had sound on gets it back at the first click anywhere (browsers need a gesture).
-  if (soundPreferred()) {
-    const resume = () => {
-      setSound(true);
-      syncSound();
-      window.removeEventListener('pointerdown', resume);
-    };
-    window.addEventListener('pointerdown', resume);
-  }
-  const stripWrap = h('div', { style: 'position:relative' }, stripCanvas, readout);
-  const hero = h('section', { class: 'panel hero', 'aria-label': T.panorama }, h('div', { class: 'hero-bar' }, viewSeg, heroNote, h('div', { class: 'grow' }), soundBtn), three.el, stripWrap);
+  const stripWrap = h('div', { class: 'pano' }, stripCanvas, readout);
   three.onFail = () => {
     view3dBtn.disabled = true;
     view3dBtn.title = T.three.unavailable;
@@ -163,6 +180,8 @@ export function createExplore(app: App): View {
     const on = use3d();
     three.el.hidden = !on;
     stripWrap.hidden = on;
+    hudClose.hidden = on;
+    stage.classList.toggle('is-pano', !on);
     view3dBtn.setAttribute('aria-pressed', String(on));
     viewPanBtn.setAttribute('aria-pressed', String(!on));
   }
@@ -191,10 +210,10 @@ export function createExplore(app: App): View {
 
   // ----- stat cards
   const stat = (title: string, tip: string, lead = false, dot?: 'sun' | 'earth') => {
-    const value = h('div', { class: 'value' });
-    const sub = h('div', { class: 'sub' });
+    const value = h('div', { class: 'tm-value' });
+    const sub = h('div', { class: 'tm-sub' });
     const label = h('span', null, title);
-    const el = h('div', { class: `panel stat${lead ? ' lead' : ''}`, title: tip }, h('div', { class: 'eyebrow' }, dot ? h('span', { class: `dot ${dot}` }) : null, label), value, sub);
+    const el = h('div', { class: `tm-row${lead ? ' lead' : ''}`, title: tip }, h('div', { class: 'tm-label' }, dot ? h('span', { class: `dot ${dot}` }) : null, label), value, sub);
     return { el, value, sub, label };
   };
   const stSunEl = stat(T.stat.sunEl, T.stat.sunElTip, true, 'sun');
@@ -202,7 +221,8 @@ export function createExplore(app: App): View {
   const stSunNext = stat(T.stat.nextSun, T.stat.sunVisibleTip, false, 'sun');
   const stEarth = stat(T.stat.earthEl, T.stat.earthElTip, false, 'earth');
   const stEarthNext = stat(T.stat.nextEarth, T.stat.earthElTip, false, 'earth');
-  const stats = h('div', { class: 'stats' }, stSunEl.el, stSunVis.el, stSunNext.el, stEarth.el, stEarthNext.el);
+  const telemetry = h('div', { class: 'telemetry' }, stSunEl.el, stSunVis.el, stSunNext.el, stEarth.el, stEarthNext.el);
+  const hudData = h('div', { class: 'hud hud-data' }, telemetry, h('div', { class: 'hud-row' }, h('span', { class: 'eyebrow' }, T.view), viewSeg));
 
   // ----- close-ups and timeline
   const sunCanvas = h('canvas', { role: 'img', 'aria-label': T.closeSun });
@@ -210,17 +230,28 @@ export function createExplore(app: App): View {
   const closeups = h(
     'div',
     { class: 'closeups' },
-    h('div', { class: 'panel closeup' }, h('div', { class: 'cap' }, h('span', { class: 'dot sun' }), T.closeSun, h('span', { class: 'muted small' }, T.trueScale)), sunCanvas),
-    h('div', { class: 'panel closeup' }, h('div', { class: 'cap' }, h('span', { class: 'dot earth' }), T.closeEarth, h('span', { class: 'muted small' }, T.trueScale)), earthCanvas),
+    h('div', { class: 'closeup', title: T.trueScale }, h('div', { class: 'cap' }, h('span', { class: 'dot sun' }), T.closeSun), sunCanvas),
+    h('div', { class: 'closeup', title: T.trueScale }, h('div', { class: 'cap' }, h('span', { class: 'dot earth' }), T.closeEarth), earthCanvas),
   );
+  const hudClose = h('div', { class: 'hud hud-close', hidden: true }, closeups);
   const timeCanvas = h('canvas', { role: 'img', 'aria-label': T.timelineTitle(EXPLORE_DAYS) });
   const eventList = h('ul', { class: 'events' });
-  const timeline = h(
+  const dock = h(
     'div',
-    { class: 'panel timeline' },
-    h('div', { class: 'cap' }, T.timelineTitle(EXPLORE_DAYS), h('span', { class: 'muted small' }, T.timelineHint)),
-    timeCanvas,
-    eventList,
+    { class: 'dock' },
+    h(
+      'div',
+      { class: 'dock-cell dock-transport' },
+      h('div', { class: 'field' }, h('label', { for: 'time' }, T.time), timeInput),
+      h(
+        'div',
+        { class: 'transport-row' },
+        playBtn,
+        h('div', { class: 'stepper' }, step(T.back1d, -DAY_MS, 'One day earlier'), step(T.back1h, -HOUR_MS, 'One hour earlier'), step(T.fwd1h, HOUR_MS, 'One hour later'), step(T.fwd1d, DAY_MS, 'One day later')),
+      ),
+    ),
+    h('div', { class: 'dock-cell dock-time' }, h('div', { class: 'dock-cap' }, h('span', { class: 'eyebrow' }, T.timelineTitle(EXPLORE_DAYS)), h('span', { class: 'muted small' }, T.timelineHint)), timeCanvas),
+    h('div', { class: 'dock-cell dock-events' }, h('div', { class: 'dock-cap' }, h('span', { class: 'eyebrow' }, T.nextEvents)), eventList),
   );
   const pickTime = (ev: MouseEvent) => {
     if (!timeGeo) return;
@@ -238,8 +269,8 @@ export function createExplore(app: App): View {
     window.addEventListener('mouseup', up);
   });
 
-  const facts = h('dl', { class: 'panel facts' });
-  const el = h('div', { class: 'explore' }, h('div', { class: 'panel panel-pad' }, controls, replayRow, verdict, replayNote), hero, stats, h('div', { class: 'lower' }, closeups, timeline), facts);
+  const stage = h('section', { class: 'stage', 'aria-label': T.panorama }, three.el, stripWrap, h('div', { class: 'stage-scrim' }), heroNote, hudSite, hudData, hudVerdict, hudClose);
+  const el = h('div', { class: 'explore' }, stage, dock);
 
   // ----- behaviour
   function togglePlay(force?: boolean): void {
@@ -269,6 +300,8 @@ export function createExplore(app: App): View {
     if (site.note) about.push(' ', site.note);
     if (site.published) about.push(' ', T.facts.moved(deg(site.published.lat, 2), deg(site.published.lon, 2)));
     if (site.nasa) about.push(' ', T.facts.nasa(pct(site.nasa.sunVisibility3x3), pct(site.nasa.earthVisibility3x3)));
+    clear(siteMeta);
+    siteMeta.append(h('span', null, latLon(site.lat, site.lon)), h('span', { class: 'muted' }, `${num(site.elevationM, 0)} m`), h('span', { class: `tag ${terrain ? 'terrain' : 'sphere'}` }, terrain ? T.facts.terrain : T.facts.sphere));
     facts.append(
       h('div', null, h('dt', null, T.facts.coords), h('dd', null, latLon(site.lat, site.lon))),
       h('div', null, h('dt', null, T.facts.elevation), h('dd', null, T.facts.elevationValue(num(site.elevationM, 0)))),
@@ -279,6 +312,7 @@ export function createExplore(app: App): View {
         h('dd', null, h('span', { class: `tag ${terrain ? 'terrain' : 'sphere'}` }, terrain ? T.facts.terrain : T.facts.sphere), ' ', site.horizon === 'lola-5m-80m-240m' ? T.facts.terrainFineText : terrain ? T.facts.terrainText : T.facts.sphereText),
       ),
       h('div', null, h('dt', null, T.facts.about), h('dd', null, ...about, ...(own ? [] : [' ', h('a', { href: site.source, target: '_blank', rel: 'noopener' }, T.facts.source)]))),
+      h('div', null, h('dt', null, T.facts.real), h('dd', null, terrain ? T.three.note : T.three.noteSphere)),
     );
   }
 
@@ -362,12 +396,26 @@ export function createExplore(app: App): View {
     // A real landing being replayed: what happened, next to what the tool says. The note stays while
     // the visitor moves through the three weeks after the landing.
     const replay = REPLAYS.find((r) => r.siteId === site.id && state.timeMs >= r.timeMs - HOUR_MS && state.timeMs <= r.timeMs + 21 * DAY_MS);
-    replayRow.querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', String(!!replay && b.dataset.replay === replay.id)));
-    replayNote.hidden = !replay;
+    replayList.querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', String(!!replay && b.dataset.replay === replay.id)));
+    replayNote.hidden = !replay || noteClosed === replay.id;
     if (replay && replayNote.dataset.id !== replay.id) {
       replayNote.dataset.id = replay.id;
       clear(replayNote);
       replayNote.append(
+        h(
+          'button',
+          {
+            class: 'btn icon',
+            type: 'button',
+            'aria-label': T.close,
+            title: T.close,
+            onclick: () => {
+              noteClosed = replay.id;
+              replayNote.hidden = true;
+            },
+          },
+          '✕',
+        ),
         h('div', null, h('span', { class: 'eyebrow' }, T.replay.happened), h('p', null, replay.happened, ' ', h('a', { href: replay.source.url, target: '_blank', rel: 'noopener' }, replay.source.label))),
         h('div', null, h('span', { class: 'eyebrow' }, T.replay.look), h('p', null, replay.look)),
       );
@@ -379,7 +427,7 @@ export function createExplore(app: App): View {
     const pill = (el: HTMLElement, kind: 'sun' | 'earth', ok: boolean, name: string, text: string) => {
       el.className = `pill ${ok ? 'yes' : 'no'}`;
       clear(el);
-      el.append(h('span', { class: `dot ${kind}` }), h('span', { class: `mark ${ok ? 'ok' : 'bad'}`, 'aria-hidden': 'true' }, ok ? '✓' : '✕'), h('b', null, name), text);
+      el.append(h('span', { class: `dot ${kind}` }), h('span', { class: `mark ${ok ? 'ok' : 'bad'}`, 'aria-hidden': 'true' }, ok ? '✓' : '✕'), h('b', null, name), h('span', null, text));
     };
     const share = pct(m.sunFrac);
     pill(sunPill, 'sun', sunUp, S.sun, m.eclipse > 0.5 ? T.sunEclipsed : sunUp ? T.sunUp(share) : m.sunFrac > 0 ? T.sunPartial(share) : T.sunDown);
@@ -414,14 +462,15 @@ export function createExplore(app: App): View {
 
     // Events list
     clear(eventList);
-    const upcoming = outlook.events.filter((e) => e.timeMs > state.timeMs).slice(0, 6);
-    if (!upcoming.length) eventList.append(h('li', { class: 'muted' }, T.noEvents));
+    const upcoming = outlook.events.filter((e) => e.timeMs > state.timeMs).slice(0, EVENT_ROWS);
+    if (!upcoming.length) eventList.append(h('li', { class: 'muted' }, h('span'), h('span', null, T.noEvents)));
     for (const e of upcoming) {
       const kind = e.kind.startsWith('earth') ? 'earth' : 'sun';
       eventList.append(
-        h('li', null, h('span', { class: `dot ${kind}` }), h('span', null, T.events[e.kind]), h('span', { class: 'muted' }, T.inTime(duration((e.timeMs - state.timeMs) / HOUR_MS))), h('span', { class: 'when' }, dayTime(e.timeMs))),
+        h('li', null, h('span', { class: `dot ${kind}` }), h('span', null, T.events[e.kind]), h('span', null, T.inTime(duration((e.timeMs - state.timeMs) / HOUR_MS))), h('span', { class: 'when' }, dayTime(e.timeMs))),
       );
     }
+    for (let i = Math.max(1, upcoming.length); i < EVENT_ROWS; i++) eventList.append(h('li', { 'aria-hidden': 'true' }));
     draw();
   }
 
@@ -430,7 +479,9 @@ export function createExplore(app: App): View {
     const mast = store.state.req.mast;
     const [elMin, elMax] = elevationRange(loaded, mast);
     if (use3d()) {
-      setText(heroNote, loaded.site.horizon === 'sphere' ? T.three.noteSphere : T.three.note);
+      const sphere = loaded.site.horizon === 'sphere';
+      setText(heroNote, sphere ? T.three.legendSphere : T.three.legend);
+      heroNote.title = sphere ? T.three.noteSphere : T.three.note;
       three.redraw();
     } else stripGeo = drawStrip(
       stripCanvas,
@@ -449,14 +500,15 @@ export function createExplore(app: App): View {
         earthPath: outlook.earthPath,
         labels: { sun: S.sun, earth: S.earth, behind: T.behind, horizontal: T.horizontal, sphere: T.sphereNote },
       },
-      STRIP_H,
+      stripWrap.clientHeight > 160 ? stripWrap.clientHeight : STRIP_H,
     );
     if (!use3d() && stripGeo) {
       const stretch = stripGeo.plotH / (elMax - elMin) / (stripGeo.plotW / 360);
       setText(heroNote, stretch > 1.5 ? T.panoramaNote(stretch.toFixed(0)) : T.panoramaNoteFlat);
+      heroNote.title = '';
     }
-    drawCloseup(sunCanvas, { horizon: loaded.horizon, mast, body: moment.sun, span: 3.2, inner: '#ffffff', outer: '#ececee', glow: 'rgba(255,255,255,0.4)', scaleLabel: T.oneDegree }, CLOSE_H);
-    drawCloseup(earthCanvas, { horizon: loaded.horizon, mast, body: moment.earth, span: 7.5, inner: '#dcecff', outer: COLORS.earthDeep, glow: 'rgba(125,184,255,0.24)', scaleLabel: T.oneDegree }, CLOSE_H);
+    if (!use3d()) drawCloseup(sunCanvas, { horizon: loaded.horizon, mast, body: moment.sun, span: 3.2, inner: '#ffffff', outer: '#ececee', glow: 'rgba(255,255,255,0.4)', scaleLabel: T.oneDegree }, CLOSE_H);
+    if (!use3d()) drawCloseup(earthCanvas, { horizon: loaded.horizon, mast, body: moment.earth, span: 7.5, inner: '#dcecff', outer: COLORS.earthDeep, glow: 'rgba(125,184,255,0.24)', scaleLabel: T.oneDegree }, CLOSE_H);
     timeGeo = drawTimeline(timeCanvas, {
       startMs: outlook.grid.startMs,
       stepMs: outlook.grid.stepMs,

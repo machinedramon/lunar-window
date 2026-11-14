@@ -41,8 +41,102 @@ export interface SceneSky {
   earthNorth: [number, number, number];
   earthGreenwich: [number, number, number];
   /** Local east, north and up of the site in J2000 equatorial coordinates, to place the stars. */
-  starAxes: { east: readonly number[]; north: readonly number[]; up: readonly number[] };
+  starAxes: { east: readonly number[]; north: readonly number[]; up: readonly number[]; planets?: { name: string; dir: readonly number[]; mag: number }[] };
 }
+
+/** Planets drawn among the stars: Mercury, Venus, Mars, Jupiter, Saturn. */
+const PLANETS = 5;
+const PLANET_TINT: Record<string, [number, number, number]> = {
+  Mercury: [1, 0.95, 0.88],
+  Venus: [1, 1, 0.94],
+  Mars: [1, 0.72, 0.5],
+  Jupiter: [1, 0.95, 0.84],
+  Saturn: [1, 0.92, 0.74],
+};
+
+/** How a point of light of a given visual magnitude is drawn: diameter in pixels, intensity, and a halo for the brightest. */
+function starLook(mag: number): { size: number; gain: number; halo: number } {
+  const halo = Math.max(0, Math.min(1, (1.6 - mag) / 2.4));
+  return {
+    size: Math.max(2.4, 7.4 - 1.25 * (mag + 1.5)) * (1 + 0.9 * halo),
+    gain: Math.max(0.1, Math.min(3.2, 1.7 * Math.pow(10, -0.4 * mag * 0.6))),
+    halo,
+  };
+}
+
+/** Colour of a black body, roughly, kept pale: on screen the Earth remains the only strong colour. */
+function starTint(kelvin: number): [number, number, number] {
+  const t = Math.max(0, Math.min(1, (kelvin - 3000) / 9000));
+  const warm: [number, number, number] = [1, 0.78, 0.58];
+  const white: [number, number, number] = [1, 0.97, 0.93];
+  const blue: [number, number, number] = [0.74, 0.83, 1];
+  const mixTo = (a: [number, number, number], b: [number, number, number], k: number): [number, number, number] => [a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k, a[2] + (b[2] - a[2]) * k];
+  return t < 0.33 ? mixTo(warm, white, t / 0.33) : mixTo(white, blue, (t - 0.33) / 0.67);
+}
+
+const STAR_VERT = /* glsl */ `
+#include <common>
+#include <logdepthbuf_pars_vertex>
+attribute vec3 tint;
+attribute float size;
+attribute float halo;
+uniform float uDpr;
+varying vec3 vTint;
+varying float vHalo;
+void main() {
+  vTint = tint;
+  vHalo = halo;
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+  gl_PointSize = size * uDpr;
+  #include <logdepthbuf_vertex>
+}`;
+// Stars do not twinkle on the Moon: there is no air. Each one is a steady round point.
+const STAR_FRAG = /* glsl */ `
+#include <common>
+#include <logdepthbuf_pars_fragment>
+uniform float uOpacity;
+uniform float uGain;
+varying vec3 vTint;
+varying float vHalo;
+void main() {
+  #include <logdepthbuf_fragment>
+  vec2 p = gl_PointCoord * 2.0 - 1.0;
+  float r2 = dot(p, p);
+  if (r2 > 1.0) discard;
+  float sharp = mix(4.5, 18.0, vHalo);
+  float light = exp(-r2 * sharp) + vHalo * 0.05 * exp(-r2 * 3.0) * (1.0 - r2);
+  gl_FragColor = vec4(vTint * light * uOpacity * uGain, 1.0);
+  #include <tonemapping_fragment>
+  #include <colorspace_fragment>
+}`;
+const GALAXY_VERT = /* glsl */ `
+#include <common>
+#include <logdepthbuf_pars_vertex>
+varying vec3 vDir;
+void main() {
+  vDir = position;
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+  #include <logdepthbuf_vertex>
+}`;
+// NASA's Deep Star Map is a plate carrée in J2000: centred on 0 h of right ascension, which grows to the left.
+const GALAXY_FRAG = /* glsl */ `
+#include <common>
+#include <logdepthbuf_pars_fragment>
+uniform sampler2D uMap;
+uniform float uOpacity;
+uniform float uGain;
+varying vec3 vDir;
+void main() {
+  #include <logdepthbuf_fragment>
+  vec3 d = normalize(vDir);
+  vec2 uv = vec2(0.5 - atan(d.y, d.x) / (2.0 * PI), 0.5 + asin(clamp(d.z, -1.0, 1.0)) / PI);
+  vec3 c = texture2D(uMap, uv).rgb;
+  c = mix(vec3(dot(c, vec3(0.2126, 0.7152, 0.0722))), c, 0.4);
+  c = pow(c, vec3(1.3));
+  gl_FragColor = vec4(c * uOpacity * uGain, 1.0);
+  #include <tonemapping_fragment>
+  #include <colorspace_fragment>
+}`;
 
 /** Direction in scene coordinates (x east, y up, z south) of an azimuth and elevation in degrees. */
 export function direction(az: number, el: number, out = new THREE.Vector3()): THREE.Vector3 {
@@ -586,6 +680,10 @@ export class LunarScene {
   private readonly earth: THREE.Mesh;
   private readonly earthMat: THREE.ShaderMaterial;
   private readonly stars: THREE.Points;
+  private readonly starMat: THREE.ShaderMaterial;
+  private starCount = 0;
+  private readonly galaxy: THREE.Mesh;
+  private readonly galaxyMat: THREE.ShaderMaterial;
   private readonly sunDir = new THREE.Vector3(0, 0.02, -1);
   private readonly shadowSun = new THREE.Vector3();
   private shadowsDirty = true;
@@ -742,18 +840,54 @@ void main() {
     // They show only when the Sun is hidden, as for a dark-adapted eye or a long exposure.
     const starGeo = new THREE.BufferGeometry();
     starGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(3), 3));
-    starGeo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(3), 3));
-    this.stars = new THREE.Points(starGeo, new THREE.PointsMaterial({ size: 2.1, sizeAttenuation: false, vertexColors: true, transparent: true, opacity: 0, depthWrite: false }));
+    this.starMat = new THREE.ShaderMaterial({
+      vertexShader: STAR_VERT,
+      fragmentShader: STAR_FRAG,
+      uniforms: { uOpacity: { value: 0 }, uGain: { value: 1 }, uDpr: { value: 1 } },
+      transparent: true,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    });
+    this.stars = new THREE.Points(starGeo, this.starMat);
     this.stars.frustumCulled = false;
     this.stars.matrixAutoUpdate = false;
     this.stars.visible = false;
     this.scene.add(this.stars);
+    // The Milky Way: NASA's Deep Star Map (Gaia, Hipparcos and Tycho stars), in the same frame as the catalogue.
+    this.galaxyMat = new THREE.ShaderMaterial({
+      vertexShader: GALAXY_VERT,
+      fragmentShader: GALAXY_FRAG,
+      uniforms: { uMap: { value: null }, uOpacity: { value: 0 }, uGain: { value: 1 } },
+      side: THREE.BackSide,
+      transparent: true,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    });
+    this.galaxy = new THREE.Mesh(new THREE.SphereGeometry(1, 48, 24), this.galaxyMat);
+    this.galaxy.frustumCulled = false;
+    this.galaxy.matrixAutoUpdate = false;
+    this.galaxy.visible = false;
+    this.galaxy.renderOrder = -2;
+    this.scene.add(this.galaxy);
+    new THREE.TextureLoader().load(`${import.meta.env.BASE_URL}textures/milkyway.jpg`, (map) => {
+      map.colorSpace = THREE.SRGBColorSpace;
+      map.wrapS = THREE.RepeatWrapping;
+      map.generateMipmaps = false;
+      map.minFilter = THREE.LinearFilter;
+      this.galaxyMat.uniforms.uMap.value = map;
+      this.galaxy.visible = true;
+      this.onChange?.();
+    });
     void fetch(`${import.meta.env.BASE_URL}data/stars.json`)
       .then((r) => r.json() as Promise<{ stars: number[] }>)
       .then((doc) => {
         const count = doc.stars.length / 4;
-        const pos = new Float32Array(count * 3);
-        const col = new Float32Array(count * 3);
+        // The planets take the last places of the same buffers; they move, so they are filled at each moment.
+        const pos = new Float32Array((count + PLANETS) * 3);
+        const col = new Float32Array((count + PLANETS) * 3);
+        const size = new Float32Array(count + PLANETS);
+        const halo = new Float32Array(count + PLANETS);
+        this.starCount = count;
         for (let i = 0; i < count; i++) {
           const ra = doc.stars[i * 4] * D2R;
           const dec = doc.stars[i * 4 + 1] * D2R;
@@ -761,12 +895,16 @@ void main() {
           const kelvin = doc.stars[i * 4 + 3];
           // Unit vector in J2000 equatorial coordinates; the object's matrix turns it into the local sky.
           pos.set([Math.cos(dec) * Math.cos(ra), Math.cos(dec) * Math.sin(ra), Math.sin(dec)], i * 3);
-          const b = Math.min(1.8, 0.07 + 2.2 * Math.pow(10, -0.4 * mag));
-          const warm = Math.max(-1, Math.min(1, (6500 - kelvin) / 4000)); // cool stars slightly warm, hot ones slightly blue
-          col.set([b * (1 + 0.12 * warm), b, b * (1 - 0.16 * warm)], i * 3);
+          const look = starLook(mag);
+          const tint = starTint(kelvin);
+          col.set([tint[0] * look.gain, tint[1] * look.gain, tint[2] * look.gain], i * 3);
+          size[i] = look.size;
+          halo[i] = look.halo;
         }
         starGeo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-        starGeo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+        starGeo.setAttribute('tint', new THREE.BufferAttribute(col, 3));
+        starGeo.setAttribute('size', new THREE.BufferAttribute(size, 1));
+        starGeo.setAttribute('halo', new THREE.BufferAttribute(halo, 1));
         this.stars.visible = true;
         if (this.lastSky) this.setSky(this.lastSky);
         this.onChange?.();
@@ -1009,7 +1147,31 @@ void main() {
     // Exposure opens up when the Sun is hidden, as a camera (or an eye) would, so that earthshine shows.
     this.renderer.toneMappingExposure = 1.0 + 5.0 * Math.pow(1 - Math.min(1, visible * power), 3);
     this.earthMat.uniforms.uGain.value = 1 / Math.sqrt(this.renderer.toneMappingExposure);
-    (this.stars.material as THREE.PointsMaterial).opacity = Math.max(0, 1 - visible * power * 6) * 0.95;
+    // Stars and Milky Way show only when the Sun is hidden, as for a dark-adapted eye or a long exposure;
+    // their brightness does not follow the exposure, or every star would burn to the same white.
+    const dark = Math.max(0, 1 - visible * power * 6);
+    this.starMat.uniforms.uOpacity.value = dark;
+    this.starMat.uniforms.uGain.value = 3.3 / this.renderer.toneMappingExposure;
+    this.galaxyMat.uniforms.uOpacity.value = dark * dark;
+    this.galaxyMat.uniforms.uGain.value = 1.5 / this.renderer.toneMappingExposure;
+    const planets = s.starAxes.planets;
+    if (planets && this.starCount) {
+      const g = this.stars.geometry;
+      const pos = g.getAttribute('position') as THREE.BufferAttribute;
+      const tint = g.getAttribute('tint') as THREE.BufferAttribute;
+      const size = g.getAttribute('size') as THREE.BufferAttribute;
+      const halo = g.getAttribute('halo') as THREE.BufferAttribute;
+      planets.slice(0, PLANETS).forEach((p, i) => {
+        const at = this.starCount + i;
+        const look = starLook(p.mag);
+        const c = PLANET_TINT[p.name] ?? [1, 1, 1];
+        pos.setXYZ(at, p.dir[0], p.dir[1], p.dir[2]);
+        tint.setXYZ(at, c[0] * look.gain, c[1] * look.gain, c[2] * look.gain);
+        size.setX(at, look.size);
+        halo.setX(at, look.halo);
+      });
+      pos.needsUpdate = tint.needsUpdate = size.needsUpdate = halo.needsUpdate = true;
+    }
     // J2000 direction -> scene (x east, y up, z south), scaled out to the sky and centred on the camera.
     const ax = s.starAxes;
     const k = SKY_M * 0.985;
@@ -1020,6 +1182,8 @@ void main() {
       0, 0, 0, 1,
     );
     this.stars.matrixWorldNeedsUpdate = true;
+    this.galaxy.matrix.copy(this.stars.matrix);
+    this.galaxy.matrixWorldNeedsUpdate = true;
   }
 
   /** Share of the full resolution to draw at: lowered on slow graphics to keep the motion fluid. */
@@ -1028,6 +1192,7 @@ void main() {
   resize(width: number, height: number): void {
     const dpr = Math.min(2, window.devicePixelRatio || 1) * this.quality;
     this.renderer.setPixelRatio(dpr);
+    this.starMat.uniforms.uDpr.value = dpr;
     this.renderer.setSize(width, height, false);
     this.composer.setPixelRatio(dpr);
     this.composer.setSize(width, height);
@@ -1140,6 +1305,11 @@ void main() {
     this.sunMat.uniforms.uGain.value = gainWas;
     shot.key = key;
     shot.at = now;
+  }
+
+  /** 0 to 1: how much of the night sky shows (none while the Sun is up). */
+  get starLevel(): number {
+    return this.stars.visible ? (this.starMat.uniforms.uOpacity.value as number) : 0;
   }
 
   /** Screen position (0 to 1, origin top left) of a direction, or null when it is behind the camera. */
