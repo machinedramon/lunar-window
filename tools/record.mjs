@@ -23,8 +23,11 @@ page.on('pageerror', (e) => console.log('pageerror', e.message));
 await page.goto('http://localhost:5700/#explore?site=malapert&t=2027-01-17T00:00', { waitUntil: 'networkidle' });
 await page.addStyleTag({
   content: `
-  #rec-cap { position: fixed; left: 0; right: 0; bottom: 46px; z-index: 3000; text-align: center; pointer-events: none;
-    font: 600 27px/1.25 'Space Grotesk Variable', sans-serif; letter-spacing: -0.01em; color: #fff; text-shadow: 0 2px 16px #000, 0 0 3px #000, 0 0 30px #000; padding: 0 10%; }
+  #rec-cap { position: fixed; left: 0; right: 0; bottom: 0; z-index: 3000; text-align: center; pointer-events: none;
+    font: 600 27px/1.25 'Space Grotesk Variable', sans-serif; letter-spacing: -0.01em; color: #fff; text-shadow: 0 2px 16px #000, 0 0 3px #000; padding: 90px 10% 44px;
+    background: linear-gradient(180deg, rgba(0,0,0,0), rgba(0,0,0,0.86) 62%); }
+  #rec-cap:empty { display: none; }
+  body.clean .three-label, body.clean .three-insets, body.clean .three-tape { display: none !important; }
   #rec-card { position: fixed; inset: 0; z-index: 4000; background: #000; display: none; flex-direction: column; align-items: center; justify-content: center; gap: 18px; color: #fff; text-align: center; }
   #rec-card.on { display: flex; }
   #rec-card .big { font: 600 92px/0.95 'Space Grotesk Variable', sans-serif; letter-spacing: -0.04em; }
@@ -115,6 +118,8 @@ await shot(2, 2, 3.5, async () => {
 await shot(3, 5.5, 4.5, async () => {
   await set({ timeMs: utc(2027, 1, 17) });
   await mode(true, false);
+  // The title plays over a clean picture, as the arrival shot of the tool itself does.
+  await page.evaluate(() => document.body.classList.add('clean'));
   await look(338, -13, 58);
   await page.waitForTimeout(2500);
 }, async (t, i) => {
@@ -122,6 +127,7 @@ await shot(3, 5.5, 4.5, async () => {
   await look(lerp(338, 3, k), lerp(-13, 5.5, k), lerp(58, 44, k));
   if (i === Math.round(1.2 * FPS)) await title('<div class="big">Lunar Window</div><div class="mid">When the launch slips, see what still works.</div>');
 });
+await page.evaluate(() => document.body.classList.remove('clean'));
 
 // 4. The planner and the slip (0:10 to 0:16)
 await shot(4, 10, 6, async () => {

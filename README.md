@@ -4,14 +4,29 @@
 
 Built for the NASA Space Apps Challenge 2026, challenge *Lunar Landing Site Navigator*.
 
+**Open it: https://machinedramon.github.io/lunar-window/**
+
+![Standing at Malapert Massif: NASA's concept rover, the solar array mast and the Earth over the skyline](docs/img/stand-there.jpg)
+
+| | |
+|---|---|
+| ![A ridge hides part of the Sun, seen through a long lens](docs/img/ridge.jpg) | ![The landing-window calendar after a launch slip](docs/img/planner.jpg) |
+| *One ridge decides: the Sun through a long lens, with the share of the disc that clears the terrain.* | *Plan a mission: every site and landing day of a year, and what a slip does to them.* |
+
 Most tools ask you to pick a landing site and a date, then show you the sky. Lunar Window starts from
 what a mission needs — sunlight at landing, hours of continuous power, Earth in view for
 communication — and shows every site and day that works across a year. When the launch date moves,
 it shows which sites survive, which fail, and why.
 
-## Status
+## What is in it
 
-Work in progress during the hackathon weekend (14–15 November 2026).
+- **Explore** — pick a site and a moment; stand there in 3D, or read the 360° panorama and the 30-day timeline. Seven real landings can be replayed.
+- **Plan a mission** — requirements in, landing windows out, for 15 sites over a year; slip the launch and see what survives, and why.
+- **Compare** — up to four options side by side.
+- **Missions** — three planning problems to play, scored on real quantities.
+- **Accuracy** — the measured errors against NASA data, and the limits of the model.
+
+Built during the hackathon weekend (14–15 November 2026).
 
 ## How it works
 
