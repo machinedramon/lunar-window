@@ -9,6 +9,10 @@
 // afterwards the Guide button of the top bar brings it back, from the beginning, as often as wanted. Starting
 // covers the screen while everything is made ready (the voice, the terrain, the map of the Moon), and uncovers
 // it on the Moon seen from space, which turns to the south pole while the camera comes down on the site.
+//
+// The guide is dressed as a technical display: corner marks, numbered lines, a start-up log, a band across the
+// screen when something decisive happens (the Sun is lost, the launch is late, the Earth is in view). The
+// colours keep the meaning they have everywhere in the tool: blue is the link with Earth, red is a problem.
 // At the moment the voice asks for something, the rest of the screen dims and only that control stays lit;
 // while it explains something that has to be seen (the Sun, the calendar), nothing is dimmed.
 //
@@ -30,9 +34,12 @@ const SITE = 'malapert';
 const PLANNED = Date.UTC(2027, 0, 17);
 const SLIP = 21;
 const SLIPPED = PLANNED + SLIP * DAY_MS;
-/** The Sun goes behind the ridge on 2 February 2027 at 06:37 UTC: the running clock is stopped a little after. */
-const DARK_FROM = Date.UTC(2027, 1, 2, 6, 50);
-const DARK = Date.UTC(2027, 1, 2, 7, 10);
+/**
+ * The ridge takes the Sun on 2 and 3 February 2027; from the evening of the 3rd nothing of its disc is left,
+ * for eight days. The running clock is stopped at midnight, when the Sun is wholly behind the terrain.
+ */
+const DARK_FROM = Date.UTC(2027, 1, 3, 23, 20);
+const DARK = Date.UTC(2027, 1, 4);
 /** Where the descent starts: over the first place people landed, a quarter of the Moon away from the pole. */
 const FROM = 'apollo-11';
 /** The descent over the globe, in milliseconds, and the least time the briefing stays up while things are made ready. */
@@ -66,6 +73,8 @@ interface Step {
   lit?: (s: State) => boolean;
   /** For a line that asks for nothing: called on every frame; true when the story may go on. */
   hold?: (s: State, spoken: boolean) => boolean;
+  /** For a line that asks for nothing: takes the tool to where the line would have left it, when it is cut short. */
+  skip?: () => void;
 }
 
 const q = (selector: string): HTMLElement | null => document.querySelector<HTMLElement>(selector);
@@ -178,13 +187,13 @@ export function createGuide(store: Store, host: GuideHost): Guide {
       place: 'top',
       hold: (s, spoken) => {
         // The clock stops by itself once the ridge has hidden the Sun; if it was stopped by hand, it is taken there.
-        if (s.timeMs >= DARK_FROM || spoken) {
-          press(PLAY, false);
-          if (s.timeMs !== DARK) store.set({ timeMs: DARK });
+        if (s.timeMs >= DARK_FROM || (spoken && !pressed(PLAY))) {
+          toDark();
           return spoken;
         }
         return false;
       },
+      skip: () => toDark(),
     },
     {
       id: 'question',
@@ -211,7 +220,10 @@ export function createGuide(store: Store, host: GuideHost): Guide {
     {
       id: 'why',
       place: 'low',
-      enter: () => store.set({ tab: 'plan', slipDays: SLIP, detail: null }),
+      enter: () => {
+        store.set({ tab: 'plan', slipDays: SLIP, detail: null });
+        announce('bad', G().alerts.slip[0], G().alerts.slip[1]);
+      },
       target: `.site-chip[data-site="${SITE}"]`,
       task: () => [G().verbs.click, S.siteNames[SITE] ?? 'Malapert Massif'],
       done: (s) => s.detail?.siteId === SITE,
@@ -237,6 +249,7 @@ export function createGuide(store: Store, host: GuideHost): Guide {
       task: () => [G().verbs.press, S.explore.three.faceEarth],
       done: () => pressed(FOLLOW_EARTH),
       act: () => press(FOLLOW_EARTH, true),
+      leave: () => announce('earth', G().alerts.earth[0], G().alerts.earth[1]),
     },
     {
       id: 'out',
@@ -249,6 +262,14 @@ export function createGuide(store: Store, host: GuideHost): Guide {
       },
     },
   ];
+
+  /** Stops the clock in the dark that follows the Sun's last light, and says so across the screen. */
+  function toDark(): void {
+    press(PLAY, false);
+    if (store.state.timeMs === DARK) return;
+    store.set({ timeMs: DARK });
+    announce('bad', G().alerts.sun[0], G().alerts.sun[1]);
+  }
 
   // ----- the panel: the picture of the link, the words, the request
   const portrait = h('div', { class: 'guide-face' });
@@ -278,6 +299,17 @@ export function createGuide(store: Store, host: GuideHost): Guide {
   // ----- the briefing: the mission in four lines, the language, one button to start; then what is being made ready
   const briefEyebrow = h('span', { class: 'eyebrow' });
   const briefTitle = h('h2', null);
+  const briefCode = h('b', null);
+  const briefKind = h('span', null);
+  const channel = h('span', null);
+  const clock = h('span', { class: 'briefing-clock' });
+  const pct = h('span', { class: 'briefing-pct' });
+  const logLines = [0, 1, 2, 3].map((i) => h('li', null, h('span', { class: 'n' }, `0${i + 1}`), h('span', { class: 't' }), h('i', { 'aria-hidden': 'true' }), h('b', null)));
+  const linked = h('div', { class: 'briefing-linked', 'aria-hidden': 'true' });
+  /** A band across the screen, when something decisive happens in the story. */
+  const alertTitle = h('b', null);
+  const alertSub = h('span', null);
+  const alertBand = h('div', { class: 'guide-alert', 'aria-hidden': 'true' }, h('div', null, alertTitle, alertSub));
   const briefRows = h('dl', { class: 'briefing-rows' });
   const startBtn = h('button', { class: 'btn primary briefing-start', type: 'button', onclick: () => void start() });
   const skipBtn = h('button', { class: 'btn', type: 'button', onclick: () => dismiss() });
@@ -286,7 +318,6 @@ export function createGuide(store: Store, host: GuideHost): Guide {
   for (const l of LANGS) langSeg.append(h('button', { type: 'button', lang: l.tag, dataset: { code: l.code }, onclick: () => host.setLanguage(l.code) }, l.name));
   const briefNote = h('p', { class: 'briefing-note' });
   const loadBar = h('i');
-  const loadText = h('span', { class: 'briefing-status', 'aria-live': 'polite' });
   const cancelBtn = h('button', { class: 'briefing-cancel', type: 'button', onclick: () => finish() });
   const signal = h('span', { class: 'guide-signal', 'aria-hidden': 'true' }, h('i'), h('i'), h('i'));
   const brief = h(
@@ -295,14 +326,16 @@ export function createGuide(store: Store, host: GuideHost): Guide {
     h(
       'div',
       { class: 'briefing-card' },
+      h('div', { class: 'briefing-strip', 'aria-hidden': 'true' }, h('span', null, h('i'), channel), clock),
       h('div', { class: 'briefing-head' }, signal, briefEyebrow),
+      h('div', { class: 'briefing-code' }, briefCode, briefKind),
       briefTitle,
       briefRows,
       h(
         'div',
         { class: 'briefing-foot' },
         h('div', { class: 'briefing-go' }, h('div', { class: 'briefing-buttons' }, startBtn, skipBtn), h('div', { class: 'briefing-lang' }, langLabel, langSeg), briefNote),
-        h('div', { class: 'briefing-load' }, h('span', { class: 'briefing-bar' }, loadBar), h('div', { class: 'briefing-line' }, loadText, cancelBtn)),
+        h('div', { class: 'briefing-load' }, h('div', { class: 'briefing-meter' }, h('span', { class: 'briefing-bar' }, loadBar), pct), h('ol', { class: 'briefing-log', 'aria-live': 'polite' }, ...logLines), cancelBtn, linked),
       ),
     ),
   );
@@ -312,7 +345,7 @@ export function createGuide(store: Store, host: GuideHost): Guide {
   button.innerHTML = ICON;
   button.append(buttonLabel);
 
-  document.body.append(dim, panel, ring, brief);
+  document.body.append(dim, panel, ring, alertBand, brief);
 
   // ----- state
   let at = -1;
@@ -463,7 +496,7 @@ export function createGuide(store: Store, host: GuideHost): Guide {
       } else step.act?.();
       return;
     }
-    if (step.hold) step.hold(store.state, true);
+    step.skip?.();
     advance();
   }
 
@@ -559,6 +592,10 @@ export function createGuide(store: Store, host: GuideHost): Guide {
     window.clearTimeout(closeTimer);
     brief.hidden = false;
     brief.classList.toggle('busy', mode === 'loading');
+    brief.classList.remove('linked', 'open');
+    window.clearInterval(clockTimer);
+    tickClock();
+    clockTimer = window.setInterval(tickClock, 1000);
     void brief.offsetWidth;
     brief.classList.add('in');
     if (mode === 'invite') startBtn.focus({ preventScroll: true });
@@ -566,18 +603,52 @@ export function createGuide(store: Store, host: GuideHost): Guide {
 
   function closeBrief(): void {
     if (brief.hidden) return;
+    // It opens like a visor, from the middle line outwards.
+    brief.classList.add('open');
     brief.classList.remove('in');
     window.clearTimeout(closeTimer);
     closeTimer = window.setTimeout(() => {
       brief.hidden = true;
-      brief.classList.remove('busy');
-    }, 950);
+      brief.classList.remove('busy', 'linked', 'open');
+      window.clearInterval(clockTimer);
+    }, 1100);
   }
 
+  /** The start-up log of the briefing: the stages done, the one going on, the share of the way. */
   function stage(i: number): void {
     stageNow = i;
-    loadBar.style.transform = `scaleX(${((i + 1) / G().brief.status.length).toFixed(3)})`;
-    setText(loadText, G().brief.status[i]);
+    const B = G().brief;
+    const last = B.status.length - 1;
+    loadBar.style.transform = `scaleX(${((i + 1) / B.status.length).toFixed(3)})`;
+    setText(pct, `${String(Math.round(((i + 1) / B.status.length) * 100)).padStart(3, '0')}%`);
+    logLines.forEach((line, k) => {
+      line.classList.toggle('done', k < i || i === last);
+      line.classList.toggle('now', k === i && i !== last);
+      line.classList.toggle('on', k <= i);
+      setText(line.children[1], B.status[k]);
+      setText(line.children[3], k < i || i === last ? B.ok : '');
+    });
+    setText(linked, B.status[last]);
+    brief.classList.toggle('linked', i === last);
+  }
+
+  /** The time of the visitor's own clock, in UTC, as a control room shows it. */
+  let clockTimer = 0;
+  function tickClock(): void {
+    setText(clock, `UTC ${new Date().toISOString().slice(11, 19)}`);
+  }
+
+  /** A band across the picture for a couple of seconds: red for a problem, blue for the link with Earth. */
+  let alertTimer = 0;
+  function announce(kind: 'bad' | 'earth', title: string, sub: string): void {
+    setText(alertTitle, title);
+    setText(alertSub, sub);
+    alertBand.dataset.kind = kind;
+    alertBand.classList.remove('on');
+    void alertBand.offsetWidth;
+    alertBand.classList.add('on');
+    window.clearTimeout(alertTimer);
+    alertTimer = window.setTimeout(() => alertBand.classList.remove('on'), 3000);
   }
 
   /**
@@ -673,7 +744,7 @@ export function createGuide(store: Store, host: GuideHost): Guide {
       return;
     }
     stage(3);
-    await wait(700);
+    await wait(950);
     if (!live()) {
       descent?.cancel();
       return;
@@ -711,6 +782,7 @@ export function createGuide(store: Store, host: GuideHost): Guide {
     cancelAnimationFrame(raf);
     ring.hidden = true;
     dim.classList.remove('on');
+    alertBand.classList.remove('on');
     document.body.classList.remove('guide-cine', 'guide-on');
     button.setAttribute('aria-pressed', 'false');
     panel.classList.remove('in', 'talking');
@@ -742,6 +814,9 @@ export function createGuide(store: Store, host: GuideHost): Guide {
     button.setAttribute('aria-label', G().buttonTip);
     setText(briefEyebrow, B.eyebrow);
     setText(briefTitle, B.title);
+    setText(briefCode, B.code);
+    setText(briefKind, B.kind);
+    setText(channel, B.channel);
     clear(briefRows);
     B.rows.forEach(([label, value], i) => {
       const row = h('div', null, h('dt', null, label), h('dd', null, value));
@@ -755,7 +830,7 @@ export function createGuide(store: Store, host: GuideHost): Guide {
     langSeg.querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.code === language())));
     setText(briefNote, B.note);
     setText(cancelBtn, G().end);
-    setText(loadText, B.status[stageNow]);
+    stage(stageNow);
     if (at >= 0) {
       const share = said.textContent!.length;
       write();

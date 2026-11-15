@@ -3403,6 +3403,24 @@ table.compare tbody tr.cmp-actions td {
   opacity: 1;
   transform: translate(-50%, 0);
 }
+/* corner marks outside the panel, as on the frame of a display */
+.comm::after {
+  content: '';
+  position: absolute;
+  inset: -7px;
+  pointer-events: none;
+  --mark: var(--earth);
+  --arm: 12px;
+  background:
+    linear-gradient(var(--mark), var(--mark)) left top / var(--arm) 1.5px no-repeat,
+    linear-gradient(var(--mark), var(--mark)) left top / 1.5px var(--arm) no-repeat,
+    linear-gradient(var(--mark), var(--mark)) right top / var(--arm) 1.5px no-repeat,
+    linear-gradient(var(--mark), var(--mark)) right top / 1.5px var(--arm) no-repeat,
+    linear-gradient(var(--mark), var(--mark)) left bottom / var(--arm) 1.5px no-repeat,
+    linear-gradient(var(--mark), var(--mark)) left bottom / 1.5px var(--arm) no-repeat,
+    linear-gradient(var(--mark), var(--mark)) right bottom / var(--arm) 1.5px no-repeat,
+    linear-gradient(var(--mark), var(--mark)) right bottom / 1.5px var(--arm) no-repeat;
+}
 /* While only the picture and the voice are on: under the picture, like a subtitle, where the dock was. */
 .comm[data-place='cine'] {
   top: calc(100vh - 184px);
@@ -3639,27 +3657,47 @@ table.compare tbody tr.cmp-actions td {
   margin-left: auto;
 }
 
-/* what is asked for, ringed */
+/* what is asked for: a sight that closes on it and locks */
 .guide-ring {
   position: fixed;
   z-index: 59;
   left: 0;
   top: 0;
-  border: 1.5px solid var(--earth);
-  border-radius: 4px;
   pointer-events: none;
-  animation: guide-ring 1.5s var(--ease) infinite;
 }
-@keyframes guide-ring {
+.guide-ring::before,
+.guide-ring::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  --mark: var(--earth);
+  --arm: 11px;
+  background:
+    linear-gradient(var(--mark), var(--mark)) left top / var(--arm) 2px no-repeat,
+    linear-gradient(var(--mark), var(--mark)) left top / 2px var(--arm) no-repeat,
+    linear-gradient(var(--mark), var(--mark)) right top / var(--arm) 2px no-repeat,
+    linear-gradient(var(--mark), var(--mark)) right top / 2px var(--arm) no-repeat,
+    linear-gradient(var(--mark), var(--mark)) left bottom / var(--arm) 2px no-repeat,
+    linear-gradient(var(--mark), var(--mark)) left bottom / 2px var(--arm) no-repeat,
+    linear-gradient(var(--mark), var(--mark)) right bottom / var(--arm) 2px no-repeat,
+    linear-gradient(var(--mark), var(--mark)) right bottom / 2px var(--arm) no-repeat;
+  filter: drop-shadow(0 0 5px rgb(125 184 255 / 0.7));
+}
+/* a second set of marks comes in from outside, again and again: the sight closing */
+.guide-ring::after {
+  animation: guide-lock 1.5s var(--ease) infinite;
+}
+@keyframes guide-lock {
   0% {
-    box-shadow:
-      0 0 0 0 rgb(125 184 255 / 0.55),
-      0 0 18px rgb(125 184 255 / 0.35);
+    inset: -16px;
+    opacity: 0;
+  }
+  35% {
+    opacity: 0.9;
   }
   100% {
-    box-shadow:
-      0 0 0 12px rgb(125 184 255 / 0),
-      0 0 18px rgb(125 184 255 / 0.35);
+    inset: 0;
+    opacity: 0;
   }
 }
 
@@ -3701,23 +3739,37 @@ body.guide-cine .three-hint {
   pointer-events: none;
 }
 
-/* The briefing the guide opens on. Over the tool, which shows through, while it waits for its button; black
-   once started, while everything is made ready behind it. Its foot keeps one height: the buttons and the
-   languages, then the line of what is being made ready, in the same place. */
+/* The briefing the guide opens on: a display. Corner marks on the screen, the channel and a running clock at
+   the top, a title that fills its line, numbered lines of data. Over the tool, which shows through, while it
+   waits for its button; black once started, while everything is made ready behind it; then it opens from its
+   middle line outwards, like a visor. Its foot keeps one height: the buttons and the languages, then the
+   start-up log, in the same place. */
+@property --visor {
+  syntax: '<percentage>';
+  inherits: false;
+  initial-value: 50%;
+}
 .briefing {
   position: fixed;
   inset: 0;
   z-index: 70;
   display: grid;
   place-items: center;
-  padding: 24px;
+  padding: 64px 24px 40px;
   overflow: auto;
-  background: rgb(0 0 0 / 0.74);
+  background: rgb(0 0 0 / 0.76);
   backdrop-filter: blur(16px) saturate(0.7);
   opacity: 0;
+  -webkit-mask:
+    linear-gradient(#000 0 0) top / 100% var(--visor) no-repeat,
+    linear-gradient(#000 0 0) bottom / 100% var(--visor) no-repeat;
+  mask:
+    linear-gradient(#000 0 0) top / 100% var(--visor) no-repeat,
+    linear-gradient(#000 0 0) bottom / 100% var(--visor) no-repeat;
   transition:
     opacity 0.7s var(--ease),
-    background-color 0.5s var(--ease);
+    background-color 0.5s var(--ease),
+    --visor 0.9s cubic-bezier(0.7, 0, 0.2, 1);
 }
 .briefing.in {
   opacity: 1;
@@ -3725,8 +3777,71 @@ body.guide-cine .three-hint {
 .briefing.busy {
   background: #000;
 }
+/* opening: the two halves draw back to the top and the bottom edge; what is written goes first */
+.briefing.open {
+  --visor: 0%;
+  opacity: 1;
+  transition:
+    --visor 0.9s cubic-bezier(0.7, 0, 0.2, 1) 0.12s,
+    opacity 0.3s ease 0.95s;
+}
+.briefing.open:not(.in) {
+  opacity: 0;
+}
+.briefing.open .briefing-card {
+  opacity: 0;
+  transition: opacity 0.22s ease;
+}
+/* the frame of the display */
+.briefing::before {
+  content: '';
+  position: fixed;
+  inset: 20px;
+  pointer-events: none;
+  --mark: rgb(255 255 255 / 0.55);
+  --arm: 26px;
+  background:
+    linear-gradient(var(--mark), var(--mark)) left top / var(--arm) 1.5px no-repeat,
+    linear-gradient(var(--mark), var(--mark)) left top / 1.5px var(--arm) no-repeat,
+    linear-gradient(var(--mark), var(--mark)) right top / var(--arm) 1.5px no-repeat,
+    linear-gradient(var(--mark), var(--mark)) right top / 1.5px var(--arm) no-repeat,
+    linear-gradient(var(--mark), var(--mark)) left bottom / var(--arm) 1.5px no-repeat,
+    linear-gradient(var(--mark), var(--mark)) left bottom / 1.5px var(--arm) no-repeat,
+    linear-gradient(var(--mark), var(--mark)) right bottom / var(--arm) 1.5px no-repeat,
+    linear-gradient(var(--mark), var(--mark)) right bottom / 1.5px var(--arm) no-repeat,
+    /* a scale down the left edge and along the bottom one */
+    repeating-linear-gradient(to bottom, rgb(255 255 255 / 0.3) 0 1px, transparent 1px 14px) left 0 top 50% / 7px 34% no-repeat,
+    repeating-linear-gradient(to right, rgb(255 255 255 / 0.3) 0 1px, transparent 1px 14px) left 50% bottom 0 / 30% 7px no-repeat;
+}
 .briefing-card {
-  width: min(640px, 100%);
+  position: relative;
+  width: min(680px, 100%);
+}
+.briefing-strip {
+  position: fixed;
+  left: 56px;
+  right: 56px;
+  top: 30px;
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  font: 500 10px/1 var(--code);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+.briefing-strip i {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 9px;
+  background: var(--earth);
+  animation: guide-blink 1.1s steps(2, jump-none) infinite;
+}
+.briefing-clock {
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-2);
 }
 .briefing-head {
   display: flex;
@@ -3737,37 +3852,86 @@ body.guide-cine .three-hint {
 .briefing-head .eyebrow {
   color: var(--earth);
 }
+/* the number of the mission, as a plate */
+.briefing-code {
+  display: flex;
+  align-items: stretch;
+  width: max-content;
+  margin-top: 22px;
+  font: 700 11px/1 var(--mono);
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+.briefing-code b {
+  padding: 6px 9px 5px 10px;
+  color: #000;
+  background: #fff;
+}
+.briefing-code span {
+  padding: 6px 10px 5px;
+  color: var(--ink-2);
+  box-shadow: inset 0 0 0 1px var(--rule-2);
+}
 .briefing h2 {
-  margin: 20px 0 26px;
-  font: 500 clamp(40px, 7vw, 72px) / 0.98 var(--display);
-  letter-spacing: -0.012em;
+  margin: 12px 0 0;
+  width: 119%;
+  font: 800 clamp(46px, 9.2vw, 108px) / 0.86 var(--display);
+  letter-spacing: -0.018em;
+  text-transform: uppercase;
+  /* set narrow, as the titles of a display are */
+  transform: scaleX(0.84);
+  transform-origin: 0 50%;
   text-wrap: balance;
 }
+/* a band of the link, moving, under the title */
+.briefing h2::after {
+  content: '';
+  display: block;
+  width: 100%;
+  height: 9px;
+  margin-top: 20px;
+  background: repeating-linear-gradient(-45deg, var(--earth) 0 9px, transparent 9px 18px);
+  background-size: 200% 100%;
+  opacity: 0.85;
+  animation: briefing-band 14s linear infinite;
+}
+@keyframes briefing-band {
+  to {
+    background-position: -254.5px 0;
+  }
+}
 .briefing-rows {
-  margin: 0;
+  margin: 22px 0 0;
   border-top: 1px solid var(--rule-2);
+  counter-reset: row;
 }
 .briefing-rows > div {
   display: grid;
-  grid-template-columns: 124px 1fr;
-  gap: 18px;
+  grid-template-columns: 30px 118px 1fr;
+  gap: 14px;
   align-items: baseline;
-  padding: 12px 0 11px;
+  padding: 11px 0 10px;
   border-bottom: 1px solid var(--rule);
   opacity: 0;
 }
+.briefing-rows > div::before {
+  counter-increment: row;
+  content: counter(row, decimal-leading-zero);
+  font: 400 11px/1 var(--code);
+  color: var(--earth);
+}
 .briefing.in .briefing-rows > div {
-  animation: briefing-row 0.8s var(--ease) both;
-  animation-delay: calc(var(--i, 0) * 0.42s + 0.45s);
+  animation: briefing-row 0.5s steps(4, jump-none) both;
+  animation-delay: calc(var(--i, 0) * 0.36s + 0.45s);
 }
 @keyframes briefing-row {
   from {
     opacity: 0;
-    transform: translateY(7px);
+    clip-path: inset(0 100% 0 0);
   }
   to {
     opacity: 1;
-    transform: none;
+    clip-path: inset(0);
   }
 }
 .briefing-rows dt {
@@ -3783,15 +3947,15 @@ body.guide-cine .three-hint {
 }
 .briefing-foot {
   display: grid;
-  margin-top: 28px;
-  min-height: 136px;
+  margin-top: 26px;
+  min-height: 176px;
 }
 .briefing-go,
 .briefing-load {
   grid-area: 1 / 1;
   transition:
-    opacity 0.45s var(--ease),
-    visibility 0s 0.45s;
+    opacity 0.4s var(--ease),
+    visibility 0s 0.4s;
 }
 .briefing.busy .briefing-go,
 .briefing:not(.busy) .briefing-load {
@@ -3802,7 +3966,7 @@ body.guide-cine .three-hint {
 .briefing.busy .briefing-load,
 .briefing:not(.busy) .briefing-go {
   transition:
-    opacity 0.45s var(--ease) 0.2s,
+    opacity 0.4s var(--ease) 0.2s,
     visibility 0s;
 }
 .briefing-buttons {
@@ -3811,7 +3975,7 @@ body.guide-cine .three-hint {
   gap: 10px;
 }
 .briefing-buttons .btn {
-  height: 44px;
+  height: 46px;
   padding: 0 20px;
   font-size: 11.5px;
 }
@@ -3819,6 +3983,11 @@ body.guide-cine .three-hint {
 .briefing-start {
   box-shadow: 0 0 0 0 rgb(125 184 255 / 0.5);
   animation: briefing-pulse 2.2s var(--ease) 2.4s infinite;
+}
+.briefing-start::before {
+  content: '▶';
+  margin-right: 4px;
+  font-size: 9px;
 }
 @keyframes briefing-pulse {
   0% {
@@ -3847,50 +4016,96 @@ body.guide-cine .three-hint {
   line-height: 1.45;
   color: var(--ink-3);
 }
+/* the start-up log: a meter in segments with the share of the way, and a line for each thing made ready */
 .briefing-load {
+  position: relative;
   display: grid;
   align-content: start;
+  gap: 12px;
+}
+.briefing-meter {
+  display: flex;
+  align-items: center;
   gap: 14px;
-  padding-top: 8px;
 }
 .briefing-bar {
+  flex: 1 1 auto;
   display: block;
-  height: 1px;
-  background: var(--rule);
+  height: 10px;
+  background: rgb(255 255 255 / 0.1);
   overflow: hidden;
+  -webkit-mask: repeating-linear-gradient(90deg, #000 0 calc(100% / 40 - 3px), transparent calc(100% / 40 - 3px) calc(100% / 40));
+  mask: repeating-linear-gradient(90deg, #000 0 calc(100% / 40 - 3px), transparent calc(100% / 40 - 3px) calc(100% / 40));
 }
 .briefing-bar i {
   display: block;
   height: 100%;
   background: var(--earth);
   transform-origin: 0 50%;
-  transform: scaleX(0.05);
-  transition: transform 0.9s var(--ease);
+  transform: scaleX(0.02);
+  transition: transform 0.7s steps(10, jump-none);
 }
-.briefing-line {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 16px;
+.briefing-pct {
+  font: 700 22px/1 var(--code);
+  letter-spacing: 0.02em;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
 }
-.briefing-status {
-  font: 500 10.5px/1.3 var(--mono);
-  letter-spacing: 0.18em;
+.briefing-log {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 7px;
+  font: 500 10.5px/1.25 var(--code);
+  letter-spacing: 0.14em;
   text-transform: uppercase;
+}
+.briefing-log li {
+  display: grid;
+  grid-template-columns: 26px auto 1fr auto;
+  gap: 10px;
+  align-items: baseline;
+  color: var(--ink-4);
+  opacity: 0;
+}
+.briefing-log li.on {
+  opacity: 1;
+}
+.briefing-log li.now {
+  color: var(--ink);
+}
+.briefing-log li.done {
   color: var(--ink-2);
 }
-.briefing-status::after {
+.briefing-log .n {
+  color: var(--earth);
+}
+/* dots from the words to the answer */
+.briefing-log i {
+  align-self: center;
+  height: 1px;
+  background: repeating-linear-gradient(90deg, currentcolor 0 2px, transparent 2px 7px);
+  opacity: 0.6;
+}
+.briefing-log b {
+  min-width: 2ch;
+  font-weight: 700;
+  text-align: right;
+  color: var(--earth);
+}
+.briefing-log li.now b::after {
   content: '';
   display: inline-block;
-  width: 6px;
-  height: 6px;
-  margin-left: 10px;
-  border-radius: 50%;
-  background: var(--earth);
-  animation: guide-blink 1.1s steps(2, jump-none) infinite;
+  width: 7px;
+  height: 11px;
+  background: var(--ink);
+  vertical-align: -1px;
+  animation: guide-blink 0.7s steps(2, jump-none) infinite;
 }
 .briefing-cancel {
   appearance: none;
+  justify-self: end;
   padding: 4px 0;
   border: 0;
   background: none;
@@ -3903,13 +4118,167 @@ body.guide-cine .three-hint {
 .briefing-cancel:hover {
   color: var(--ink);
 }
-@media (max-width: 520px) {
+/* the link is there: a plate across the log, in the colour of the link */
+.briefing-linked {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 28px;
+  display: grid;
+  place-items: center;
+  height: 94px;
+  font: 800 34px/1 var(--display);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #000;
+  background: var(--earth);
+  clip-path: inset(0 100% 0 0);
+  visibility: hidden;
+}
+.briefing.linked .briefing-linked {
+  visibility: visible;
+  animation: briefing-linked 0.9s steps(12, jump-none) both;
+}
+@keyframes briefing-linked {
+  0% {
+    clip-path: inset(0 100% 0 0);
+  }
+  30%,
+  100% {
+    clip-path: inset(0);
+  }
+  42%,
+  54% {
+    opacity: 0.25;
+  }
+  48%,
+  60% {
+    opacity: 1;
+  }
+}
+@media (max-width: 620px) {
+  .briefing {
+    padding: 58px 20px 30px;
+  }
+  .briefing::before {
+    inset: 10px;
+  }
+  .briefing-strip {
+    left: 26px;
+    right: 26px;
+    top: 20px;
+    font-size: 9px;
+  }
+  .briefing h2 {
+    width: 119%;
+  }
   .briefing-rows > div {
-    grid-template-columns: 1fr;
-    gap: 3px;
+    grid-template-columns: 24px 1fr;
+  }
+  .briefing-rows dd {
+    grid-column: 2;
   }
   .briefing-foot {
-    min-height: 190px;
+    min-height: 210px;
+  }
+  .briefing-linked {
+    font-size: 21px;
+  }
+}
+
+/* A band across the picture when something decisive happens: a title set large, a line under it, warning
+   stripes at both ends. Red for a problem, blue for the link with Earth, as everywhere in the tool. */
+.guide-alert {
+  position: fixed;
+  z-index: 62;
+  left: 0;
+  right: 0;
+  top: 36vh;
+  --c: var(--bad);
+  display: grid;
+  place-items: center;
+  height: 92px;
+  background: rgb(0 0 0 / 0.9);
+  border-block: 2px solid var(--c);
+  pointer-events: none;
+  clip-path: inset(50% 0);
+  visibility: hidden;
+}
+.guide-alert[data-kind='earth'] {
+  --c: var(--earth);
+}
+.guide-alert::before,
+.guide-alert::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: min(24vw, 360px);
+  background: repeating-linear-gradient(-45deg, var(--c) 0 14px, transparent 14px 28px);
+  background-size: 200% 100%;
+  animation: briefing-band 9s linear infinite;
+}
+.guide-alert::before {
+  left: 0;
+  -webkit-mask: linear-gradient(90deg, #000 40%, transparent);
+  mask: linear-gradient(90deg, #000 40%, transparent);
+}
+.guide-alert::after {
+  right: 0;
+  -webkit-mask: linear-gradient(270deg, #000 40%, transparent);
+  mask: linear-gradient(270deg, #000 40%, transparent);
+}
+.guide-alert > div {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  justify-items: center;
+  gap: 9px;
+  padding: 0 16px;
+  text-align: center;
+}
+.guide-alert b {
+  font: 800 clamp(26px, 4.4vw, 44px) / 0.9 var(--display);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--c);
+  transform: scaleX(0.9);
+}
+.guide-alert span {
+  font: 500 10.5px/1.2 var(--code);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+}
+.guide-alert.on {
+  visibility: visible;
+  animation: guide-alert 3s cubic-bezier(0.7, 0, 0.2, 1) both;
+}
+@keyframes guide-alert {
+  0% {
+    clip-path: inset(50% 0);
+  }
+  7% {
+    clip-path: inset(0);
+    opacity: 1;
+  }
+  10% {
+    opacity: 0.35;
+  }
+  13% {
+    opacity: 1;
+  }
+  16% {
+    opacity: 0.5;
+  }
+  19%,
+  88% {
+    opacity: 1;
+    clip-path: inset(0);
+  }
+  100% {
+    clip-path: inset(50% 0);
+    opacity: 1;
   }
 }
 
@@ -4011,10 +4380,13 @@ body.guide-cine .three-hint {
 }
 @media (prefers-reduced-motion: reduce) {
   .guide-face::after,
-  .guide-ring,
+  .guide-ring::after,
   .guide-signal i + i,
   .guide-btn.nudge,
-  .briefing-start {
+  .briefing-start,
+  .briefing h2::after,
+  .guide-alert::before,
+  .guide-alert::after {
     animation: none;
   }
   .briefing.in .briefing-rows > div {

@@ -81,6 +81,10 @@ export const en = {
     brief: {
       eyebrow: 'Incoming transmission · Mission Control',
       title: 'The first landing',
+      code: 'Mission 01',
+      kind: 'Guided',
+      channel: 'Channel 01 · Earth to Moon',
+      ok: 'OK',
       rows: [
         ['Site', 'Malapert Massif · lunar south pole'],
         ['Landing', '17 January 2027'],
@@ -92,6 +96,12 @@ export const en = {
       note: 'Two minutes, with sound. You can take it again whenever you like: the Guide button, top right.',
       status: ['Tuning the radio', 'Building the landing site', 'Plotting the descent', 'Link established'],
     },
+    /** The bands across the screen at the three turns of the story: a title and a line under it. */
+    alerts: {
+      sun: ['Sun lost', 'No power for 8 days · 4 Feb 2027, 00:00 UTC'],
+      slip: ['Launch +21 days', '7 sites worked · 2 still do'],
+      earth: ['Earth in view', 'The link holds · 3.0° above the skyline'],
+    } as Record<'sun' | 'slip' | 'earth', [string, string]>,
     who: 'Mission Control',
     where: 'Earth',
     onAir: 'On air',

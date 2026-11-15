@@ -144,6 +144,9 @@ export function createHero3D(): Hero3D {
   const titleName = h('div', { class: 'three-title-name' });
   const titleSub = h('div', { class: 'three-title-sub' });
   const title = h('div', { class: 'three-title', 'aria-hidden': 'true' }, titleName, titleSub);
+  // Once the title card has played it is put away: put back on the page (another screen was visited meanwhile),
+  // it would otherwise play again, with the name and the date of the last arrival.
+  title.addEventListener('animationend', () => title.classList.remove('show'));
   const btn = (text: string, tip: string, fn: () => void) => h('button', { class: 'btn ghost three-btn', type: 'button', title: tip, onclick: fn }, text);
   const faceSunBtn = btn(T.faceSun, T.faceSunTip, () => face('sun'));
   const faceEarthBtn = btn(T.faceEarth, T.faceEarthTip, () => face('earth'));

@@ -89,6 +89,10 @@ export const pt: Strings = {
     brief: {
       eyebrow: 'Transmissão chegando · Controle da Missão',
       title: 'O primeiro pouso',
+      code: 'Missão 01',
+      kind: 'Guiada',
+      channel: 'Canal 01 · Terra para Lua',
+      ok: 'OK',
       rows: [
         ['Local', 'Malapert Massif · polo sul lunar'],
         ['Pouso', '17 de janeiro de 2027'],
@@ -100,6 +104,11 @@ export const pt: Strings = {
       note: 'Dois minutos, com som. Dá para rever quando quiser: botão Guia, no canto superior direito.',
       status: ['Sintonizando o rádio', 'Montando o local de pouso', 'Traçando a descida', 'Enlace estabelecido'],
     },
+    alerts: {
+      sun: ['Sol perdido', 'Sem energia por 8 dias · 4 fev 2027, 00:00 UTC'],
+      slip: ['Lançamento +21 dias', '7 locais funcionavam · 2 ainda funcionam'],
+      earth: ['Terra à vista', 'O enlace se mantém · 3,0° acima do horizonte'],
+    } as Record<'sun' | 'slip' | 'earth', [string, string]>,
     who: 'Controle da Missão',
     where: 'Terra',
     onAir: 'No ar',

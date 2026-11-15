@@ -89,6 +89,10 @@ export const es: Strings = {
     brief: {
       eyebrow: 'Transmisión entrante · Control de Misión',
       title: 'El primer aterrizaje',
+      code: 'Misión 01',
+      kind: 'Guiada',
+      channel: 'Canal 01 · Tierra a Luna',
+      ok: 'OK',
       rows: [
         ['Sitio', 'Malapert Massif · polo sur lunar'],
         ['Aterrizaje', '17 de enero de 2027'],
@@ -100,6 +104,11 @@ export const es: Strings = {
       note: 'Dos minutos, con sonido. Puedes repetirla cuando quieras: botón Guía, arriba a la derecha.',
       status: ['Sintonizando la radio', 'Montando el sitio de aterrizaje', 'Trazando el descenso', 'Enlace establecido'],
     },
+    alerts: {
+      sun: ['Sol perdido', 'Sin energía durante 8 días · 4 feb 2027, 00:00 UTC'],
+      slip: ['Lanzamiento +21 días', '7 sitios funcionaban · 2 siguen funcionando'],
+      earth: ['Tierra a la vista', 'El enlace se mantiene · 3,0° sobre el horizonte'],
+    } as Record<'sun' | 'slip' | 'earth', [string, string]>,
     who: 'Control de Misión',
     where: 'Tierra',
     onAir: 'En el aire',
