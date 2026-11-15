@@ -2,12 +2,15 @@
 // engine and data; the score comes only from real quantities (how many nearby points still work,
 // how many more days of delay the plan absorbs, how soon it lands).
 import { REQUIREMENT_ORDER } from '../core/requirements';
-import { PROFILES, type Requirements } from '../core/requirements';
-import { STATUS_CODES, type SiteCalendar } from '../core/calendar';
+import { durationSteps, PROFILES, STATUS_RANK, type Requirements } from '../core/requirements';
+import { DAY_STEPS, STEP_MS } from '../core/series';
+import { LANDING_STEPS, STATUS_CODES, type SiteCalendar } from '../core/calendar';
 import { S } from '../i18n/en';
-import { calendarCell, drawCalendar, type CalendarGeometry, type CalendarRow } from '../viz/calendar';
+import { calendarCell, drawCalendar, rowHeightToFill, type CalendarGeometry, type CalendarRow } from '../viz/calendar';
 import { COLORS, FONT, onResize, surface } from '../viz/canvas';
-import type { ComputeResult } from '../worker/protocol';
+import { drawPoleMap } from '../viz/polemap';
+import { drawTimeline } from '../viz/timeline';
+import type { ComputeResult, WindowResult } from '../worker/protocol';
 import type { App, View } from './app';
 import { clear, h, reducedMotion } from './dom';
 import { DAY_MS, day as fmtDay, monthShort } from './format';
@@ -74,6 +77,18 @@ export function createMissions(app: App, planner: Planner): View {
   let geo: CalendarGeometry | null = null;
   let slipShown = 0;
   let canvas: HTMLCanvasElement | null = null;
+  // The hour-by-hour picture of the option in hand: the planned landing, then the cell that was chosen.
+  let lineCanvas: HTMLCanvasElement | null = null;
+  let lineKey = '';
+  let lineWin: WindowResult | null = null;
+  let lineLanding = 0;
+  let stopWatch: () => void = () => undefined;
+  // The south pole with the sites of the board: where the row under the pointer is, and which sites work that day.
+  let mapCanvas: HTMLCanvasElement | null = null;
+  let mapDay: HTMLElement | null = null;
+  const mapImage = new Image();
+  mapImage.src = `${import.meta.env.BASE_URL}data/southpole.jpg`;
+  mapImage.addEventListener('load', () => drawMap());
 
   /** The computed board of each mission: drawn on its card, and ready when the mission starts. */
   const boards = new Map<string, ComputeResult>();
@@ -91,7 +106,7 @@ export function createMissions(app: App, planner: Planner): View {
     if (!cv.isConnected) return;
     // The board takes the room the card has left, within reason.
     const room = cv.parentElement ? cv.parentElement.clientHeight - 22 : 136;
-    const { ctx, w, h: height } = surface(cv, Math.max(118, Math.min(250, room)));
+    const { ctx, w, h: height } = surface(cv, Math.max(118, Math.min(520, room)));
     ctx.clearRect(0, 0, w, height);
     const AXIS = 18;
     const GAP = 3;
@@ -242,7 +257,10 @@ export function createMissions(app: App, planner: Planner): View {
     if (!mission || !canvas || !canvas.isConnected) return;
     const m = mission;
     const planned = m.planned ? m.planned.day : -1;
+    // The board fills its panel: the rows grow with the room there is.
+    const wrap = canvas.parentElement;
     geo = drawCalendar(canvas, {
+      rowH: wrap ? rowHeightToFill(rows(), wrap.clientHeight - 10) : undefined,
       startMs: m.startMs,
       days: m.days,
       rows: rows(),
@@ -252,6 +270,77 @@ export function createMissions(app: App, planner: Planner): View {
       selected: pick,
       allowed: step >= 2 ? { from: m.from, to: m.to } : undefined,
       labels: { planned: S.plan.plannedTag, slipped: S.plan.slippedTag(Math.round(slipShown)), days: S.plan.daysShort, month: (ms) => `${monthShort(ms)} ${String(new Date(ms).getUTCFullYear()).slice(2)}` },
+    });
+    drawMap();
+  }
+
+  function drawMap(): void {
+    if (!mission || !mapCanvas || !mapCanvas.isConnected) return;
+    const m = mission;
+    const box = mapCanvas.parentElement!;
+    // The map takes the room the column has left; with too little of it, it steps aside.
+    const room = box.clientHeight;
+    box.classList.toggle('off', room < 170);
+    if (room < 170) return;
+    mapCanvas.style.width = `${Math.min(box.clientWidth, Math.floor(room * 1.302))}px`;
+    const day = cursor?.day ?? pick?.day ?? (m.planned ? m.planned.day + (step >= 1 ? m.slip : 0) : m.from);
+    if (mapDay) mapDay.textContent = T.mapDay(fmtDay(m.startMs + day * DAY_MS));
+    drawPoleMap(mapCanvas, {
+      image: mapImage,
+      sites: terrain.map((site) => ({ id: site.id, name: site.name.replace(/ \(.*\)$/, ''), lat: site.lat, lon: site.lon, status: calOf(site.id)?.status[day] ?? null })),
+      hover: cursor ? terrain[cursor.row].id : null,
+      selected: pick ? terrain[pick.row].id : m.planned && step < 2 ? m.planned.siteId : null,
+      labels: { earth: S.plan.map.earth, pole: S.plan.map.pole, off: S.plan.map.off },
+    });
+  }
+
+  function lineTarget(): { siteId: string; day: number } | null {
+    if (!mission) return null;
+    if (pick) return { siteId: terrain[pick.row].id, day: pick.day };
+    if (mission.planned) return { siteId: mission.planned.siteId, day: mission.planned.day + (step >= 1 ? mission.slip : 0) };
+    return null;
+  }
+
+  function loadLine(): void {
+    const m = mission;
+    const want = lineTarget();
+    if (!m || !want) {
+      lineKey = '';
+      lineWin = null;
+      return;
+    }
+    const key = `${m.id}|${want.siteId}|${want.day}`;
+    if (key === lineKey) {
+      drawLine();
+      return;
+    }
+    lineKey = key;
+    lineWin = null;
+    void planner.window(m.startMs, m.days, m.req, want.siteId, Math.max(0, (want.day - 1) * DAY_STEPS), durationSteps(m.req) + 3 * DAY_STEPS, want.day).then((win) => {
+      if (lineKey !== key) return;
+      lineWin = win;
+      let bestTime = 0;
+      win.detail?.times.forEach((x, j) => {
+        if (STATUS_RANK[x.status] > STATUS_RANK[win.detail!.times[bestTime].status]) bestTime = j;
+      });
+      lineLanding = m.startMs + want.day * DAY_MS + LANDING_STEPS[bestTime] * STEP_MS;
+      drawLine();
+    });
+  }
+
+  function drawLine(): void {
+    if (!mission || !lineWin || !lineCanvas || !lineCanvas.isConnected) return;
+    drawTimeline(lineCanvas, {
+      startMs: lineWin.startMs,
+      stepMs: lineWin.stepMs,
+      sunFrac: lineWin.sunFrac,
+      earthClear: lineWin.earthClear,
+      earthMarginDeg: mission.req.earthMarginDeg,
+      cursorMs: lineLanding,
+      span: { fromMs: lineLanding, toMs: lineLanding + mission.req.durationDays * DAY_MS },
+      events: lineWin.events,
+      labels: { sun: S.sun, earth: S.earth, both: S.both },
+      formatDay: (ms) => `${new Date(ms).getUTCDate()} ${monthShort(ms)}`,
     });
   }
 
@@ -355,14 +444,54 @@ export function createMissions(app: App, planner: Planner): View {
       );
     }
 
+    // What stays on screen through the mission: what is asked, and how the plan will be scored.
+    const specRow = (label: string, text: string) => h('div', { class: 'mission-spec-row' }, h('b', null, label), h('span', null, text));
+    const brief = h(
+      'div',
+      { class: 'mission-brief' },
+      h(
+        'div',
+        { class: 'mission-spec' },
+        specRow(T.spec.mission, t.meta),
+        specRow(T.spec.needs, t.needs),
+        specRow(T.spec.choose, T.choose(fmtDay(m.startMs + m.from * DAY_MS).replace(/ [0-9]{4}$/, ''), fmtDay(m.startMs + m.to * DAY_MS))),
+      ),
+    );
+    if (step < 3) {
+      const part = (label: string, max: number, what: string) => h('div', { class: 'score-key' }, h('b', null, String(max)), h('span', null, label), h('span', { class: 'muted' }, what));
+      brief.append(
+        h(
+          'div',
+          { class: 'score-keys' },
+          h('p', { class: 'eyebrow' }, T.scoringTitle),
+          part(T.parts.robust, 40, T.scoreWhat.robust),
+          part(T.parts.tolerance, 30, T.scoreWhat.tolerance),
+          part(T.parts.prompt, 20, T.scoreWhat.prompt),
+          part(T.parts.margin, 10, T.scoreWhat.margin),
+        ),
+      );
+    }
+    mapCanvas = h('canvas', { role: 'img', 'aria-label': S.plan.map.aria });
+    mapDay = h('p', { class: 'eyebrow' });
+    side.append(h('div', { class: 'mission-map' }, mapDay, h('div', { class: 'mission-map-plot' }, mapCanvas)), brief);
+
+    lineCanvas = h('canvas', { role: 'img', 'aria-label': T.lineTitle });
+    const want = lineTarget();
     const board = h(
       'section',
-      { class: 'panel cal', 'aria-label': S.plan.calendarTitle },
+      { class: 'panel mission-board-panel', 'aria-label': S.plan.calendarTitle },
       h('div', { class: 'cap' }, T.board(PROFILES.find((p) => p.id === m.profileId)!.label), h('span', { class: 'muted small' }, PROFILES.find((p) => p.id === m.profileId)!.blurb)),
       h('div', { class: 'cal-wrap' }, canvas),
       h('div', { class: 'cal-foot' }, h('span', { class: 'small muted' }, result ? S.plan.legendRobust : S.plan.computing)),
+      h(
+        'div',
+        { class: 'mission-line' },
+        h('div', { class: 'cap' }, T.lineTitle, h('span', { class: 'muted small' }, want ? `${app.siteInfo(want.siteId).name} · ${fmtDay(m.startMs + want.day * DAY_MS)}` : T.lineHint)),
+        h('div', { class: 'mission-line-plot' }, lineCanvas),
+      ),
     );
     el.append(h('div', { class: 'mission-run' }, side, board));
+    loadLine();
 
     canvas.addEventListener('mousemove', (ev) => {
       if (!geo || step !== 2) return;
@@ -405,6 +534,10 @@ export function createMissions(app: App, planner: Planner): View {
       draw();
     });
     draw();
+    // The board follows the room its panel gives it, from the first frame and whenever the window changes.
+    stopWatch();
+    const wrapEl = canvas.parentElement;
+    stopWatch = wrapEl ? onResize(wrapEl, draw) : () => undefined;
   }
 
   /** The launch date slides to its new place, so the delay is seen happening. */
@@ -426,7 +559,10 @@ export function createMissions(app: App, planner: Planner): View {
     requestAnimationFrame(run);
   }
 
-  onResize(el, draw);
+  onResize(el, () => {
+    draw();
+    drawLine();
+  });
   hub();
   void rowOf;
   return {

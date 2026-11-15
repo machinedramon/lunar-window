@@ -25,6 +25,8 @@ export interface CalendarInput {
   /** When set, only these days can be chosen: the others are dimmed. */
   allowed?: { from: number; to: number };
   labels: { planned: string; slipped: string; days: (n: number) => string; month: (ms: number) => string };
+  /** Height of a row, CSS pixels. The planner keeps the default; a mission's board fills its panel. */
+  rowH?: number;
 }
 
 export interface CalendarGeometry {
@@ -44,8 +46,14 @@ const GAP = 4;
 const HEADING = 26;
 const BOTTOM = 10;
 
-export function calendarHeight(rows: CalendarRow[]): number {
-  return AXIS + rows.reduce((h, r) => h + ROW + GAP + (r.heading ? HEADING : 0), 0) + BOTTOM;
+export function calendarHeight(rows: CalendarRow[], rowH = ROW): number {
+  return AXIS + rows.reduce((h, r) => h + rowH + GAP + (r.heading ? HEADING : 0), 0) + BOTTOM;
+}
+
+/** The row height with which these rows fill `height`, within sensible limits. */
+export function rowHeightToFill(rows: CalendarRow[], height: number): number {
+  const fixed = AXIS + BOTTOM + rows.reduce((h, r) => h + GAP + (r.heading ? HEADING : 0), 0);
+  return Math.max(ROW, Math.min(76, Math.floor((height - fixed) / Math.max(1, rows.length))));
 }
 
 export function calendarCell(g: CalendarGeometry, x: number, y: number): { row: number; day: number } | null {
@@ -58,7 +66,8 @@ export function calendarCell(g: CalendarGeometry, x: number, y: number): { row: 
 const OK = [255, 255, 255];
 
 export function drawCalendar(canvas: HTMLCanvasElement, m: CalendarInput): CalendarGeometry {
-  const height = calendarHeight(m.rows);
+  const rowH = m.rowH ?? ROW;
+  const height = calendarHeight(m.rows, rowH);
   const { ctx, w } = surface(canvas, height);
   const plotW = w - LEFT - RIGHT;
   const cellW = plotW / m.days;
@@ -67,7 +76,7 @@ export function drawCalendar(canvas: HTMLCanvasElement, m: CalendarInput): Calen
   for (const r of m.rows) {
     if (r.heading) y += HEADING;
     rowTop.push(y);
-    y += ROW + GAP;
+    y += rowH + GAP;
   }
   const bottom = y - GAP;
   const xOf = (day: number) => LEFT + day * cellW;
@@ -112,7 +121,7 @@ export function drawCalendar(canvas: HTMLCanvasElement, m: CalendarInput): Calen
       ctx.stroke();
     }
     ctx.fillStyle = '#0f0f11';
-    ctx.fillRect(LEFT, top, plotW, ROW);
+    ctx.fillRect(LEFT, top, plotW, rowH);
     let viable = 0;
     if (r.cal) {
       const gap = cellW > 3.4 ? 0.6 : 0;
@@ -123,12 +132,12 @@ export function drawCalendar(canvas: HTMLCanvasElement, m: CalendarInput): Calen
         const share = r.cal.points > 1 ? r.cal.robust[d] / r.cal.points : 1;
         ctx.fillStyle = `rgba(${OK[0]},${OK[1]},${OK[2]},${(0.34 + 0.66 * share).toFixed(3)})`;
         // Marginal days are drawn as a short bar: the difference never depends on colour.
-        if (s === 2) ctx.fillRect(xOf(d), top, cellW - gap + 0.35, ROW);
-        else ctx.fillRect(xOf(d), top + ROW * 0.55, cellW - gap + 0.35, ROW * 0.45);
+        if (s === 2) ctx.fillRect(xOf(d), top, cellW - gap + 0.35, rowH);
+        else ctx.fillRect(xOf(d), top + rowH * 0.55, cellW - gap + 0.35, rowH * 0.45);
       }
     } else {
       ctx.fillStyle = 'rgba(255,255,255,0.03)';
-      ctx.fillRect(LEFT, top, plotW, ROW);
+      ctx.fillRect(LEFT, top, plotW, rowH);
     }
     ctx.font = `500 13px ${FONT}`;
     ctx.textAlign = 'left';
@@ -137,11 +146,11 @@ export function drawCalendar(canvas: HTMLCanvasElement, m: CalendarInput): Calen
     let name = r.label;
     const max = LEFT - 14 - (r.note ? ctx.measureText('  ').width : 0);
     while (ctx.measureText(name).width > max && name.length > 4) name = `${name.slice(0, -2).trimEnd()}…`;
-    ctx.fillText(name, 0, top + ROW / 2 + 0.5);
+    ctx.fillText(name, 0, top + rowH / 2 + 0.5);
     ctx.font = `600 12.5px ${FONT}`;
     ctx.textAlign = 'right';
     ctx.fillStyle = viable ? COLORS.text : COLORS.muted;
-    ctx.fillText(r.cal ? m.labels.days(viable) : '…', w, top + ROW / 2 + 0.5);
+    ctx.fillText(r.cal ? m.labels.days(viable) : '…', w, top + rowH / 2 + 0.5);
     ctx.textBaseline = 'alphabetic';
   });
 
@@ -185,11 +194,11 @@ export function drawCalendar(canvas: HTMLCanvasElement, m: CalendarInput): Calen
     ctx.strokeStyle = color;
     ctx.lineWidth = width;
     const cw = Math.max(cellW, 5);
-    ctx.strokeRect(xOf(cell.day) - (cw - cellW) / 2 - 1, rowTop[cell.row] - 2, cw + 2, ROW + 4);
+    ctx.strokeRect(xOf(cell.day) - (cw - cellW) / 2 - 1, rowTop[cell.row] - 2, cw + 2, rowH + 4);
     ctx.lineWidth = 1;
   };
   box(m.selected, '#ffffff', 2);
   box(m.cursor, 'rgba(125,184,255,0.95)', 1.5);
 
-  return { left: LEFT, cellW, days: m.days, rowTop, rowH: ROW, height };
+  return { left: LEFT, cellW, days: m.days, rowTop, rowH, height };
 }

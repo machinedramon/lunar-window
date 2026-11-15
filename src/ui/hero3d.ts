@@ -398,7 +398,9 @@ export function createHero3D(): Hero3D {
       const need = (Math.abs(clear) + radius * 2.2) * 2.1;
       const lens = need <= widest ? Math.max(fov, need) : fov;
       const aim = need <= widest ? elv - clear / 2 : elv;
-      out.push({ x: Math.round(r.left - box.left) + 1, y: Math.round(r.top - box.top) + 1, size: Math.round(r.width) - 2, az, el: aim, fov: lens });
+      // Measured boxes follow any scaling of the page (a zoomed recording); the picture is drawn in its own pixels.
+      const k = box.width / (canvas.clientWidth || box.width) || 1;
+      out.push({ x: Math.round((r.left - box.left) / k) + 1, y: Math.round((r.top - box.top) / k) + 1, size: Math.round(r.width / k) - 2, az, el: aim, fov: lens });
     };
     const sunClear = m.sun.el - site.horizon.at(m.sun.az, mast);
     one(sunInset, outerSun, m.sun.az, m.sun.el, m.sun.radius, sunClear, 2.6, 12);

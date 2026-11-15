@@ -3,9 +3,14 @@
     python tools/film_audio.py        writes video/audio.wav (48 kHz stereo, 30 s)
 
 The narration takes are video/voice/main.wav and video/voice/close.wav. They are an AI-generated
-voice (OpenAI text-to-speech, voice "marin") reading the script of the film; the project page
-says so. The music is not a recording: every tone below is computed.
+voice (OpenAI text-to-speech) reading the script of the film; the project page says so. The music
+is not a recording: every tone below is computed.
+
+When video/voice/main.words.json exists (the word timings of the main take, from a transcription),
+each sentence is placed on its own mark of the film, so any take fits the cuts; the marks and the
+subtitle times are written to video/voice/marks.json, which tools/film.mjs reads.
 """
+import json
 import subprocess
 import wave
 from pathlib import Path
@@ -150,10 +155,47 @@ def room(x: np.ndarray, seconds: float, mix: float) -> np.ndarray:
 # ---------- narration
 voice = np.zeros(N)
 main = read(ROOT / 'video/voice/main.wav')
-main = main[: int((MAIN_CUT - MAIN_AT) * SR)]
-main[-int(0.05 * SR) :] *= np.linspace(1, 0, int(0.05 * SR))
-i0 = int(MAIN_AT * SR)
-voice[i0 : i0 + len(main)] += main
+words_file = ROOT / 'video/voice/main.words.json'
+# The sentences of the script: how many words each has, when it starts in the film, and its subtitle
+# (the fourth sentence is shown in two parts; the second starts at its ninth word).
+SENTENCES = [
+    (9, 0.70, ['At the Moon’s south pole, the Sun never climbs.']),
+    (13, 5.00, ['It circles the horizon, and a single ridge can hide it for days.']),
+    (11, 9.60, ['When a launch slips, a good landing site can go dark.']),
+    (18, 13.55, ['Lunar Window stands you on real NASA terrain,', 'and shows every site, and every day, that still works.']),
+    (5, 20.55, ['Verified against NASA’s JPL Horizons.']),
+]
+SPLIT_AT_WORD = 8
+marks = []
+if words_file.exists():
+    words = json.loads(words_file.read_text(encoding='utf-8'))['words']
+    assert len(words) == sum(n for n, _, _ in SENTENCES), f'{len(words)} words in the take, {sum(n for n, _, _ in SENTENCES)} in the script'
+    k = 0
+    edge = int(0.012 * SR)
+    for n, at, lines in SENTENCES:
+        first, last = words[k], words[k + n - 1]
+        # from the middle of the pause before the sentence to the middle of the pause after it
+        a = 0.0 if k == 0 else (words[k - 1]['end'] + first['start']) / 2
+        b = len(main) / SR if k + n == len(words) else (last['end'] + words[k + n]['start']) / 2
+        piece = main[int(a * SR) : int(b * SR)].copy()
+        piece[:edge] *= np.linspace(0, 1, edge)
+        piece[-edge:] *= np.linspace(1, 0, edge)
+        i0 = int((at - (first['start'] - a)) * SR)
+        voice[i0 : i0 + len(piece)] += piece
+        end = at + (last['end'] - first['start'])
+        if len(lines) == 2:
+            cut = at + (words[k + SPLIT_AT_WORD]['start'] - first['start'])
+            marks += [[round(at, 2), round(cut, 2), lines[0]], [round(cut, 2), round(end + 0.3, 2), lines[1]]]
+        else:
+            marks.append([round(at, 2), round(end + 0.3, 2), lines[0]])
+        k += n
+    (ROOT / 'video/voice/marks.json').write_text(json.dumps(marks, ensure_ascii=False, indent=1), encoding='utf-8')
+    print('sentences placed:', ', '.join(f'{m[0]:.2f}-{m[1]:.2f}' for m in marks))
+else:
+    main = main[: int((MAIN_CUT - MAIN_AT) * SR)]
+    main[-int(0.05 * SR) :] *= np.linspace(1, 0, int(0.05 * SR))
+    i0 = int(MAIN_AT * SR)
+    voice[i0 : i0 + len(main)] += main
 close = read(ROOT / 'video/voice/close.wav')
 i0 = int(CLOSE_AT * SR)
 close = close[: N - i0]

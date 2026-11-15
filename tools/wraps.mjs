@@ -25,7 +25,7 @@ const VIEWS = [
 // Things meant to be read as one line. (Table headings break where their text says; the place-and-moment
 // line of Explore may take two lines on a phone.)
 const LABELS =
-  '.eyebrow, .field > span, .field > label, .btn, .seg button, .tab, .tag, .chip, .site-chip, .three-inset-title, .three-inset-note, .inst-head, .inst-state, .inst-row dt, .inst-row dd, .inst-row small, .inst-lens-note, .where, .next-step, .mission-title, .mission-board-cap, .mission-spec-row > *, .cmp-site, .cmp-verdict, .cmp-num, .foot-short, .slip-value, .slip-date, .brand-name, .three-label, .stage-note span, .three-hint, .dock-cap > *, .events li > span, .req-label, .profile b, .mission-meta, .mission-n, .unit, .site-meta > *, .metric b, .cmp-date, .replay-item b, .replay-item i';
+  '.eyebrow, .field > span, .field > label, .btn, .seg button, .tab, .tag, .chip, .site-chip, .three-inset-title, .three-inset-note, .inst-head, .inst-state, .inst-row dt, .inst-row dd, .inst-row small, .inst-lens-note, .where, .next-step, .mission-title, .mission-board-cap, .score-key > *, .mission-map .eyebrow, .mission-spec-row > *, .cmp-site, .cmp-verdict, .cmp-num, .foot-short, .slip-value, .slip-date, .brand-name, .three-label, .stage-note span, .three-hint, .dock-cap > *, .events li > span, .req-label, .profile b, .mission-meta, .mission-n, .unit, .site-meta > *, .metric b, .cmp-date, .replay-item b, .replay-item i';
 
 const browser = await chromium.launch({ channel: 'msedge', args: ['--use-angle=d3d11', '--enable-gpu', '--ignore-gpu-blocklist'] });
 let total = 0;

@@ -8,7 +8,7 @@
 //
 // Every picture is the real tool running. What the film adds: the black bars, the subtitles,
 // a drawn pointer, slow zooms on the interface, the slate lines and the closing title.
-import { mkdirSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { chromium } from 'playwright-core';
 
 const FPS = 30;
@@ -25,14 +25,16 @@ mkdirSync(out, { recursive: true });
 // ---------- time marks, in seconds of film (tools/film_audio.py uses the same ones)
 const CUT = { ridge: 6.3, slip: 9.3, stand: 13.3, days: 16.5, proof: 20.3, eclipse: 22.1, title: 23.7, end: 30 };
 /** Subtitles: what the narrator says, when she says it. */
-const SUBTITLES = [
-  [0.7, 4.55, 'At the Moon’s south pole, the Sun never climbs.'],
-  [5.0, 9.05, 'It circles the horizon, and a single ridge can hide it for days.'],
-  [9.6, 12.8, 'When a launch slips, a good landing site can go dark.'],
-  [13.55, 16.25, 'Lunar Window stands you on real NASA terrain,'],
-  [16.25, 20.0, 'and shows every site, and every day, that still works.'],
-  [20.55, 23.2, 'Verified against NASA’s JPL Horizons.'],
-];
+const SUBTITLES = existsSync('video/voice/marks.json')
+  ? JSON.parse(readFileSync('video/voice/marks.json', 'utf8'))
+  : [
+      [0.7, 4.55, 'At the Moon’s south pole, the Sun never climbs.'],
+      [5.0, 9.05, 'It circles the horizon, and a single ridge can hide it for days.'],
+      [9.6, 12.8, 'When a launch slips, a good landing site can go dark.'],
+      [13.55, 16.25, 'Lunar Window stands you on real NASA terrain,'],
+      [16.25, 20.0, 'and shows every site, and every day, that still works.'],
+      [20.55, 23.2, 'Verified against NASA’s JPL Horizons.'],
+    ];
 
 const browser = await chromium.launch({ channel: 'msedge', args: ['--use-angle=d3d11', '--enable-gpu', '--ignore-gpu-blocklist'] });
 // A 1536 x 864 page drawn at 1.25 gives 1920 x 1080 frames with an interface large enough to read.
@@ -48,20 +50,20 @@ await page.addStyleTag({
   #f-top, #f-bot { position: fixed; left: 0; right: 0; height: 0; background: #000; z-index: 5000; pointer-events: none; }
   #f-top { top: 0; } #f-bot { bottom: 0; }
   #f-cap { position: fixed; left: 0; right: 0; bottom: 0; height: ${SUB}px; z-index: 5100; display: flex; align-items: center; justify-content: center; pointer-events: none;
-    font: 500 21px/1.2 'Geist Variable', sans-serif; letter-spacing: -0.005em; color: #fff; text-align: center; }
+    font: 400 23px/1.2 'Jost Variable', sans-serif; letter-spacing: 0.005em; color: #fff; text-align: center; }
   #f-slate { position: fixed; left: 48px; right: 48px; top: 0; height: ${BAR}px; z-index: 5100; display: none; align-items: flex-end; justify-content: space-between; padding-bottom: 17px; pointer-events: none;
-    font: 500 10.5px/1 'Geist Mono Variable', monospace; letter-spacing: 0.2em; text-transform: uppercase; color: rgba(255,255,255,0.56); font-variant-numeric: tabular-nums; }
+    font: 500 10.5px/1 'B612', sans-serif; letter-spacing: 0.2em; text-transform: uppercase; color: rgba(255,255,255,0.56); font-variant-numeric: tabular-nums; }
   #f-slate b { font-weight: 500; color: #fff; }
   #f-fade { position: fixed; inset: 0; background: #000; opacity: 0; z-index: 6000; pointer-events: none; }
   /* The title stands on the left, over a darkened side of the picture; the Earth and the vehicle keep the right. */
   #f-title { position: fixed; inset: 0; z-index: 5200; display: none; flex-direction: column; align-items: flex-start; justify-content: center; padding: 0 0 26px 118px; color: #fff; text-align: left; pointer-events: none;
     background: linear-gradient(90deg, rgba(0,0,0,0.9), rgba(0,0,0,0.78) 34%, rgba(0,0,0,0.3) 56%, transparent 72%); }
-  #f-title .f-name { font: 600 62px/1 'Geist Variable', sans-serif; letter-spacing: 0.26em; text-transform: uppercase; white-space: nowrap; }
+  #f-title .f-name { font: 500 64px/1 'Jost Variable', sans-serif; letter-spacing: 0.26em; text-transform: uppercase; white-space: nowrap; }
   #f-title .f-rule { width: 0; height: 1px; background: rgba(255,255,255,0.7); margin-top: 28px; }
-  #f-title .f-line { margin-top: 24px; font: 400 25px/1.2 'Geist Variable', sans-serif; letter-spacing: -0.01em; white-space: nowrap; }
-  #f-title .f-meta { margin-top: 30px; font: 500 11.5px/2 'Geist Mono Variable', monospace; letter-spacing: 0.2em; text-transform: uppercase; color: rgba(255,255,255,0.74); white-space: nowrap; }
+  #f-title .f-line { margin-top: 24px; font: 400 27px/1.2 'Jost Variable', sans-serif; letter-spacing: 0; white-space: nowrap; }
+  #f-title .f-meta { margin-top: 30px; font: 500 11.5px/2 'B612', sans-serif; letter-spacing: 0.2em; text-transform: uppercase; color: rgba(255,255,255,0.74); white-space: nowrap; }
   #f-credit { position: fixed; left: 0; right: 0; bottom: 0; height: ${BAR}px; z-index: 5200; display: none; align-items: center; justify-content: center; pointer-events: none;
-    font: 500 9.5px/1.9 'Geist Mono Variable', monospace; letter-spacing: 0.18em; text-transform: uppercase; color: rgba(255,255,255,0.5); text-align: center; }
+    font: 500 9.5px/1.9 'B612', sans-serif; letter-spacing: 0.18em; text-transform: uppercase; color: rgba(255,255,255,0.5); text-align: center; }
   #f-cursor { position: fixed; left: 0; top: 0; z-index: 5500; width: 26px; height: 26px; pointer-events: none; display: none; filter: drop-shadow(0 2px 5px rgba(0,0,0,0.7)); }
   #f-ring { position: fixed; left: 0; top: 0; z-index: 5490; width: 40px; height: 40px; margin: -20px 0 0 -20px; border: 1.5px solid #fff; border-radius: 50%; pointer-events: none; opacity: 0; }
   body.film .top, body.film .foot, body.film .dock, body.film .hud, body.film .stage-note, body.film .stage-scrim { display: none !important; }
@@ -253,12 +255,13 @@ await shot(4, CUT.stand, CUT.days, async () => {
   await set({ detail: null, slipDays: 21 });
   await set({ tab: 'explore', siteId: 'malapert', timeMs: utc(2027, 1, 17), hero: '3d' });
   await page.waitForTimeout(10000);
-  await lookBy('earth', -30, -5.5, 50);
+  await lookBy('earth', -24, -5.5, 50);
   await page.waitForTimeout(1500);
 }, async (t) => {
   await set({ timeMs: utc(2027, 1, 17) + t * 5 * HOUR });
-  await lookBy('earth', lerp(-30, -6, ease(t)), lerp(-5.5, -4.5, t), lerp(50, 44, ease(t)));
-  await dress({ zoom: [lerp(1.0, 1.035, t), 50, 45] });
+  await lookBy('earth', lerp(-24, -4, ease(t)), lerp(-5.5, -4.5, t), lerp(50, 45, ease(t)));
+  // Clarity: the frame closes slowly on the two instruments, the Sun and the Earth with their figures.
+  await dress({ zoom: [lerp(1.0, 1.15, ease(t)), 100, 8] });
 });
 
 // ---------- 5. Every site, every day: the calendar and the reason (16.5 to 20.3 s)

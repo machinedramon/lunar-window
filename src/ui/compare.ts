@@ -160,7 +160,7 @@ export function createCompare(app: App, planner: Planner): View {
     group(T.groups.miss);
     row(T.rows.robust, S.plan.table.nearbyTip, (c) => (c.points > 1 ? { node: pips(c.robust, c.points), value: c.robust } : { node: '—' }), 'high');
 
-    const actions = h('tr', null, h('td'));
+    const actions = h('tr', { class: 'cmp-actions' }, h('td'));
     for (const c of columns) {
       const landing = c.item.dayMs + LANDING_STEPS[c.time] * STEP_MS;
       actions.append(
@@ -180,6 +180,18 @@ export function createCompare(app: App, planner: Planner): View {
     table.append(tb);
     body.append(h('div', { class: 'table-wrap' }, table));
     draw();
+    fit();
+  }
+
+  /** The table fills its panel: the height that is left over is shared among the rows of figures. */
+  function fit(): void {
+    const table = body.querySelector<HTMLTableElement>('table.compare');
+    const wrap = table?.parentElement;
+    if (!table || !wrap) return;
+    table.style.setProperty('--row', '27px');
+    const rows = table.querySelectorAll('tbody tr:not(.cmp-line-row):not(.cmp-actions)').length;
+    const spare = wrap.clientHeight - table.offsetHeight;
+    if (spare > 1 && rows) table.style.setProperty('--row', `${Math.min(58, 27 + spare / rows).toFixed(2)}px`);
   }
 
   function draw(): void {
@@ -221,7 +233,10 @@ export function createCompare(app: App, planner: Planner): View {
     ),
   );
   example.textContent = T.example;
-  onResize(el, draw);
+  onResize(el, () => {
+    draw();
+    fit();
+  });
 
   return {
     el,
