@@ -6,7 +6,12 @@ Built for the NASA Space Apps Challenge 2026, challenge *Lunar Landing Site Navi
 
 **Open it: https://machinedramon.github.io/lunar-window/**
 
-![Explore: standing at Malapert Massif, with the Earth over the skyline, the readings on the right and the time dock below](docs/img/stand-there.jpg)
+![The Earth clears the ridge at Haworth, at the lunar south pole, seen through a long lens](docs/img/earthrise.jpg)
+
+*The Earth clears a ridge at Haworth on 7 February 2027, as the tool draws it: NASA's LOLA terrain, the Earth
+where the ephemeris puts it, and its face as NASA's VIIRS instruments saw it on one real day.*
+
+![Explore: standing at Haworth, with the Sun and the Earth read on the right, the answer in one line and the time dock below](docs/img/stand-there.jpg)
 
 | | |
 |---|---|

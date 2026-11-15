@@ -1097,6 +1097,9 @@ input:disabled {
   color: var(--ink-3);
   white-space: nowrap;
   overflow: hidden;
+  /* Room above the capitals for their accents (Ã, Õ, À), which the clipping would otherwise cut. */
+  padding-top: 0.4em;
+  margin-top: -0.4em;
   text-overflow: ellipsis;
 }
 .inst-row dd {
@@ -1131,6 +1134,9 @@ input:disabled {
   color: var(--ink-2);
   white-space: nowrap;
   overflow: hidden;
+  /* Room above the capitals for their accents (Ã, Õ, À), which the clipping would otherwise cut. */
+  padding-top: 0.4em;
+  margin-top: -0.4em;
   text-overflow: ellipsis;
 }
 .hud-verdict h1 {
@@ -2543,6 +2549,9 @@ table.compare tbody tr.cmp-actions td {
   color: var(--ink-3);
   white-space: nowrap;
   overflow: hidden;
+  /* Room above the capitals for their accents (Ã, Õ, À), which the clipping would otherwise cut. */
+  padding-top: 0.4em;
+  margin-top: -0.4em;
   text-overflow: ellipsis;
 }
 .mission-board canvas {
