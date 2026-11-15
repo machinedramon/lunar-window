@@ -131,6 +131,71 @@ function tag(o: THREE.Object3D): void {
   });
 }
 
+/**
+ * Hardware that has stood and driven on the Moon is not clean: regolith dust coats what is near the ground and
+ * settles on what faces up, and no paint or metal is perfectly even. This adds both to a material (illustrative,
+ * like the objects themselves): dust by height above the ground and by how much a surface faces the sky, broken
+ * up by a grain, and a faint unevenness in the finish.
+ * @param ground height of the ground the object stands on, shared by the materials of that object
+ */
+function weather(material: THREE.Material, ground: { value: number }): void {
+  const m = material as THREE.MeshStandardMaterial;
+  if (!m.isMeshStandardMaterial || m.userData.weathered) return;
+  m.userData.weathered = true;
+  m.onBeforeCompile = (shader) => {
+    shader.uniforms.uLwGround = ground;
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nvarying vec3 vLwWorld;')
+      .replace('#include <project_vertex>', '#include <project_vertex>\nvLwWorld = (modelMatrix * vec4(transformed, 1.0)).xyz;');
+    shader.fragmentShader = shader.fragmentShader
+      .replace(
+        '#include <common>',
+        `#include <common>
+varying vec3 vLwWorld;
+uniform float uLwGround;
+float lwHash(vec3 p) {
+  p = fract(p * 0.3183099 + 0.1);
+  p *= 17.0;
+  return fract(p.x * p.y * p.z * (p.x + p.y + p.z));
+}
+float lwGrain(vec3 x) {
+  vec3 i = floor(x);
+  vec3 f = fract(x);
+  f = f * f * (3.0 - 2.0 * f);
+  return mix(
+    mix(mix(lwHash(i), lwHash(i + vec3(1, 0, 0)), f.x), mix(lwHash(i + vec3(0, 1, 0)), lwHash(i + vec3(1, 1, 0)), f.x), f.y),
+    mix(mix(lwHash(i + vec3(0, 0, 1)), lwHash(i + vec3(1, 0, 1)), f.x), mix(lwHash(i + vec3(0, 1, 1)), lwHash(i + vec3(1, 1, 1)), f.x), f.y),
+    f.z);
+}`,
+      )
+      .replace(
+        '#include <normal_fragment_maps>',
+        `#include <normal_fragment_maps>
+{
+  vec3 lwUp = inverseTransformDirection(normal, viewMatrix);
+  float lwHeight = vLwWorld.y - uLwGround;
+  float lwFine = lwGrain(vLwWorld * 11.0);
+  float lwPatch = lwGrain(vLwWorld * 1.6);
+  // dust thrown up by the wheels and the feet: thick near the ground, thinning with height, in uneven patches
+  float lwLow = 1.0 - smoothstep(0.08, 1.35, lwHeight + (lwPatch - 0.5) * 0.8);
+  // dust that settles: on what faces the sky
+  float lwTop = smoothstep(0.4, 0.95, lwUp.y) * 0.34;
+  float lwDust = clamp(max(lwLow * 0.82, lwTop) * (0.7 + 0.6 * lwFine), 0.0, 0.9);
+  diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.34, 0.33, 0.32) * (0.82 + 0.36 * lwFine), lwDust);
+  roughnessFactor = mix(clamp(roughnessFactor * (0.8 + 0.4 * lwPatch), 0.04, 1.0), 1.0, lwDust);
+  metalnessFactor *= 1.0 - lwDust;
+  // no finish is perfectly even: a faint grain in the way the surface catches the light
+  vec3 lwBump = vec3(lwGrain(vLwWorld * 46.0), lwGrain(vLwWorld * 46.0 + 7.3), lwGrain(vLwWorld * 46.0 + 13.1)) - 0.5;
+  normal = normalize(normal + lwBump * (0.05 + 0.1 * lwDust));
+}`,
+      );
+  };
+  m.customProgramCacheKey = () => 'lw-weathered';
+  m.needsUpdate = true;
+}
+/** Height of the ground under the vehicle and under the mast: read by their weathered materials. */
+const vehicleGround = { value: 0 };
+
 /** Depth a wheel or a footpad presses into the regolith, metres. */
 const SINK = 0.02;
 const UP = new THREE.Vector3(0, 1, 0);
@@ -226,6 +291,11 @@ export async function createProps(ground: (east: number, north: number) => numbe
     const file = apollo ? 'apollo-lm.glb' : roomy ? 'sev-4k.glb' : 'sev.glb';
     const vehicle = (await loadModel(file)).clone(true);
     vehicleGaps = stand(vehicle, file, ve, vn, ground, ((vehicleAz + (apollo ? 40 : 205)) * Math.PI) / 180);
+    vehicleGround.value = ground(ve, vn);
+    vehicle.traverse((o) => {
+      const mat = (o as THREE.Mesh).material;
+      if (mat) for (const one of Array.isArray(mat) ? mat : [mat]) weather(one, vehicleGround);
+    });
     group.add(vehicle);
     keepOut.push({ e: ve, n: vn, r: apollo ? 6.5 : 4.5 });
   } catch (err) {
@@ -250,6 +320,12 @@ export async function createProps(ground: (east: number, north: number) => numbe
     );
     mast.group.position.set(me, here, -mn);
     mast.group.rotation.y = yaw;
+    const mastGround = { value: here };
+    mast.group.traverse((o) => {
+      const mat = (o as THREE.Mesh).material as THREE.Material | undefined;
+      // the link line is a drawing aid, not hardware
+      if (mat && !o.userData.noShadow) weather(mat, mastGround);
+    });
     group.add(mast.group);
     keepOut.push({ e: me, n: mn, r: 2.4 });
   }

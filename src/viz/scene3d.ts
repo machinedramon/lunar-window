@@ -253,9 +253,12 @@ void boulders(vec2 p, float cell, float weight, float tanSun, vec2 sunDir, inout
       float reach = min(height / max(tanSun, 0.012), cell * 1.35);
       float along = -dot(q, sunDir);
       float across = abs(q.x * sunDir.y - q.y * sunDir.x);
-      float taper = size * (1.0 - 0.55 * clamp(along / reach, 0.0, 1.0));
-      float inShadow = smoothstep(0.0, size * 0.5, along) * (1.0 - smoothstep(reach * 0.82, reach, along)) * (1.0 - smoothstep(taper * 0.7, taper, across));
-      lit *= 1.0 - weight * inShadow;
+      // The shadow of a small stone under a low Sun: long, narrowing, and dissolving in its own penumbra
+      // (the Sun is a disc), not a dark shape with corners.
+      float far = clamp(along / reach, 0.0, 1.0);
+      float half_ = size * (1.0 - 0.5 * far) + along * 0.0047;
+      float inShadow = smoothstep(0.0, size * 0.6, along) * (1.0 - smoothstep(0.35, 1.0, far)) * (1.0 - smoothstep(half_ * 0.35, half_ * 1.15, across));
+      lit *= 1.0 - weight * 0.8 * inShadow;
     }
   }
 }
@@ -321,6 +324,27 @@ vec2 slopeOf(sampler2D t, vec2 p, float halfSize, float e) {
 float texS(sampler2D t, vec2 p, float halfSize) {
   return texture2D(t, p / halfSize * 0.5 + 0.5).r;
 }
+// Height of the finest grid through a cubic filter (four bilinear taps): a surface without creases, for shading.
+float heightSmooth(vec2 p) {
+  vec2 st = (p / HALF.x * 0.5 + 0.5) * (GN - 1.0);
+  vec2 i = floor(st);
+  vec2 f = st - i;
+  vec2 w0 = (1.0 - f) * (1.0 - f) * (1.0 - f) / 6.0;
+  vec2 w1 = (3.0 * f * f * f - 6.0 * f * f + 4.0) / 6.0;
+  vec2 w3 = f * f * f / 6.0;
+  vec2 w2 = 1.0 - w0 - w1 - w3;
+  vec2 g0 = w0 + w1;
+  vec2 g1 = w2 + w3;
+  vec2 h0 = (i - 0.5 + w1 / g0) / GN;
+  vec2 h1 = (i + 1.5 + w3 / g1) / GN;
+  return g0.y * (g0.x * texture2D(tH0, vec2(h0.x, h0.y)).r + g1.x * texture2D(tH0, vec2(h1.x, h0.y)).r) +
+    g1.y * (g0.x * texture2D(tH0, vec2(h0.x, h1.y)).r + g1.x * texture2D(tH0, vec2(h1.x, h1.y)).r);
+}
+// Slope of that smooth surface. With the Sun a couple of degrees up, the line between lit and unlit ground is
+// where the slope equals the Sun's height: on a creased surface that line is a polygon; on this one it curves.
+vec2 slopeSmooth(vec2 p, float e) {
+  return vec2(heightSmooth(p + vec2(e, 0.0)) - heightSmooth(p - vec2(e, 0.0)), heightSmooth(p + vec2(0.0, e)) - heightSmooth(p - vec2(0.0, e))) / (2.0 * e);
+}
 // The finest shadow map read through a cubic filter (four bilinear taps): its 2.5 m squares do not show as steps.
 float texSmooth(sampler2D t, vec2 p, float halfSize) {
   const float N = 512.0;
@@ -365,7 +389,7 @@ void main() {
     slope = mix(slopeOf(tH2, p, HALF.z, max(320.0, 1.5 * footprint)), slope, blendAt(m, HALF.z));
     if (m < HALF.y) {
       slope = mix(slopeOf(tH1, p, HALF.y, max(40.0, 1.5 * footprint)), slope, blendAt(m, HALF.y));
-      if (m < HALF.x) slope = mix(slopeOf(tH0, p, HALF.x, max(4.0, 1.5 * footprint)), slope, blendAt(m, HALF.x));
+      if (m < HALF.x) slope = mix(slopeSmooth(p, max(2.5, 1.5 * footprint)), slope, blendAt(m, HALF.x));
     }
   }
   float dE = slope.x;
