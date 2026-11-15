@@ -7,14 +7,16 @@ import { DAY_STEPS, STEP_MS } from '../core/series';
 import { S } from '../i18n';
 import { onResize } from '../viz/canvas';
 import { calendarCell, drawCalendar, type CalendarGeometry, type CalendarRow } from '../viz/calendar';
-import { drawPoleMap, mapHit, type MapGeometry } from '../viz/polemap';
+import { drawPoleMap, mapHit, mapLatLon, type MapGeometry } from '../viz/polemap';
 import { drawTimeline } from '../viz/timeline';
 import type { ComputeResult, WindowResult } from '../worker/protocol';
 import type { App, View } from './app';
+import type { Site } from './data';
 import { clear, h, setText } from './dom';
-import { DAY_MS, HOUR_MS, day as fmtDay, dayTime, deg, duration, isoDate, monthShort, parseUtc, pct, local } from './format';
+import { DAY_MS, HOUR_MS, day as fmtDay, dayTime, deg, duration, isoDate, latLon, monthShort, parseUtc, pct, local } from './format';
+import { hasOwnTerrain } from './ownPoint';
 import type { Planner } from './planner';
-import { MAX_SLIP, type State } from './store';
+import { CUSTOM_SITE, MAX_SLIP, ownOn, type State } from './store';
 
 const T = S.plan;
 const DAYS = 365;
@@ -25,8 +27,16 @@ const mark = (status: string) => h('span', { class: `mark ${status === 'ok' ? 'o
 
 export function createPlan(app: App, planner: Planner): View {
   const { store } = app;
-  const sites = [...app.sites].sort((a, b) => Number(a.horizon === 'sphere') - Number(b.horizon === 'sphere'));
-  const terrain = sites.filter((s) => s.horizon !== 'sphere');
+  const listed = [...app.sites].sort((a, b) => Number(a.horizon === 'sphere') - Number(b.horizon === 'sphere'));
+  const sites: Site[] = [...listed];
+  const terrain: Site[] = listed.filter((s) => s.horizon !== 'sphere');
+  /** The visitor's own point, once its terrain is computed, is the first row and a marker of its own. */
+  const placeOwn = () => {
+    const own = planner.own ? [planner.own.site] : [];
+    sites.splice(0, sites.length, ...own, ...listed);
+    terrain.splice(0, terrain.length, ...own, ...listed.filter((s) => s.horizon !== 'sphere'));
+  };
+  placeOwn();
   let result: ComputeResult | null = null;
   let key = '';
   let timer = 0;
@@ -150,7 +160,10 @@ export function createPlan(app: App, planner: Planner): View {
   const chipOf = new Map<string, HTMLElement>();
 
   // ---------- map of the south pole
-  const mapCanvas = h('canvas', { class: 'map-canvas', role: 'img', 'aria-label': T.map.aria });
+  const mapCanvas = h('canvas', { class: 'map-canvas', role: 'img', 'aria-label': T.map.aria, title: T.map.place });
+  const mapLegend = h('p', { class: 'small muted map-legend', title: T.map.legend }, T.map.legendShort);
+  let mapFlash = '';
+  let mapFlashTimer = 0;
   const mapImage = new Image();
   mapImage.src = `${import.meta.env.BASE_URL}data/southpole.jpg`;
   mapImage.addEventListener('load', () => drawMap());
@@ -161,15 +174,32 @@ export function createPlan(app: App, planner: Planner): View {
     { class: 'panel map', 'aria-label': T.map.title },
     h('div', { class: 'cap' }, T.map.title, h('span', { class: 'muted small' }, T.map.note)),
     mapCanvas,
-    h('p', { class: 'small muted map-legend', title: T.map.legend }, T.map.legendShort),
+    mapLegend,
   );
+  /** Under the map: what the black ground is; or, with a point of one's own, where it is and the way to remove it. */
+  function renderLegend(): void {
+    const st = store.state;
+    clear(mapLegend);
+    if (mapFlash) {
+      mapLegend.append(mapFlash);
+      return;
+    }
+    if (!ownOn(st)) {
+      mapLegend.append(T.map.legendShort);
+      return;
+    }
+    const remove = h('button', { type: 'button', class: 'map-own-x', onclick: () => store.set({ pin: false, ...(st.siteId === CUSTOM_SITE ? { siteId: listed[0].id } : {}), ...(st.detail?.siteId === CUSTOM_SITE ? { detail: null } : {}) }) }, T.map.ownRemove);
+    const where = `${S.explore.custom.group}: ${latLon(st.custom.lat, st.custom.lon)}`;
+    mapLegend.append(!hasOwnTerrain(st.custom.lat) ? T.map.ownOutside : planner.own ? where : T.map.ownComputing, ' · ', remove);
+  }
   function drawMap(): void {
     if (!mapCanvas.isConnected) return;
     renderChips();
+    renderLegend();
     const d1 = slippedDay();
     mapGeo = drawPoleMap(mapCanvas, {
       image: mapImage,
-      sites: terrain.map((s) => ({ id: s.id, name: s.name.replace(/ \(.*\)$/, ''), lat: s.lat, lon: s.lon, status: calOf(s.id)?.status[d1] ?? null })),
+      sites: terrain.map((s) => ({ id: s.id, name: s.name.replace(/ \(.*\)$/, ''), lat: s.lat, lon: s.lon, status: calOf(s.id)?.status[d1] ?? null, own: s.id === CUSTOM_SITE })),
       hover: mapHover,
       selected: store.state.detail?.siteId ?? null,
       labels: { earth: T.map.earth, pole: T.map.pole, off: T.map.off },
@@ -179,7 +209,7 @@ export function createPlan(app: App, planner: Planner): View {
     if (!mapGeo) return;
     const box = mapCanvas.getBoundingClientRect();
     const id = mapHit(mapGeo, ev.clientX - box.left, ev.clientY - box.top);
-    mapCanvas.style.cursor = id ? 'pointer' : 'default';
+    mapCanvas.style.cursor = id ? 'pointer' : 'crosshair';
     if (id !== mapHover) setMapHover(id);
   });
   mapCanvas.addEventListener('mouseleave', () => setMapHover(null));
@@ -201,7 +231,8 @@ export function createPlan(app: App, planner: Planner): View {
         chip.addEventListener('focus', () => setMapHover(t.id));
         chip.addEventListener('blur', () => setMapHover(null));
         chipOf.set(t.id, chip);
-        siteChips.append(chip);
+        if (t.id === CUSTOM_SITE) siteChips.prepend(chip);
+        else siteChips.append(chip);
       }
       const status = calOf(t.id)?.status[d1];
       const word = status === undefined ? 'wait' : status === 2 ? 'ok' : status === 1 ? 'marginal' : 'fail';
@@ -209,12 +240,33 @@ export function createPlan(app: App, planner: Planner): View {
       chip.title = status === undefined ? T.computing : `${t.name}: ${S.status[word]}`;
       chip.setAttribute('aria-label', chip.title);
     }
+    for (const [id, chip] of chipOf) {
+      if (terrain.some((t) => t.id === id)) continue;
+      chip.remove();
+      chipOf.delete(id);
+    }
   }
   mapCanvas.addEventListener('click', (ev) => {
     if (!mapGeo) return;
     const box = mapCanvas.getBoundingClientRect();
     const id = mapHit(mapGeo, ev.clientX - box.left, ev.clientY - box.top);
-    if (id) store.set({ detail: { siteId: id, dayMs: startMs() + slippedDay() * DAY_MS } });
+    if (id) {
+      store.set({ detail: { siteId: id, dayMs: startMs() + slippedDay() * DAY_MS } });
+      return;
+    }
+    // Anywhere else on the map: a point of one's own, where NASA's model reaches.
+    const at = mapLatLon(mapGeo, ev.clientX - box.left, ev.clientY - box.top);
+    if (!hasOwnTerrain(at.lat)) {
+      mapFlash = T.map.ownOutside;
+      renderLegend();
+      window.clearTimeout(mapFlashTimer);
+      mapFlashTimer = window.setTimeout(() => {
+        mapFlash = '';
+        renderLegend();
+      }, 2600);
+      return;
+    }
+    store.set({ custom: { lat: Math.round(at.lat * 1000) / 1000, lon: Math.round(at.lon * 1000) / 1000 }, pin: true, ...(store.state.detail?.siteId === CUSTOM_SITE ? { detail: null } : {}) });
   });
 
   // ---------- calendar
@@ -635,7 +687,7 @@ export function createPlan(app: App, planner: Planner): View {
 
   function ensure(): void {
     const s = store.state;
-    const k = `${s.plannedMs}|${JSON.stringify(s.req)}`;
+    const k = `${s.plannedMs}|${JSON.stringify(s.req)}|${planner.own ? `${planner.own.site.lat},${planner.own.site.lon}` : ''}`;
     if (k === key) return;
     key = k;
     // A calendar computed for another start date cannot be shown against the new dates.
@@ -655,11 +707,26 @@ export function createPlan(app: App, planner: Planner): View {
     if (store.state.detail && win) renderDetail();
   });
 
+  // The visitor's own point joined, moved or left: its row and marker follow, and the year is computed with it.
+  const offOwn = planner.onOwn(() => {
+    placeOwn();
+    if (result) result = { ...result, calendars: result.calendars.filter((c) => c.siteId !== CUSTOM_SITE) };
+    if (!el.isConnected) return;
+    ensure();
+    renderAll();
+  });
+
   return {
     el,
+    dispose() {
+      offOwn();
+      window.clearTimeout(mapFlashTimer);
+    },
     update(state, changed) {
       syncForm(state);
+      placeOwn();
       ensure();
+      if (changed && (changed.has('pin') || changed.has('custom') || changed.has('siteId'))) drawMap();
       if (!changed || changed.has('slipDays') || changed.has('tab')) renderAll();
       else if (changed.has('detail')) {
         renderTable();

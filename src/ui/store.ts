@@ -16,6 +16,8 @@ export interface State {
   siteId: string;
   /** Coordinates of the visitor's own point, used when siteId is "custom". Degrees, east positive. */
   custom: { lat: number; lon: number };
+  /** The visitor's own point is kept in the planner (its row, its marker) even when another site is being explored. */
+  pin: boolean;
   /** Moment shown in Explore. */
   timeMs: number;
   /** Mission requirements; `req.mast` is also the observer height used in Explore. */
@@ -33,6 +35,8 @@ export interface State {
 
 /** Site id of a point given by its coordinates rather than chosen from the list. */
 export const CUSTOM_SITE = 'custom';
+/** Whether the visitor's own point is in use: explored, or kept in the planner. */
+export const ownOn = (s: Pick<State, 'siteId' | 'pin'>): boolean => s.pin || s.siteId === CUSTOM_SITE;
 export const MIN_MS = Date.UTC(1969, 0, 1);
 export const MAX_MS = Date.UTC(2035, 11, 31);
 export const MAX_SLIP = 120;
@@ -43,6 +47,7 @@ export function defaults(): State {
     tab: 'explore',
     siteId: 'malapert',
     custom: { lat: -85, lon: 0 },
+    pin: false,
     timeMs: planned,
     req: { ...PROFILES[0].req },
     profileId: PROFILES[0].id,
@@ -79,7 +84,8 @@ function decodeReq(text: string, fallback: Requirements): Requirements {
 export function toHash(s: State): string {
   const q = new URLSearchParams();
   q.set('site', s.siteId);
-  if (s.siteId === CUSTOM_SITE) q.set('ll', `${s.custom.lat},${s.custom.lon}`);
+  if (ownOn(s)) q.set('ll', `${s.custom.lat},${s.custom.lon}`);
+  if (s.pin) q.set('pin', '1');
   q.set('t', isoMinute(s.timeMs));
   q.set('plan', isoDate(s.plannedMs));
   if (s.slipDays) q.set('slip', String(s.slipDays));
@@ -107,6 +113,7 @@ export function fromHash(hash: string, knownSites: (id: string) => boolean): Sta
   if (site && knownSites(site)) s.siteId = site;
   const ll = (q.get('ll') ?? '').split(',').map(Number);
   if (ll.length === 2 && ll.every(Number.isFinite)) s.custom = { lat: clamp(ll[0], -90, 90), lon: clamp(ll[1], -180, 180) };
+  s.pin = q.get('pin') === '1';
   const t = parseUtc(q.get('t') ?? '');
   if (Number.isFinite(t)) s.timeMs = clamp(t, MIN_MS, MAX_MS);
   const plan = parseUtc(q.get('plan') ?? '');

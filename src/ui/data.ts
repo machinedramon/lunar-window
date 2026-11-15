@@ -12,7 +12,8 @@ export interface Site {
   lat: number;
   lon: number;
   elevationM: number;
-  horizon: 'lola-5m-80m-240m' | 'lola-80m-240m' | 'sphere';
+  /** Terrain model behind the horizon: with a 5 m site model, the 80 m polar model, the same computed in the browser for a point of one's own, or none. */
+  horizon: 'lola-5m-80m-240m' | 'lola-80m-240m' | 'lola-80m-480m' | 'sphere';
   source: string;
   note?: string;
   published?: { lat: number; lon: number };
@@ -33,6 +34,8 @@ export interface LoadedSite {
   /** Present for terrain sites: used to draw how far away the skyline is. */
   data: HorizonData | null;
   ring: RingData | null;
+  /** For a point of the visitor's own: the terrain grids of the 3D view, computed in the browser. */
+  tiles?: Int16Array;
 }
 
 const base = import.meta.env.BASE_URL;

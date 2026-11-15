@@ -11,6 +11,7 @@ import { CATEGORY_LABEL, type LoadedSite, type Site } from './data';
 import { clear, h, reducedMotion, setText } from './dom';
 import { EXPLORE_DAYS, elevationRange, momentAt, outlookFor, type Moment, type Outlook, warmOutlooks } from './exploreModel';
 import { createHero3D } from './hero3d';
+import { onOwnStage } from './ownPoint';
 import { DAY_MS, HOUR_MS, compass, dayTime, deg, duration, isoMinute, latLon, monthShort, num, parseUtc, pct, local } from './format';
 import { REPLAYS } from './replays';
 import { linkTone, sunTone } from './sound';
@@ -59,13 +60,16 @@ export function createExplore(app: App): View {
     const input = h('input', { type: 'number', min: String(min), max: String(max), step: '0.01', 'aria-label': label, title: label });
     input.addEventListener('change', () => {
       const v = Math.max(min, Math.min(max, Number(input.value)));
-      if (Number.isFinite(v) && v !== store.state.custom[key]) store.set({ custom: { ...store.state.custom, [key]: v } });
+      if (Number.isFinite(v) && v !== store.state.custom[key]) store.set({ custom: { ...store.state.custom, [key]: v }, pin: true });
     });
     return input;
   };
   const latIn = coord(T.custom.lat, -90, 90, 'lat');
   const lonIn = coord(T.custom.lon, -180, 180, 'lon');
-  const customField = h('div', { class: 'field custom-ll', hidden: true }, h('span', null, T.custom.label), h('div', { class: 'row' }, latIn, lonIn));
+  /** Under the coordinates: how far the terrain model reaches, or what is being done to bring the terrain of the point. */
+  const ownStatus = h('span', { class: 'small muted own-status', 'aria-live': 'polite' }, T.custom.reach);
+  const offStage = onOwnStage((stage) => setText(ownStatus, stage === 'model' ? T.custom.stageModel : stage === 'horizon' ? T.custom.stageHorizon : T.custom.reach));
+  const customField = h('div', { class: 'field custom-ll', hidden: true }, h('span', null, T.custom.label), h('div', { class: 'row' }, latIn, lonIn), ownStatus);
   const timeInput = h('input', {
     id: 'time',
     type: 'datetime-local',
@@ -329,7 +333,7 @@ export function createExplore(app: App): View {
     clear(facts);
     const terrain = site.horizon !== 'sphere';
     const own = site.id === CUSTOM_SITE;
-    const about: (Node | string)[] = [own ? `${site.mission}. ${T.custom.warning}` : `${site.mission}. ${T.status[site.status]}${site.date ? ` (${site.date})` : ''}.`];
+    const about: (Node | string)[] = [own ? `${site.mission}. ${terrain ? T.custom.terrain : T.custom.warning}` : `${site.mission}. ${T.status[site.status]}${site.date ? ` (${site.date})` : ''}.`];
     if (site.note) about.push(' ', site.note);
     if (site.published) about.push(' ', T.facts.moved(deg(site.published.lat, 2), deg(site.published.lon, 2)));
     if (site.nasa) about.push(' ', T.facts.nasa(pct(site.nasa.sunVisibility3x3), pct(site.nasa.earthVisibility3x3)));
@@ -342,7 +346,7 @@ export function createExplore(app: App): View {
         'div',
         null,
         h('dt', null, T.facts.horizon),
-        h('dd', null, h('span', { class: `tag ${terrain ? 'terrain' : 'sphere'}` }, terrain ? T.facts.terrain : T.facts.sphere), ' ', site.horizon === 'lola-5m-80m-240m' ? T.facts.terrainFineText : terrain ? T.facts.terrainText : T.facts.sphereText),
+        h('dd', null, h('span', { class: `tag ${terrain ? 'terrain' : 'sphere'}` }, terrain ? T.facts.terrain : T.facts.sphere), ' ', site.horizon === 'lola-5m-80m-240m' ? T.facts.terrainFineText : site.horizon === 'lola-80m-480m' ? T.facts.terrainOwnText : terrain ? T.facts.terrainText : T.facts.sphereText),
       ),
       h('div', null, h('dt', null, T.facts.about), h('dd', null, ...about, ...(own ? [] : [' ', h('a', { href: site.source, target: '_blank', rel: 'noopener' }, T.facts.source)]))),
       h('div', null, h('dt', null, T.facts.real), h('dd', null, terrain ? T.three.note : T.three.noteSphere)),
@@ -570,9 +574,10 @@ export function createExplore(app: App): View {
     update(state: State, changed) {
       if (!changed || changed.has('siteId') || !loaded || loaded.site.id !== state.siteId || (state.siteId === CUSTOM_SITE && changed.has('custom'))) {
         const id = state.siteId;
+        const at = id === CUSTOM_SITE ? app.ownKey() : '';
         const ready = app.peek(id);
         const apply = (l: LoadedSite) => {
-          if (store.state.siteId !== id) return;
+          if (store.state.siteId !== id || (id === CUSTOM_SITE && app.ownKey() !== at)) return;
           loaded = l;
           renderFacts(l.site);
           render();
@@ -588,6 +593,7 @@ export function createExplore(app: App): View {
     },
     dispose() {
       if (playing) togglePlay(false);
+      offStage();
     },
   };
 }

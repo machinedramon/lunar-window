@@ -197,12 +197,16 @@ export function createHero3D(): Hero3D {
     void start().then(loadTerrain);
   }
 
+  /** A place of the 3D view: a listed site, or the visitor's own point at given coordinates. */
+  const placeOf = (l: LoadedSite): string => (l.tiles ? `${l.site.id}@${l.site.lat},${l.site.lon}` : l.site.id);
+
   async function loadTerrain(): Promise<void> {
     if (!scene || !site) return;
-    const key = `${site.site.id}/${mast}`;
+    const place = placeOf(site);
+    const key = `${place}/${mast}`;
     if (key === terrainKey || key === pendingKey) return;
     // The same place from another antenna height: the eye and the mast travel there. Nothing is loaded or built again.
-    if (!pendingKey && framed === site.site.id && terrainKey.startsWith(`${site.site.id}/`)) {
+    if (!pendingKey && framed === place && terrainKey.startsWith(`${place}/`)) {
       const d = site.data;
       scene.setEye(d ? d.elevDeg[mast] : null, d ? d.distKm[mast] : null, d ? d.stepDeg : 1, MAST_HEIGHTS_M[mast]);
       terrainKey = key;
@@ -213,11 +217,12 @@ export function createHero3D(): Hero3D {
     pendingKey = key;
     const target0 = site;
     const targetMast = mast;
-    const newSite = framed !== target0.site.id;
+    const newSite = framed !== place;
     if (newSite && terrainKey) fade.classList.add('on'); // dip to black between sites
     let tiles: Int16Array | null = null;
     try {
-      if (target0.data) {
+      if (target0.tiles) tiles = target0.tiles;
+      else if (target0.data) {
         if (!terrainKey) loading.hidden = false;
         const res = await fetch(`${import.meta.env.BASE_URL}data/terrain/${target0.site.id}.bin`);
         if (!res.ok) throw new Error(`terrain: HTTP ${res.status}`);
@@ -242,13 +247,13 @@ export function createHero3D(): Hero3D {
     if (sky) scene.setSky(sky);
     const run = ++runs;
     if (newSite) {
-      framed = target0.site.id;
+      framed = place;
       frame();
       vehicleAz = (target.az - 15 + 360) % 360;
     }
     // Rocks, vehicle and mast: the same arrangement every time for a given site.
     let seed = 7;
-    for (const ch of target0.site.id) seed = (seed * 31 + ch.charCodeAt(0)) >>> 0;
+    for (const ch of place) seed = (seed * 31 + ch.charCodeAt(0)) >>> 0;
     // NASA's concept rover and our solar mast where a mission is still to come; the Lunar Module at the Apollo
     // sites; only the mast where a real robotic lander stood on real terrain; nothing at the other real sites.
     const s0 = target0.site;
@@ -256,7 +261,7 @@ export function createHero3D(): Hero3D {
     // The place is shown whole: the vehicle and the rocks are in, every program is compiled and a frame is drawn
     // before the camera arrives. Until then the picture stays covered (the opening screen, or black between sites).
     introStage(S.stages.scene, 0.6);
-    await scene.setProps(target0.site.id, seed, vehicleAz, kind, MAST_HEIGHTS_M[targetMast]);
+    await scene.setProps(place, seed, vehicleAz, kind, MAST_HEIGHTS_M[targetMast]);
     if (run !== runs || !scene) return;
     if (newSite) {
       introStage(S.stages.picture, 0.85);

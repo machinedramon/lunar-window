@@ -3,6 +3,8 @@ import type { Requirements } from '../core/requirements';
 import type { ComputeResult, Request, Response, WindowResult, WorkerSite } from '../worker/protocol';
 import type { App } from './app';
 import type { LoadedSite } from './data';
+import { hasOwnTerrain } from './ownPoint';
+import { CUSTOM_SITE, ownOn } from './store';
 
 function toWorker(l: LoadedSite): WorkerSite {
   const s = l.site;
@@ -17,7 +19,12 @@ function toWorker(l: LoadedSite): WorkerSite {
 
 export class Planner {
   private readonly worker: Worker;
-  private readonly ready: Promise<void>;
+  private ready: Promise<void>;
+  private base: WorkerSite[] = [];
+  private wanted = '';
+  private ownListeners: (() => void)[] = [];
+  /** The visitor's own point, once its terrain is computed: it takes part in every calendar, under the id "custom". */
+  own: LoadedSite | null = null;
   private nextId = 1;
   private readonly waiting = new Map<number, (r: Response) => void>();
 
@@ -28,9 +35,50 @@ export class Planner {
       this.waiting.delete(ev.data.id);
       done?.(ev.data);
     };
-    this.ready = app.all().then((all) => this.post({ type: 'sites', sites: all.map(toWorker) }));
+    this.ready = app.all().then((all) => {
+      this.base = all.map(toWorker);
+      this.post({ type: 'sites', sites: this.base });
+    });
     // A failed download is reported where the result is awaited, not as an unhandled error.
     this.ready.catch(() => undefined);
+    // The visitor's own point joins the sites when it is in use and NASA's model reaches it.
+    const sync = () => {
+      const st = app.store.state;
+      const want = ownOn(st) && hasOwnTerrain(st.custom.lat) ? app.ownKey() : '';
+      if (want === this.wanted) return;
+      this.wanted = want;
+      this.setOwn(null); // the point left or moved: the old one goes at once
+      if (want) {
+        void app.site(CUSTOM_SITE).then((l) => {
+          if (this.wanted === want) this.setOwn(l.data ? l : null);
+        });
+      }
+    };
+    app.store.subscribe((_state, changed) => {
+      if (changed.has('pin') || changed.has('custom') || changed.has('siteId')) sync();
+    });
+    sync();
+  }
+
+  /** True while the terrain of the visitor's own point is being computed. */
+  get ownPending(): boolean {
+    return !!this.wanted && !this.own;
+  }
+
+  /** Calls `fn` when the visitor's own point joins, moves or leaves. Returns the way to stop. */
+  onOwn(fn: () => void): () => void {
+    this.ownListeners.push(fn);
+    return () => {
+      this.ownListeners = this.ownListeners.filter((f) => f !== fn);
+    };
+  }
+
+  private setOwn(l: LoadedSite | null): void {
+    if (l === this.own) return;
+    this.own = l;
+    this.ready = this.ready.then(() => this.post({ type: 'sites', sites: l ? [toWorker(l), ...this.base] : this.base }));
+    this.ready.catch(() => undefined);
+    for (const fn of this.ownListeners) fn();
   }
 
   private post(msg: Request): void {

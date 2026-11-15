@@ -3085,3 +3085,27 @@ table.compare tbody tr.cmp-actions td {
     transition-duration: 0.001ms !important;
   }
 }
+
+/* A point of the visitor's own: what is being computed, under its coordinates; and, under the map, the way to remove it. */
+.own-status {
+  display: block;
+  margin-top: 6px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.map-legend {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.map-legend .map-own-x {
+  font: inherit;
+  color: var(--ink);
+  background: none;
+  border: 0;
+  padding: 0;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}

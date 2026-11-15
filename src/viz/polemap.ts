@@ -15,6 +15,8 @@ export interface MapSite {
   lon: number;
   /** 0 not viable, 1 marginal, 2 viable; null while computing. */
   status: number | null;
+  /** The visitor's own point: drawn with a dashed ring around it. */
+  own?: boolean;
 }
 
 export interface MapInput {
@@ -27,6 +29,8 @@ export interface MapInput {
 
 export interface MapGeometry {
   points: { id: string; x: number; y: number }[];
+  /** Pixels per kilometre. */
+  kx: number;
 }
 
 /** Where a label goes relative to its marker, chosen by hand so that neighbours do not collide. */
@@ -44,6 +48,13 @@ const LABEL: Record<string, [number, number, CanvasTextAlign]> = {
 export function projectKm(lat: number, lon: number): [number, number] {
   const r = 2 * MOON_RADIUS_KM * Math.tan(((90 + lat) * Math.PI) / 360);
   return [r * Math.sin((lon * Math.PI) / 180), r * Math.cos((lon * Math.PI) / 180)];
+}
+
+/** Latitude and longitude of a point of the drawn map. */
+export function mapLatLon(g: MapGeometry, x: number, y: number): { lat: number; lon: number } {
+  const kmx = x / g.kx + VIEW.x0;
+  const kmy = VIEW.y1 - y / g.kx;
+  return { lat: -90 + (2 * Math.atan(Math.hypot(kmx, kmy) / (2 * MOON_RADIUS_KM)) * 180) / Math.PI, lon: (Math.atan2(kmx, kmy) * 180) / Math.PI };
 }
 
 export function mapHit(g: MapGeometry, x: number, y: number): string | null {
@@ -165,7 +176,16 @@ export function drawPoleMap(canvas: HTMLCanvasElement, m: MapInput): MapGeometry
       ctx.arc(x, y, r + 5.5, 0, Math.PI * 2);
       ctx.stroke();
     }
-    if (compact && !active) return;
+    if (s.own) {
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([3, 3]);
+      ctx.beginPath();
+      ctx.arc(x, y, r + 6, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+    if (compact && !active && !s.own) return;
     const [dx, dy, align] = edge ? [12, 14, 'left' as CanvasTextAlign] : (LABEL[s.id] ?? [14, 4, 'left' as CanvasTextAlign]);
     const text = edge ? m.labels.off(s.name) : s.name;
     ctx.font = `${active ? 700 : 600} 11.5px ${FONT}`;
@@ -195,5 +215,5 @@ export function drawPoleMap(canvas: HTMLCanvasElement, m: MapInput): MapGeometry
     points.push({ id, x, y });
     draw(s, x, y, true);
   });
-  return { points };
+  return { points, kx };
 }

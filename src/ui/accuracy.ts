@@ -22,6 +22,8 @@ interface Validation {
   regional: { description: string; sun: Stats; earth: Stats; pointsSun: [number, number][]; pointsEarth: [number, number][] };
   fine: { description: string; sunPixel: Stats; sunArea: Stats };
   sites: { id: string; sun: number; earth: number; sunVisibility: number; sunVisibility3x3: number; earthVisibility: number; earthVisibility3x3: number; model: string; sunByHeight: number[] }[];
+  /** The model used for a point of the visitor's own, measured by tools/check_polar.py. */
+  anyPoint?: { againstFull: { points: number; meanAbsDeg: number; p95Deg: number; maxDeg: number }; againstSites: { id: string; fine: boolean; meanAbsDeg: number; p95Deg: number }[] };
 }
 type Row = [string, number, number, number];
 interface Golden {
@@ -120,6 +122,15 @@ export function createAccuracy(app: App): View {
     // ---- 2. Terrain horizon against NASA's illumination maps
     const v = (await (await fetch(`${base}data/validation.json`)).json()) as Validation;
     const canvas = h('canvas', { role: 'img', 'aria-label': T.scatterAria });
+    /** How the terrain of a point of the visitor's own compares with the full models and with the 5 m site models. */
+    const ownBlock = (): HTMLElement[] => {
+      const a = v.anyPoint;
+      if (!a) return [];
+      const fine = a.againstSites.filter((x) => x.fine).sort((x, y) => x.meanAbsDeg - y.meanAbsDeg);
+      const out = [h('h3', null, T.terrain.ownTitle), h('p', null, T.terrain.ownText(local(a.againstFull.meanAbsDeg.toFixed(3)), local(a.againstFull.p95Deg.toFixed(2)), a.againstFull.points))];
+      if (fine.length) out.push(h('p', { class: 'small muted' }, T.terrain.ownSites(local(fine[0].meanAbsDeg.toFixed(2)), local(fine[fine.length - 1].meanAbsDeg.toFixed(1)), app.siteInfo(fine[fine.length - 1].id).name)));
+      return out;
+    };
     const siteRows = h('tbody');
     for (const s of v.sites) {
       const info = app.siteInfo(s.id);
@@ -189,6 +200,7 @@ export function createAccuracy(app: App): View {
           ),
         ),
         h('p', { class: 'small muted' }, T.terrain.heightNote),
+        ...ownBlock(),
       ),
 
       h('section', { class: 'panel doc-section' }, h('h2', null, T.includes.title), list(T.includes.items)),
