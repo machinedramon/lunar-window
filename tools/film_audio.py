@@ -6,12 +6,12 @@ The narration is one take per language, video/voice/<lang>/narration.wav: an AI-
 (OpenAI text-to-speech) reading the script of the film from the first word to the last; the project
 page says so. The music is not a recording: every tone below is computed.
 
-The film follows the voice, not the other way round. The script has nine segments (the pole, the
-ridge in two parts, the slip, standing there, the calendar, the proof, the name, the line under it);
-the time of each in the take (video/voice/<lang>/segments.json, from a transcription) gives the
-moment of every cut, of every subtitle and of the title, and the length of the film: thirty seconds
-in English, a few more in Portuguese and Spanish, which take longer to say the same. They are written
-to video/voice/<lang>/marks.json, which tools/film.mjs reads.
+The film follows the voice, not the other way round. The script has eleven segments, in the order of the
+story: the problem (the pole; one hill), what a delay does (the site goes dark; or loses the Earth), the
+answer (which sites and which days; and why the others fail), how (real terrain; any point of the Moon),
+the proof (JPL Horizons), then the name and the line under it. The time of each in the take
+(video/voice/<lang>/segments.json) gives the moment of every cut, of every subtitle and of the title.
+They are written to video/voice/<lang>/marks.json, which tools/film.mjs reads. The film is thirty seconds.
 
     python tools/film_audio.py [en|pt|es]      writes video/audio.<lang>.wav
 """
@@ -30,34 +30,36 @@ LANG = sys.argv[1] if len(sys.argv) > 1 else 'en'
 VOICE = ROOT / 'video/voice' / LANG
 
 # ---------- when things happen (seconds of film), read from the voice
-VO_AT = 0.60  # the narration starts
+VO_AT = 0.45  # the narration starts
 SEG = json.loads((VOICE / 'segments.json').read_text(encoding='utf-8'))['segments']
-assert len(SEG) == 9, f'{len(SEG)} segments; the script has 9'
+assert len(SEG) == 11, f'{len(SEG)} segments; the script has 11'
 at = lambda i: VO_AT + SEG[i]['start']
 done = lambda i: VO_AT + SEG[i]['end']
 said = lambda i: SEG[i]['text'].replace("'", '’')
-RIDGE = round(at(2) - 0.12, 2)    # the ridge takes the Sun
-CUT_UI = round(at(3) - 0.35, 2)   # first cut from the Moon to the tool
-CUT_B = round(at(4) - 0.30, 2)    # standing on the terrain
-CUT_C = round(at(5) - 0.12, 2)    # the calendar
-CUT_D = round(at(6) - 0.35, 2)    # the proof
-TITLE = round(done(6) + 0.30, 2)  # the eclipse, and the title over it
-# Thirty seconds when the voice leaves room for the title to stand; otherwise as long as it needs, to the half second.
-SECONDS = 30.0 if done(8) + 3.5 <= 30.0 else float(np.ceil((done(8) + 3.6) * 2) / 2)
+RIDGE = round(at(1) - 0.50, 2)    # one hill takes the Sun
+CUT_UI = round(at(2) - 0.25, 2)   # first cut from the Moon to the tool: the launch slips
+CUT_B = round(at(4) - 0.25, 2)    # the answer: the calendar of every site
+WHY = round(at(5) - 0.35, 2)      # a day that fails is opened: the reason
+CUT_C = round(at(6) - 0.30, 2)    # how: over the globe to another place, and down on its terrain
+LAND = round(at(7) + 0.05, 2)     # standing there
+CUT_D = round(at(8) - 0.30, 2)    # the proof
+TITLE = round(done(8) + 0.30, 2)  # the eclipse, and the title over it
+SECONDS = 30.0
+assert done(10) + 3.4 <= SECONDS, f'the voice ends at {done(10):.2f} s: no room for the title'
 N = int(SR * SECONDS)
 t = np.arange(N) / SR
 rng = np.random.default_rng(7)
 MARKS = {
     'lang': LANG,
-    'cuts': {'ridge': RIDGE, 'slip': CUT_UI, 'stand': CUT_B, 'days': CUT_C, 'proof': CUT_D, 'title': TITLE, 'end': SECONDS},
-    'closing': {'name': round(at(7), 2), 'line': round(at(8), 2), 'end': round(done(8), 2), 'text': said(8)},
+    'cuts': {'ridge': RIDGE, 'slip': CUT_UI, 'days': CUT_B, 'why': WHY, 'any': CUT_C, 'land': LAND, 'proof': CUT_D, 'title': TITLE, 'end': SECONDS},
+    'closing': {'name': round(at(9), 2), 'line': round(at(10), 2), 'end': round(done(10), 2), 'text': said(10)},
     'subtitles': [
-        [round(at(0), 2), round(done(0) + 0.3, 2), said(0)],
-        [round(at(1), 2), round(done(2) + 0.3, 2), said(1) + ' ' + said(2)],
-        [round(at(3), 2), round(done(3) + 0.3, 2), said(3)],
-        [round(at(4), 2), round(at(5), 2), said(4)],
-        [round(at(5), 2), round(done(5) + 0.3, 2), said(5)],
-        [round(at(6), 2), round(done(6) + 0.25, 2), said(6)],
+        [round(at(0), 2), round(at(1) - 0.08, 2), said(0)],
+        [round(at(1), 2), round(min(done(1) + 0.25, CUT_UI - 0.02), 2), said(1)],
+        [round(at(2), 2), round(min(done(3) + 0.3, CUT_B - 0.02), 2), said(2) + ' ' + said(3)],
+        [round(at(4), 2), round(min(done(5) + 0.3, CUT_C - 0.02), 2), said(4) + ' ' + said(5)],
+        [round(at(6), 2), round(min(done(7) + 0.3, CUT_D - 0.02), 2), said(6) + ' ' + said(7)],
+        [round(at(8), 2), round(min(done(8) + 0.25, TITLE - 0.05), 2), said(8)],
     ],
 }
 (VOICE / 'marks.json').write_text(json.dumps(MARKS, ensure_ascii=False, indent=1), encoding='utf-8')
@@ -197,17 +199,19 @@ duck = 1 - 0.58 * np.clip(fast_smooth(np.clip(level_voice * 6, 0, 1), 0.35), 0, 
 # ---------- score
 music = np.zeros((N, 2))
 # A: the pole. A dark D minor that opens slowly; it thins out when the ridge takes the Sun.
-bright_a = 0.15 + 0.35 * ramp(0.5, 6.0) - 0.3 * ramp(6.3, 8.0)
-music += pad(['D2', 'A2', 'D3', 'F3', 'A3', 'E4'], span(0.0, CUT_UI + 0.5, 3.0, 0.9) * (1 - 0.45 * ramp(RIDGE, RIDGE + 1.3)), bright_a, 0.9)
-music += pad(['D1', 'D2'], span(0.0, CUT_UI + 0.4, 2.0, 0.8), 0.0, 0.8)
+bright_a = 0.15 + 0.35 * ramp(0.5, RIDGE) - 0.3 * ramp(RIDGE, CUT_UI + 0.4)
+music += pad(['D2', 'A2', 'D3', 'F3', 'A3', 'E4'], span(0.0, CUT_UI + 0.5, 2.2, 0.9) * (1 - 0.45 * ramp(RIDGE, RIDGE + 1.1)), bright_a, 0.9)
+music += pad(['D1', 'D2'], span(0.0, CUT_UI + 0.4, 1.6, 0.8), 0.0, 0.8)
 music += stars(RIDGE + 0.3, CUT_UI + 1.2, 0.05)
 # B: the launch slips. A hit, and the clock of the planner starts.
 music += boom(CUT_UI, 50, 2.4, 0.95)
 music += pad(['D2', 'A2', 'D3', 'F3', 'A3'], span(CUT_UI - 0.2, CUT_B + 0.5, 0.5, 0.9), 0.2, 0.75)
 music += pad(['D1'], span(CUT_UI, CUT_B + 0.4, 0.3, 0.8), 0.0, 0.7)
-# C and D: the tool. The harmony lifts, step by step.
+# C and D: the answer, then the whole Moon. The harmony lifts, step by step; a soft hit as the globe turns.
 music += pad(['Bb1', 'Bb2', 'F3', 'A3', 'D4'], span(CUT_B - 0.3, CUT_C + 0.5, 0.7, 0.9), 0.42, 0.9)
 music += pad(['C2', 'C3', 'G3', 'D4', 'E4'], span(CUT_C - 0.3, CUT_D + 0.5, 0.7, 0.9), 0.52, 0.92)
+music += boom(CUT_C, 46, 1.8, 0.5)
+music += stars(CUT_C + 0.1, CUT_D + 0.3, 0.035)
 # E: verified. The dominant holds its breath, air rises, and everything stops for a moment.
 music += pad(['A1', 'A2', 'E3', 'A3', 'D4'], span(CUT_D - 0.3, TITLE - 1.5, 0.7, 0.7), 0.5, 0.9)
 music += pad(['A1', 'A2', 'E3', 'A3', 'C#4'], span(TITLE - 2.1, TITLE - 0.12, 0.6, 0.18), 0.6, 0.95)

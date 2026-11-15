@@ -390,7 +390,7 @@ export const en = {
     scatterCaption: "Each dot is one point of the mesh: NASA's value across, ours up. White: Sun. Blue: Earth. On the dashed line the two agree.",
     eph: {
       title: '1. Where the Sun and the Earth are',
-      text: 'The JPL Horizons System is the reference for positions in the Solar System, but a browser cannot query it directly. Lunar Window computes the positions itself (astronomy-engine, with the IAU rotation model of the Moon) and compares them with tables downloaded from Horizons for eight places and periods: from Apollo 11 in 1969 to the far side and the south pole up to 2031, including the place and the month the tool opens on.',
+      text: 'The JPL Horizons System is the reference for positions in the Solar System, but a browser cannot query it directly. Lunar Window computes the positions itself (astronomy-engine, with the IAU rotation model of the Moon) and compares them with tables downloaded from Horizons for nine places and periods: from Apollo 11 in 1969 to the far side and the south pole up to 2031, including the place and the month the tool opens on.',
       worstEl: 'largest error in elevation',
       worstAz: 'largest error in azimuth, measured on the sky',
       count: 'positions compared',
@@ -406,6 +406,7 @@ export const en = {
       'malapert-2031': 'Malapert Massif',
       'im1-odysseus-2024': 'IM-1 Odysseus site',
       'malapert-opening-2027': 'Malapert Massif, the month the tool opens on',
+      'haworth-opening-2027': 'Haworth, the place and the month the tool opens on',
       'change-6-2024': "Chang'e 6 site, far side",
       'apollo-11-2028': 'Apollo 11 site',
       'apollo-11-1969': 'Apollo 11 site, July 1969',

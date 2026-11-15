@@ -8,6 +8,9 @@
 //
 // Every picture is the real tool running. What the film adds: the black bars, the subtitles,
 // a drawn pointer, slow zooms on the interface, the slate lines and the closing title.
+//
+// The order is the order of the story: the problem (1, 2), what a delay does (3), the answer and the reason (4),
+// how (5: any point of the Moon, on real terrain), the proof (6), the name (7).
 import { mkdirSync, readFileSync } from 'node:fs';
 import { chromium } from 'playwright-core';
 
@@ -34,11 +37,14 @@ const WORDS = {
     real: 'real NASA LOLA terrain',
     place: 'Malapert Massif, lunar south pole',
     lapse: 'time-lapse',
+    apollo: 'Apollo 17, Taurus–Littrow',
+    landing: 'the hour of the landing',
+    globe: 'the Moon as NASA’s LRO camera mapped it',
     eclipsePlace: 'Blue Ghost Mission 1, Mare Crisium',
     eclipseWhat: 'the Earth in front of the Sun, seen from the Moon',
     eclipseNote: 'the eclipse the lander recorded',
     challenge: 'NASA Space Apps Challenge 2026 · Lunar Landing Site Navigator',
-    credit1: 'Terrain: NASA LRO LOLA · Sun and Earth checked against NASA JPL Horizons · Milky Way: NASA SVS Deep Star Maps',
+    credit1: 'Terrain: NASA LRO LOLA · Moon map: NASA LRO camera · Sun and Earth checked against NASA JPL Horizons · Milky Way: NASA SVS Deep Star Maps',
     credit2: 'Narration: AI-generated voice · Music: synthesised · An independent project, not endorsed by NASA',
   },
   pt: {
@@ -46,11 +52,14 @@ const WORDS = {
     real: 'terreno real NASA LOLA',
     place: 'Malapert Massif, polo sul lunar',
     lapse: 'tempo acelerado',
+    apollo: 'Apollo 17, Taurus–Littrow',
+    landing: 'a hora do pouso',
+    globe: 'a Lua como a câmera da LRO, da NASA, a mapeou',
     eclipsePlace: 'Blue Ghost Mission 1, Mare Crisium',
     eclipseWhat: 'a Terra na frente do Sol, vista da Lua',
     eclipseNote: 'o eclipse que o módulo registrou',
     challenge: 'NASA Space Apps Challenge 2026 · Lunar Landing Site Navigator',
-    credit1: 'Terreno: NASA LRO LOLA · Sol e Terra conferidos com o NASA JPL Horizons · Via Láctea: NASA SVS Deep Star Maps',
+    credit1: 'Terreno: NASA LRO LOLA · Mapa da Lua: câmera da NASA LRO · Sol e Terra conferidos com o NASA JPL Horizons · Via Láctea: NASA SVS Deep Star Maps',
     credit2: 'Narração: voz gerada por IA · Música: sintetizada · Projeto independente, não endossado pela NASA',
   },
   es: {
@@ -58,11 +67,14 @@ const WORDS = {
     real: 'terreno real NASA LOLA',
     place: 'Malapert Massif, polo sur lunar',
     lapse: 'tiempo acelerado',
+    apollo: 'Apollo 17, Taurus–Littrow',
+    landing: 'la hora del alunizaje',
+    globe: 'la Luna tal como la cartografió la cámara LRO de la NASA',
     eclipsePlace: 'Blue Ghost Mission 1, Mare Crisium',
     eclipseWhat: 'la Tierra delante del Sol, vista desde la Luna',
     eclipseNote: 'el eclipse que registró el módulo',
     challenge: 'NASA Space Apps Challenge 2026 · Lunar Landing Site Navigator',
-    credit1: 'Terreno: NASA LRO LOLA · Sol y Tierra comprobados con NASA JPL Horizons · Vía Láctea: NASA SVS Deep Star Maps',
+    credit1: 'Terreno: NASA LRO LOLA · Mapa de la Luna: cámara LRO de la NASA · Sol y Tierra comprobados con NASA JPL Horizons · Vía Láctea: NASA SVS Deep Star Maps',
     credit2: 'Narración: voz generada por IA · Música: sintetizada · Proyecto independiente, no avalado por la NASA',
   },
 }[LANG];
@@ -106,6 +118,7 @@ await page.addStyleTag({
   body.film .three { position: fixed !important; inset: 0 !important; z-index: 2000; }
   body.film .three-label, body.film .three-insets, body.film .three-tape, body.film .three-caption, body.film .three-controls, body.film .three-hint, body.film .three-title { display: none !important; }
   body.film.plain .three-sky { display: none !important; }
+  body.film .travel-caption { display: none !important; }
   `,
 });
 await page.evaluate(() => {
@@ -201,6 +214,8 @@ const stamp = (ms) => {
 function fadeAt(sec) {
   if (sec < 0.9) return 1 - ease(sec / 0.9);
   if (Math.abs(sec - CUT.slip) < 0.2) return 1 - Math.abs(sec - CUT.slip) / 0.2;
+  // from the tool out to the Moon: the globe comes up out of black
+  if (sec >= CUT.any && sec < CUT.any + 0.3) return 1 - ease((sec - CUT.any) / 0.3);
   // out of the tool and into the eclipse: a breath of black, shorter going out than coming in
   if (sec > CUT.title - 0.18 && sec < CUT.title) return (sec - (CUT.title - 0.18)) / 0.18;
   if (sec >= CUT.title && sec < CUT.title + 0.7) return 1 - ease((sec - CUT.title) / 0.7);
@@ -239,7 +254,7 @@ async function shot(n, from, to, prepare, each) {
 
 const SLATE = (site, right) => `<span><b>${site}</b> · ${WORDS.real}</span><span>${right}</span>`;
 
-// ---------- 1. The pole: the Sun runs along the horizon (0 to 6.3 s)
+// ---------- 1. The problem. The pole: the Sun runs along the horizon and never climbs
 await shot(1, 0, CUT.ridge, async () => {
   await set({ tab: 'explore', siteId: 'malapert', timeMs: utc(2027, 1, 17), hero: '3d' });
   await dress({ film: true, plain: true });
@@ -248,84 +263,76 @@ await shot(1, 0, CUT.ridge, async () => {
   await lookBy('sun', -11, 0.4, 37);
   await page.waitForTimeout(1500);
 }, async (t) => {
-  const ms = utc(2027, 1, 17) + t * 5.2 * DAY;
+  // (Stops before the Sun goes behind the mast.)
+  const ms = utc(2027, 1, 17) + t * 3.4 * DAY;
   await set({ timeMs: ms });
   await lookBy('sun', lerp(-11, -6, t), lerp(0.4, 1.0, t), lerp(37, 31, out3(t)));
   await dress({ slate: SLATE(WORDS.place, `${stamp(ms)} · ${WORDS.lapse}`) });
 });
 
-// ---------- 2. A ridge takes the Sun, and the night sky comes out (6.3 to 9.3 s)
+// ---------- 2. One hill can hide it: a long lens on the Sun as the ridge takes it
 await shot(2, CUT.ridge, CUT.slip, async () => {
-  await set({ timeMs: utc(2027, 2, 3, 0) });
+  await set({ tab: 'explore', siteId: 'malapert', timeMs: utc(2027, 2, 3, 1), hero: '3d' });
   await dress({ film: true, plain: false });
-  // A long lens on the ridge and the Sun: the rocks and the vehicle (set dressing) are left out of this one shot.
+  // The rocks and the vehicle (set dressing) are left out of this one shot.
   await page.evaluate(() => window.__lwProps?.(false));
+  await page.waitForTimeout(only ? 9000 : 2500);
   await face('sun', 9, 0.6);
-  await page.waitForTimeout(2500);
+  await page.waitForTimeout(1500);
 }, async (t) => {
-  const ms = utc(2027, 2, 3, 0) + ease(clamp(t / 0.62)) * 21 * HOUR;
+  const ms = utc(2027, 2, 3, 1) + ease(clamp(t / 0.8)) * 17 * HOUR;
   await set({ timeMs: ms });
-  // A long lens on the Sun as the ridge takes it; then the lens opens and tilts up to the sky.
-  const open = ease(clamp((t - 0.42) / 0.58));
-  await lookBy('sun', lerp(0, -30, open), lerp(0.7, 17, open), lerp(8.5, 54, open));
+  // Once the Sun is gone the lens opens and tilts up, on the dark ground and the night sky.
+  const open = ease(clamp((t - 0.56) / 0.44));
+  await lookBy('sun', lerp(0, -16, open), lerp(0.7, 8.5, open), lerp(8.5, 34, open));
   await dress({ slate: SLATE(WORDS.place, `${stamp(ms)} · ${WORDS.lapse}`) });
 });
 
-// ---------- 3. The launch slips: the planner (9.3 to 13.3 s)
-await shot(3, CUT.slip, CUT.stand, async () => {
+// ---------- 3. What a delay does: the launch slips, and the sites that worked no longer do
+await shot(3, CUT.slip, CUT.days, async () => {
   await page.evaluate(() => window.__lwProps?.(true));
   await dress({ film: false });
   await set({ tab: 'plan', plannedMs: utc(2027, 1, 17), slipDays: 0, detail: null });
   await page.waitForTimeout(4500);
 }, async (t) => {
-  const k = ease(clamp((t - 0.22) / 0.5));
+  const k = ease(clamp((t - 0.2) / 0.46));
   await set({ slipDays: Math.round(21 * k) });
   // Close on the slider while it is dragged; then the frame opens on what the delay did to the sites.
-  await dress({ zoom: [lerp(1.36, 1.03, ease(clamp((t - 0.5) / 0.5))), 40, 8] });
+  await dress({ zoom: [lerp(1.36, 1, ease(clamp((t - 0.52) / 0.48))), 40, 8] });
   const thumb = await point('#slip', 0.012 + 0.976 * ((21 * k) / 120), 0.5);
   const rest = await point('.slip-read', 0.2, 2.6);
   if (thumb && rest) {
-    const arrive = out3(clamp(t / 0.2));
-    const leave = ease(clamp((t - 0.78) / 0.22));
-    const x = t < 0.22 ? lerp(rest[0], thumb[0], arrive) : lerp(thumb[0], thumb[0] + 46, leave);
-    const y = t < 0.22 ? lerp(rest[1], thumb[1], arrive) : lerp(thumb[1], thumb[1] + 62, leave);
-    await dress({ cursor: [x, y] });
+    const arrive = out3(clamp(t / 0.18));
+    const leave = ease(clamp((t - 0.72) / 0.22));
+    const x = t < 0.2 ? lerp(rest[0], thumb[0], arrive) : lerp(thumb[0], thumb[0] + 46, leave);
+    const y = t < 0.2 ? lerp(rest[1], thumb[1], arrive) : lerp(thumb[1], thumb[1] + 62, leave);
+    // The pointer lets go and leaves; it does not stay over the answer.
+    await dress({ cursor: t < 0.9 ? [x, y] : null });
   }
 });
 
-// ---------- 4. Standing on the terrain (13.3 to 16.5 s)
-await shot(4, CUT.stand, CUT.days, async () => {
-  await dress({ film: false });
-  await set({ detail: null, slipDays: 21 });
-  await set({ tab: 'explore', siteId: 'malapert', timeMs: utc(2027, 1, 17), hero: '3d' });
-  await page.waitForTimeout(10000);
-  await lookBy('earth', -24, -5.5, 50);
-  await page.waitForTimeout(1500);
-}, async (t) => {
-  await set({ timeMs: utc(2027, 1, 17) + t * 5 * HOUR });
-  await lookBy('earth', lerp(-24, -4, ease(t)), lerp(-5.5, -4.5, t), lerp(50, 45, ease(t)));
-  // Clarity: the frame closes slowly on the two instruments, the Sun and the Earth with their figures.
-  await dress({ zoom: [lerp(1.0, 1.15, ease(t)), 100, 8] });
-});
-
-// ---------- 5. Every site, every day: the calendar and the reason (16.5 to 20.3 s)
+// ---------- 4. The answer: every site, every day; and, on a day that fails, the reason
 let clicked = false;
-await shot(5, CUT.days, CUT.proof, async () => {
+/** Haworth is the fourth row of the calendar; the calendar starts seven days before the planned date. */
+const WHY_ROW = 3;
+const WHY_DAY = 7 + 21;
+await shot(4, CUT.days, CUT.any, async () => {
   await dress({ film: false });
   await set({ tab: 'plan', plannedMs: utc(2027, 1, 17), slipDays: 21, detail: null });
   await page.waitForTimeout(4000);
-}, async (t, sec, i) => {
-  // In on the calendar while the pointer travels; after the click, across to the answer that opens on the right.
-  const over = ease(clamp((t - 0.64) / 0.36));
-  await dress({ zoom: [lerp(1.02, 1.12, ease(clamp(t / 0.6))) + 0.06 * over, lerp(62, 100, over), lerp(74, 34, over)] });
-  // The pointer crosses the calendar, stops on a day of Connecting Ridge and opens it.
-  const b = await cell(0, 7 + 21);
+}, async (t, sec) => {
+  const length = CUT.any - CUT.days;
+  const click = (CUT.why - CUT.days) / length;
+  // In on the calendar while the pointer travels; after the click, across to the reason that opens on the right.
+  const over = ease(clamp((sec - CUT.why - 0.08) / 0.75));
+  await dress({ zoom: [lerp(1, 1.15, ease(clamp(t / click))) + 0.27 * over, lerp(60, 100, over), lerp(78, 30, over)] });
+  const b = await cell(WHY_ROW, WHY_DAY);
   if (!b) return;
-  const k = out3(clamp(t / 0.46));
-  // The pointer comes from the right, along the row.
-  const dx = lerp(330, 0, k);
-  const dy = lerp(96, 0, k);
-  if (t < 0.56) {
+  // The pointer comes from the right, along the rows, and stops on a day of Haworth that no longer works.
+  const k = out3(clamp(t / (click - 0.1)));
+  const dx = lerp(360, 0, k);
+  const dy = lerp(-74, 0, k);
+  if (t < click) {
     await page.mouse.move(b.mouse[0] + dx / b.k, b.mouse[1] + dy / b.k);
     await dress({ cursor: [b.show[0] + dx, b.show[1] + dy] });
   } else if (!clicked) {
@@ -333,21 +340,62 @@ await shot(5, CUT.days, CUT.proof, async () => {
     await page.mouse.click(b.mouse[0], b.mouse[1]);
     await page.mouse.move(2, 2);
   }
-  if (t >= 0.5 && t < 0.62) await dress({ ring: [b.show[0], b.show[1], 1 - (t - 0.5) / 0.12, 0.4 + (t - 0.5) / 0.1] });
+  const since = sec - CUT.why;
+  if (since >= -0.1 && since < 0.3) await dress({ ring: [b.show[0], b.show[1], 1 - (since + 0.1) / 0.4, 0.4 + (since + 0.1) / 0.3] });
   else await dress({ ring: null });
-  if (t >= 0.62) await dress({ cursor: null });
+  if (since >= 0.12) await dress({ cursor: null });
 });
 
-// ---------- 6. Checked against NASA (20.3 to 22.1 s)
+// ---------- 5. How: any point of the Moon, on NASA's terrain. Over the globe from the pole to Taurus-Littrow,
+// and down on it at the hour Apollo 17 landed.
+const APOLLO = utc(1972, 12, 11, 19, 55);
+const FROM = { lat: -87.05, lon: -24.24, name: 'Haworth' };
+const TO = { lat: 20.1911, lon: 30.7723, name: WORDS.apollo };
+let way = '';
+await shot(5, CUT.any, CUT.proof, async () => {
+  await page.mouse.move(2, 2);
+  await set({ detail: null });
+  await dress({ film: true, plain: true, zoom: [1, 50, 50] });
+  await set({ tab: 'explore', siteId: 'apollo-17', timeMs: APOLLO, hero: '3d' });
+  await page.evaluate(() => window.__lwProps?.(true));
+  await page.waitForTimeout(10000);
+  await look(222, 5, 50);
+  await page.evaluate(([from, to]) => window.__lwJourney.show(from, to, to), [FROM, TO]);
+  way = await page.evaluate(() => document.querySelector('.travel-caption')?.textContent.replace(/\s+/g, ' ').trim() ?? '');
+  await page.waitForTimeout(800);
+}, async (t, sec) => {
+  // The globe: already on its way up from the pole, across the Moon, and down.
+  const g = clamp((sec - CUT.any) / (CUT.land + 0.12 - CUT.any));
+  const gone = ease(clamp((sec - (CUT.land - 0.22)) / 0.42));
+  await page.evaluate(([p, o]) => {
+    // (Further back than in the tool: between the black bars the whole Moon must fit.)
+    window.__lwJourney.pose(p, 2.3);
+    const el = document.querySelector('.travel');
+    el.style.opacity = String(o);
+    el.style.visibility = o > 0 ? 'visible' : 'hidden';
+  }, [lerp(0.3, 1, 1 - Math.pow(1 - g, 1.7)), 1 - gone]);
+  // Standing there: the frame settles on the Lunar Module, with the South Massif behind it.
+  const settle = out3(clamp((sec - (CUT.land - 0.25)) / (CUT.proof - CUT.land + 0.25)));
+  await look(lerp(223, 210, settle), lerp(5.5, 4.5, settle), lerp(51, 46, settle));
+  await dress({ slate: gone < 0.5 ? `<span><b>${way}</b></span><span>${WORDS.globe}</span>` : SLATE(WORDS.apollo, `${stamp(APOLLO)} · ${WORDS.landing}`) });
+});
+
+// ---------- 6. The proof: checked against NASA's JPL Horizons
 await shot(6, CUT.proof, CUT.title, async () => {
+  await page.evaluate(() => {
+    window.__lwJourney?.hide();
+    const el = document.querySelector('.travel');
+    if (el) el.style.opacity = el.style.visibility = '';
+  });
   await page.mouse.move(2, 2);
   await set({ detail: null });
   await dress({ film: false });
   await set({ tab: 'accuracy' });
   await page.waitForTimeout(3500);
 }, async (t) => {
-  await page.evaluate((y) => (document.getElementById('main').scrollTop = y), Math.round(lerp(120, 176, ease(t))));
-  await dress({ zoom: [lerp(1.2, 1.28, ease(t)), 50, 40] });
+  // The question, the three figures and the first places of the table, whole, while the frame closes slowly.
+  await page.evaluate(() => (document.getElementById('main').scrollTop = 0));
+  await dress({ zoom: [lerp(1.13, 1.2, ease(t)), 50, 56] });
 });
 
 // ---------- 7. The last picture: the eclipse Blue Ghost recorded, as the tool draws it, and the title over it
@@ -387,7 +435,8 @@ await shot(7, CUT.title, CUT.end, async () => {
     q('line').style.opacity = String(tag);
     q('line').style.transform = `translateY(${(1 - tag) * 10}px)`;
     q('meta').style.opacity = String(meta);
-    document.getElementById('f-credit').style.opacity = String(meta);
+    // The credits (where the terrain, the checks and the AI voice are named) stand from the name to the end.
+    document.getElementById('f-credit').style.opacity = String(rule);
   }, [out3(clamp((sec - (CLOSING.name - 0.3)) / 0.9)), ease(clamp((sec - (CLOSING.name + 0.45)) / 0.9)), out3(clamp((sec - (CLOSING.line - 0.15)) / 0.8)), ease(clamp((sec - (CLOSING.end + 0.15)) / 0.9))]);
 });
 

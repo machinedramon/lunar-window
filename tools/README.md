@@ -88,8 +88,12 @@ it. Against the listed sites that have a 5 m model, the 80 m horizon seen from 2
 
 ## The demo film
 
-The film is a recording of the tool itself, one per language (English, Portuguese, Spanish). Nothing in it is
-drawn by hand: a headless browser opens the dev server, drives the interface and saves every frame.
+The film is a recording of the tool itself. Nothing in it is drawn by hand: a headless browser opens the dev
+server, drives the interface and saves every frame. It follows the order of the story: the problem (the Sun
+at the pole, the hill that hides it), what a delay does (the planner), the answer and the reason (the
+calendar, a day that fails), how (over the globe to any point of the Moon, and down on its terrain), the proof
+(the Accuracy page), the name. The script is in English; the tools take a language (`en`, `pt`, `es`) and
+need a take of the same script in it.
 
 ```bash
 npm run dev                                  # the film is recorded from http://localhost:5700
@@ -99,11 +103,14 @@ python -X utf8 tools/film_build.py en        # video/lunar-window-demo.en.mp4 an
 ```
 
 - `film_audio.py` computes the music (no recording is used) and lays the narration over it. The narration is an
-  AI-generated voice (OpenAI text-to-speech), one take per language in `video/voice/<lang>/narration.wav`, with
-  the time of its nine segments in `segments.json`; the cuts, subtitles and the length of the film follow it.
+  AI-generated voice (OpenAI text-to-speech), one take per language in `video/voice/<lang>/narration.wav` (its
+  longest pauses shortened to fit the thirty seconds), with the time of its eleven segments in `segments.json`;
+  the cuts, the subtitles and the title follow it.
 - `film.mjs` opens the page with `?lang=`, so the interface, the captions and the credits are in that language.
   `SHOTS=7` records one shot again; `EVERY=30` records a sparse preview. Do not edit `src/` while it records:
-  the dev server would reload the page.
+  the dev server would reload the page. The journey over the globe is drawn one moment at a time through a
+  hook of the development build (`__lwJourney`), from further back than in the tool so that the whole Moon fits
+  between the black bars. `film_look.mjs <site> <time>` saves stills around a place, to choose a camera.
 - `film_build.py` needs ffmpeg. It writes the AI-voice notice into the file's metadata.
 
 The `video/` folder is not in the repository.

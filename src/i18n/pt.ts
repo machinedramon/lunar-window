@@ -399,7 +399,7 @@ export const pt: Strings = {
     scatterCaption: 'Cada ponto é um ponto da malha: o valor da NASA na horizontal, o nosso na vertical. Branco: Sol. Azul: Terra. Na linha tracejada os dois concordam.',
     eph: {
       title: '1. Onde estão o Sol e a Terra',
-      text: 'O JPL Horizons System é a referência para posições no Sistema Solar, mas um navegador não pode consultá-lo diretamente. O Lunar Window calcula as posições ele mesmo (astronomy-engine, com o modelo de rotação da Lua da IAU) e as compara com tabelas baixadas do Horizons para oito lugares e períodos: da Apollo 11 em 1969 ao lado oculto e ao polo sul até 2031, incluindo o lugar e o mês em que a ferramenta abre.',
+      text: 'O JPL Horizons System é a referência para posições no Sistema Solar, mas um navegador não pode consultá-lo diretamente. O Lunar Window calcula as posições ele mesmo (astronomy-engine, com o modelo de rotação da Lua da IAU) e as compara com tabelas baixadas do Horizons para nove lugares e períodos: da Apollo 11 em 1969 ao lado oculto e ao polo sul até 2031, incluindo o lugar e o mês em que a ferramenta abre.',
       worstEl: 'maior erro em elevação',
       worstAz: 'maior erro em azimute, medido no céu',
       count: 'posições comparadas',
@@ -415,6 +415,7 @@ export const pt: Strings = {
       'malapert-2031': 'Malapert Massif',
       'im1-odysseus-2024': 'Local da IM-1 Odysseus',
       'malapert-opening-2027': 'Malapert Massif, o mês em que a ferramenta abre',
+      'haworth-opening-2027': 'Haworth, o lugar e o mês em que a ferramenta abre',
       'change-6-2024': "Local da Chang'e 6, lado oculto",
       'apollo-11-2028': 'Local da Apollo 11',
       'apollo-11-1969': 'Local da Apollo 11, julho de 1969',

@@ -14,6 +14,11 @@ export interface Travel {
   show(from: Place, to: Place, sunMoonFixed: readonly [number, number, number]): Promise<void>;
   /** Turns the Moon to the place that is reached and comes down on it. Resolves on arrival. */
   fly(): Promise<void>;
+  /**
+   * Draws one moment of the way, from 0 (over the place that is left) to 1 (over the place that is reached).
+   * `back` multiplies how far the camera pulls away in the middle (a frame much wider than tall needs more).
+   */
+  pose(t: number, back?: number): void;
   /** Uncovers the view. */
   hide(): void;
   dispose(): void;
@@ -59,9 +64,11 @@ export function createTravel(container: HTMLElement): Travel {
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(30, 2, 0.05, 20);
   const sun = new THREE.DirectionalLight(0xffffff, 2.0);
-  // The Sun as it is, and enough fill for the ground to be read where it grazes (the poles) or is not up at all:
-  // this view is a map of the way, not a photograph.
-  scene.add(sun, new THREE.AmbientLight(0xffffff, 0.24));
+  // The Sun as it is, and enough fill for the ground to be read where the Sun grazes (the poles, any landing at
+  // dawn) or is not up at all: a soft light from where the camera is, and a little from everywhere. This view is a
+  // map of the way, not a photograph.
+  const fill = new THREE.DirectionalLight(0xffffff, 0.55);
+  scene.add(sun, fill, new THREE.AmbientLight(0xffffff, 0.18));
   const globe = new THREE.Mesh(new THREE.SphereGeometry(1, 128, 64), new THREE.MeshLambertMaterial({ color: 0xffffff }));
   scene.add(globe);
   const ringGeo = new THREE.RingGeometry(0.011, 0.0145, 48);
@@ -87,13 +94,14 @@ export function createTravel(container: HTMLElement): Travel {
   };
 
   /** The camera at fraction `t` of the way: over the great circle from one place to the other, higher in the middle. */
-  const place = (t: number) => {
+  const place = (t: number, back = 1) => {
     const dir = angle < 1e-4 ? a.clone() : a.clone().multiplyScalar(Math.sin((1 - t) * angle)).addScaledVector(b, Math.sin(t * angle)).divideScalar(Math.sin(angle));
     dir.normalize();
     // A short hop stays low; a journey across the Moon pulls back until the whole globe is in view.
-    const far = NEAR + Math.min(2.1, angle * 1.5);
+    const far = NEAR + Math.min(2.1, angle * 1.5) * back;
     const d = NEAR + (far - NEAR) * Math.pow(Math.sin(Math.PI * t), 0.85);
     camera.position.copy(dir).multiplyScalar(d);
+    fill.position.copy(camera.position);
     // The marks keep a steady size on screen: from close up they would be huge.
     const k = Math.min(1, (d - 1) / 0.75);
     markFrom.scale.setScalar(k);
@@ -156,6 +164,10 @@ export function createTravel(container: HTMLElement): Travel {
         };
         frame = requestAnimationFrame(step);
       });
+    },
+    pose(t, back = 1) {
+      cancelAnimationFrame(frame);
+      place(Math.max(0, Math.min(1, t)), back);
     },
     hide() {
       cancelAnimationFrame(frame);

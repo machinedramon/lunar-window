@@ -759,6 +759,19 @@ export function createHero3D(): Hero3D {
         resize();
       }
     };
+    /** The journey between two places, one moment at a time: the recording tool draws it frame by frame. */
+    (window as unknown as Record<string, unknown>).__lwJourney = {
+      show: async (from: Place, to: Place, at?: Place) => {
+        if (!moment) return false;
+        const { createTravel } = await loadTravel();
+        travel ??= createTravel(el);
+        // `at`: the place whose sky the moment on screen describes, when it is not the place that is left.
+        await travel.show(from, to, sunMoonFixed(at ?? from, moment));
+        return true;
+      },
+      pose: (t: number, back?: number) => travel?.pose(t, back),
+      hide: () => travel?.hide(),
+    };
     (window as unknown as Record<string, unknown>).__lwFace = (which: 'sun' | 'earth', fov: number, lift = 0) => {
       if (!scene || !moment) return;
       const v = which === 'sun' ? moment.sun : moment.earth;

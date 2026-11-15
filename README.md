@@ -83,9 +83,10 @@ the measured errors are published on the Accuracy page of the tool.
 
 In the tool itself nothing is an AI-generated image, video or sound: the visuals are rendered in real
 time from NASA data and open-licensed 3D assets, and the sounds are synthesised by code. The demo video
-(30 seconds in English; a few seconds longer in Portuguese and Spanish) is a recording of the tool; its
-narration is an AI-generated voice (OpenAI text-to-speech) reading a script in each language, as the
-closing credits and the file metadata state, and its music is synthesised by code (`tools/film_audio.py`).
+(30 seconds, in English) is a recording of the tool; its narration is an AI-generated voice (OpenAI
+text-to-speech) reading a script, as the closing credits and the file metadata state, and its music is
+synthesised by code (`tools/film_audio.py`). The tool itself runs no AI model: every figure is computed by
+deterministic code from NASA data.
 The Portuguese and Spanish texts of the interface were written with the same AI assistant and reviewed by
 the team member.
 
