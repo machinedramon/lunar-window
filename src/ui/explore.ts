@@ -558,6 +558,8 @@ export function createExplore(app: App): View {
   }
 
   onResize(el, draw);
+  // The panorama fills its own box, whenever that box takes its size.
+  onResize(stripWrap, draw);
 
   return {
     el,

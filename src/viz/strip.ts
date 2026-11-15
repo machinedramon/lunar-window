@@ -104,27 +104,28 @@ export function drawStrip(canvas: HTMLCanvasElement, m: StripInput, cssHeight: n
   path(m.sunPath, 'rgba(255,255,255,0.5)');
   path(m.earthPath, 'rgba(125,184,255,0.6)');
 
-  // Discs at their true angular size (the vertical scale is stretched, so they look tall)
+  // Discs drawn round, at the vertical scale: how high each one stands over the skyline is true; their width is
+  // enlarged by the stretch of the chart (drawn to both scales they would be thin vertical slivers).
   const disc = (v: View, inner: string, outer: string, glow: string, glowR: number) => {
     for (const shift of [-360, 0, 360]) {
       const x = xOf(v.az) + shift * ppdX;
       if (x < PAD.left - 40 || x > PAD.left + plotW + 40) continue;
       const y = yOf(v.el);
-      const halo = ctx.createRadialGradient(x, y, 0, x, y, glowR);
+      const r = Math.max(2.5, v.radius * ppdY);
+      const reach = Math.max(glowR, r * 1.9);
+      const halo = ctx.createRadialGradient(x, y, r * 0.6, x, y, reach);
       halo.addColorStop(0, glow);
       halo.addColorStop(1, 'rgba(0,0,0,0)');
       ctx.fillStyle = halo;
       ctx.beginPath();
-      ctx.arc(x, y, glowR, 0, Math.PI * 2);
+      ctx.arc(x, y, reach, 0, Math.PI * 2);
       ctx.fill();
-      const rx = Math.max(1.6, v.radius * ppdX);
-      const ry = Math.max(1.6, v.radius * ppdY);
-      const fill = ctx.createLinearGradient(x, y - ry, x, y + ry);
+      const fill = ctx.createLinearGradient(x, y - r, x, y + r);
       fill.addColorStop(0, inner);
       fill.addColorStop(1, outer);
       ctx.fillStyle = fill;
       ctx.beginPath();
-      ctx.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2);
+      ctx.arc(x, y, r, 0, Math.PI * 2);
       ctx.fill();
     }
   };
@@ -198,7 +199,7 @@ export function drawStrip(canvas: HTMLCanvasElement, m: StripInput, cssHeight: n
     ctx.lineWidth = 1.2;
     ctx.setLineDash([3, 3]);
     ctx.beginPath();
-    ctx.ellipse(x, y, Math.max(5, v.radius * ppdX), Math.max(5, v.radius * ppdY), 0, 0, Math.PI * 2);
+    ctx.arc(x, y, Math.max(5, v.radius * ppdY), 0, Math.PI * 2);
     ctx.stroke();
     ctx.setLineDash([]);
   };

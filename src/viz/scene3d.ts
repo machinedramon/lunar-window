@@ -125,6 +125,8 @@ const GALAXY_FRAG = /* glsl */ `
 #include <common>
 #include <logdepthbuf_pars_fragment>
 uniform sampler2D uMap;
+uniform sampler2D uFine;
+uniform float uFineOn;
 uniform float uOpacity;
 uniform float uGain;
 varying vec3 vDir;
@@ -133,6 +135,17 @@ void main() {
   vec3 d = normalize(vDir);
   vec2 uv = vec2(0.5 - atan(d.y, d.x) / (2.0 * PI), 0.5 + asin(clamp(d.z, -1.0, 1.0)) / PI);
   vec3 c = texture2D(uMap, uv).rgb;
+  if (uFineOn > 0.5) {
+    // The brightness comes from the 8192-pixel map, the colour from the smaller one. The longitude jumps by a
+    // whole turn at one meridian: the size of a pixel on the map is measured on whichever side has no jump.
+    vec2 other = vec2(fract(uv.x + 0.5), uv.y);
+    bool jump = fwidth(uv.x) > fwidth(other.x);
+    vec2 gx = jump ? dFdx(other) : dFdx(uv);
+    vec2 gy = jump ? dFdy(other) : dFdy(uv);
+    float fine = pow(textureGrad(uFine, uv, gx, gy).r, 2.2);
+    float coarse = dot(c, vec3(0.2126, 0.7152, 0.0722));
+    c = fine * clamp(c / max(coarse, 0.02), 0.5, 1.8);
+  }
   c = mix(vec3(dot(c, vec3(0.2126, 0.7152, 0.0722))), c, 0.4);
   c = pow(c, vec3(1.3));
   gl_FragColor = vec4(c * uOpacity * uGain, 1.0);
@@ -308,6 +321,23 @@ vec2 slopeOf(sampler2D t, vec2 p, float halfSize, float e) {
 float texS(sampler2D t, vec2 p, float halfSize) {
   return texture2D(t, p / halfSize * 0.5 + 0.5).r;
 }
+// The finest shadow map read through a cubic filter (four bilinear taps): its 2.5 m squares do not show as steps.
+float texSmooth(sampler2D t, vec2 p, float halfSize) {
+  const float N = 512.0;
+  vec2 st = (p / halfSize * 0.5 + 0.5) * N - 0.5;
+  vec2 i = floor(st);
+  vec2 f = st - i;
+  vec2 w0 = (1.0 - f) * (1.0 - f) * (1.0 - f) / 6.0;
+  vec2 w1 = (3.0 * f * f * f - 6.0 * f * f + 4.0) / 6.0;
+  vec2 w3 = f * f * f / 6.0;
+  vec2 w2 = 1.0 - w0 - w1 - w3;
+  vec2 g0 = w0 + w1;
+  vec2 g1 = w2 + w3;
+  vec2 h0 = (i - 0.5 + w1 / g0) / N;
+  vec2 h1 = (i + 1.5 + w3 / g1) / N;
+  return g0.y * (g0.x * texture2D(t, vec2(h0.x, h0.y)).r + g1.x * texture2D(t, vec2(h1.x, h0.y)).r) +
+    g1.y * (g0.x * texture2D(t, vec2(h0.x, h1.y)).r + g1.x * texture2D(t, vec2(h1.x, h1.y)).r);
+}
 float shadowAt(vec2 p) {
   float m = max(abs(p.x), abs(p.y));
   float s = texS(tS3, clamp(p, -HALF.w, HALF.w), HALF.w);
@@ -315,7 +345,7 @@ float shadowAt(vec2 p) {
     s = mix(texS(tS2, p, HALF.z), s, blendAt(m, HALF.z));
     if (m < HALF.y) {
       s = mix(texS(tS1, p, HALF.y), s, blendAt(m, HALF.y));
-      if (m < HALF.x) s = mix(texS(tS0, p, HALF.x), s, blendAt(m, HALF.x));
+      if (m < HALF.x) s = mix(texSmooth(tS0, p, HALF.x), s, blendAt(m, HALF.x));
     }
   }
   return s;
@@ -421,21 +451,40 @@ void main() {
     vec4 lp = uPropMatrix * vec4(vPos, 1.0);
     vec3 q = lp.xyz / lp.w * 0.5 + 0.5;
     if (q.x > 0.0 && q.x < 1.0 && q.y > 0.0 && q.y < 1.0 && q.z < 1.0) {
-      vec2 texel = vec2(1.0 / 2048.0, 1.0 / 512.0);
-      float lit = 0.0;
-      lit += step(q.z - 0.00016, unpackRGBAToDepth(texture2D(tProp, q.xy)));
-      lit += step(q.z - 0.00016, unpackRGBAToDepth(texture2D(tProp, q.xy + texel * vec2(0.8, 0.8))));
-      lit += step(q.z - 0.00016, unpackRGBAToDepth(texture2D(tProp, q.xy + texel * vec2(-0.8, 0.8))));
-      lit += step(q.z - 0.00016, unpackRGBAToDepth(texture2D(tProp, q.xy + texel * vec2(0.8, -0.8))));
-      lit += step(q.z - 0.00016, unpackRGBAToDepth(texture2D(tProp, q.xy + texel * vec2(-0.8, -0.8))));
-      shadow *= lit / 5.0;
+      // The Sun is a disc, not a point: the edge of a shadow is a penumbra that widens with the distance from
+      // what casts it (0.0093 m per metre). A thin thing casts a sharp shadow at its foot and none far away.
+      // The map is 190 m wide and 24 m high, and 699 m deep.
+      const vec2 PER_M = vec2(1.0 / 190.0, 1.0 / 24.0);
+      float blockers = 0.0;
+      float depth = 0.0;
+      for (int k = 0; k < 9; k++) {
+        float a = float(k) * 2.399963;
+        vec2 o = sqrt((float(k) + 0.5) / 9.0) * 0.7 * vec2(cos(a), sin(a));
+        float z = unpackRGBAToDepth(texture2D(tProp, q.xy + o * PER_M));
+        if (z < q.z - 0.00016) {
+          blockers += 1.0;
+          depth += z;
+        }
+      }
+      if (blockers > 0.0) {
+        float away = max(0.0, q.z - depth / blockers) * 699.0;
+        float radius = clamp(away * 0.00465, 0.05, 1.6);
+        float lit = 0.0;
+        for (int k = 0; k < 16; k++) {
+          float a = float(k) * 2.399963 + 0.7;
+          vec2 o = sqrt((float(k) + 0.5) / 16.0) * radius * vec2(cos(a), sin(a));
+          lit += step(q.z - 0.00016, unpackRGBAToDepth(texture2D(tProp, q.xy + o * PER_M)));
+        }
+        shadow *= lit / 16.0;
+      }
     }
   }
 
   float albedo = 0.125 * (1.0 + albedoNoise);
   vec3 col = vec3(albedo) * (7.5 * direct * phase * shadow * uSunPower);
   col += vec3(0.80, 0.88, 1.0) * albedo * uEarthshine * (0.35 + 0.65 * max(dot(n, uEarth), 0.0));
-  col += vec3(albedo) * 0.012 * uSunPower;
+  // In shadow the ground still receives the light scattered by the sunlit ground around: dark, not a hole.
+  col += vec3(albedo) * 0.034 * uSunPower;
   gl_FragColor = vec4(col, 1.0);
   #include <tonemapping_fragment>
   #include <colorspace_fragment>
@@ -868,7 +917,7 @@ void main() {
     this.galaxyMat = new THREE.ShaderMaterial({
       vertexShader: GALAXY_VERT,
       fragmentShader: GALAXY_FRAG,
-      uniforms: { uMap: { value: null }, uOpacity: { value: 0 }, uGain: { value: 1 } },
+      uniforms: { uMap: { value: null }, uFine: { value: null }, uFineOn: { value: 0 }, uOpacity: { value: 0 }, uGain: { value: 1 } },
       side: THREE.BackSide,
       transparent: true,
       blending: THREE.AdditiveBlending,
@@ -889,6 +938,22 @@ void main() {
       this.galaxy.visible = true;
       this.onChange?.();
     });
+    // The Milky Way at 8192 pixels, brightness only: four times the detail. It is large, so it is fetched after
+    // the first picture, and only where the graphics card takes a texture of that size on a screen that shows it.
+    const roomy = this.renderer.capabilities.maxTextureSize >= 8192 && window.innerWidth >= 1100 && ((navigator as { deviceMemory?: number }).deviceMemory ?? 8) >= 4;
+    if (roomy)
+      window.setTimeout(() => {
+        new THREE.TextureLoader().load(`${import.meta.env.BASE_URL}textures/milkyway-8k.webp`, (fine) => {
+          fine.format = THREE.RedFormat;
+          fine.colorSpace = THREE.NoColorSpace;
+          fine.wrapS = THREE.RepeatWrapping;
+          fine.anisotropy = 4;
+          this.renderer.initTexture(fine);
+          this.galaxyMat.uniforms.uFine.value = fine;
+          this.galaxyMat.uniforms.uFineOn.value = 1;
+          this.onChange?.();
+        });
+      }, 9000);
     void fetch(`${import.meta.env.BASE_URL}data/stars.json`)
       .then((r) => r.json() as Promise<{ stars: number[] }>)
       .then((doc) => {
@@ -1231,7 +1296,10 @@ void main() {
         direction(i * stepDeg, profile[i], d);
         const range = dist / Math.max(0.2, Math.cos(profile[i] * D2R));
         const lower = direction(i * stepDeg, profile[i] - 0.45, new THREE.Vector3()).multiplyScalar(range);
-        verts.set([d.x * range, d.y * range, d.z * range, lower.x, lower.y, lower.z], i * 6);
+        // Where the skyline is set by ground a short way off, the terrain that is drawn is that skyline, seen from
+        // wherever the eye stands; a band drawn for one height would float over it from another.
+        if (distKm[i] < 1.5) verts.set([d.x * range, d.y * range, d.z * range, d.x * range, d.y * range, d.z * range], i * 6);
+        else verts.set([d.x * range, d.y * range, d.z * range, lower.x, lower.y, lower.z], i * 6);
       }
       const index: number[] = [];
       for (let i = 0; i < count; i++) {

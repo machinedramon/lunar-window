@@ -90,7 +90,21 @@ const models = new Map<string, Promise<THREE.Group>>();
 function loadModel(file: string): Promise<THREE.Group> {
   let p = models.get(file);
   if (!p) {
-    p = new Promise<THREE.Group>((resolve, reject) => loader.load(`${base}models/${file}`, (gltf) => resolve(gltf.scene), undefined, reject));
+    p = new Promise<THREE.Group>((resolve, reject) =>
+      loader.load(
+        `${base}models/${file}`,
+        (gltf) => {
+          // Sharp at a grazing angle too: the side of a vehicle is usually seen nearly edge-on.
+          gltf.scene.traverse((o) => {
+            const m = (o as THREE.Mesh).material as THREE.MeshStandardMaterial | undefined;
+            for (const map of [m?.map, m?.normalMap, m?.roughnessMap, m?.metalnessMap, (m as THREE.MeshPhysicalMaterial | undefined)?.specularColorMap]) if (map) map.anisotropy = 8;
+          });
+          resolve(gltf.scene);
+        },
+        undefined,
+        reject,
+      ),
+    );
     models.set(file, p);
   }
   return p;
@@ -207,7 +221,9 @@ export async function createProps(ground: (east: number, north: number) => numbe
   const [ve, vn] = at(vehicleAz, apollo ? 26 : 19);
   let vehicleGaps: number[] = [];
   if (vehicleKind === 'rover' || apollo) try {
-    const file = apollo ? 'apollo-lm.glb' : 'sev.glb';
+    // The rover's textures at their original 4096 pixels on a desktop; at 2048 on a phone, which has no memory to spare.
+    const roomy = window.innerWidth >= 1100 && ((navigator as { deviceMemory?: number }).deviceMemory ?? 8) >= 4;
+    const file = apollo ? 'apollo-lm.glb' : roomy ? 'sev-4k.glb' : 'sev.glb';
     const vehicle = (await loadModel(file)).clone(true);
     vehicleGaps = stand(vehicle, file, ve, vn, ground, ((vehicleAz + (apollo ? 40 : 205)) * Math.PI) / 180);
     group.add(vehicle);

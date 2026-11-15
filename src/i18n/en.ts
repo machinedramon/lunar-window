@@ -101,7 +101,7 @@ export const en = {
     },
     panorama: 'Horizon panorama',
     panoramaNote: (stretch: string) => `360° of skyline seen from the site · vertical scale stretched ${stretch}×`,
-    panoramaNote2: 'Discs keep their true angular size',
+    panoramaNote2: 'Sun and Earth drawn round · their height over the skyline is to scale',
     panoramaNoteFlat: '360° around the site.',
     behind: 'behind terrain',
     horizontal: 'horizontal',

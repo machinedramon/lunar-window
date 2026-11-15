@@ -30,7 +30,7 @@ export function introLift(then: () => void): void {
   lifted = true;
   if (bar) bar.style.transform = 'scaleX(1)';
   const now = performance.now();
-  const wait = el ? Math.max(0, 2200 - now, typedAt ? typedAt + 1300 - now : 0) : 0;
+  const wait = el ? Math.max(0, 1500 - now, typedAt ? typedAt + 800 - now : 0) : 0;
   window.setTimeout(() => {
     then();
     el?.classList.add('out');
