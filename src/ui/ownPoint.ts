@@ -2,10 +2,6 @@
 import { MAST_HEIGHTS_M } from '../core/horizon';
 import type { OwnPoint, OwnRequest, OwnResponse, OwnStage } from '../worker/terrainProtocol';
 
-/** NASA's elevation model is served for a point of one's own from the pole to this latitude (public/data/polar/index.json). */
-export const OWN_MIN_LAT = -84;
-export const hasOwnTerrain = (lat: number): boolean => lat <= OWN_MIN_LAT;
-
 let worker: Worker | null = null;
 let nextId = 1;
 const waiting = new Map<number, { resolve: (p: OwnPoint) => void; reject: (err: Error) => void }>();

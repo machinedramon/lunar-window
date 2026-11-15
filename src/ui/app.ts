@@ -2,7 +2,7 @@
 import { S } from '../i18n';
 import { Horizon, MAST_HEIGHTS_M, type HorizonData, type RingData } from '../core/horizon';
 import { loadSite, type LoadedSite, type Site, type SiteList } from './data';
-import { computeOwnPoint, hasOwnTerrain } from './ownPoint';
+import { computeOwnPoint } from './ownPoint';
 import { CUSTOM_SITE, type State, type Store } from './store';
 
 export interface View {
@@ -49,8 +49,8 @@ export class App {
   }
 
   /**
-   * The visitor's own point. From the pole to 84°S its terrain is computed in the browser from NASA's polar
-   * model (until that is done, and everywhere else, the horizon is that of a smooth sphere).
+   * The visitor's own point. Its terrain is computed in the browser from NASA's models: the polar one near the
+   * south pole, the global one elsewhere (until that is done, the horizon is that of a smooth sphere).
    */
   private customSite(): Site {
     const { lat, lon } = this.store.state.custom;
@@ -71,18 +71,17 @@ export class App {
 
   private loadOwn(): Promise<LoadedSite> {
     const { lat, lon } = this.store.state.custom;
-    if (!hasOwnTerrain(lat)) return loadSite({ ...this.customSite(), elevationM: 0, horizon: 'sphere' }, false);
     const key = this.ownKey();
     let p = this.own.get(key);
     if (!p) {
       const base = this.customSite();
       p = computeOwnPoint(lat, lon, this.list.ring).then(
         (r): LoadedSite => {
-          const site: Site = { ...base, elevationM: r.elevationM, horizon: 'lola-80m-480m' };
+          const site: Site = { ...base, elevationM: r.elevationM, horizon: r.model === 'polar' ? 'lola-80m-480m' : 'lola-474m' };
           Object.defineProperty(site, 'name', { get: () => S.explore.custom.group, enumerable: true });
           Object.defineProperty(site, 'mission', { get: () => S.explore.custom.group, enumerable: true });
-          const data: HorizonData = { siteId: CUSTOM_SITE, lat, lon, elevationM: r.elevationM, stepDeg: r.stepDeg, mastsM: [...MAST_HEIGHTS_M], elevDeg: r.elevDeg, distKm: r.distKm, dem: ['ldem_80s_80m', 'ldem_75s_240m'], generated: '' };
-          const ring: RingData = { siteId: CUSTOM_SITE, radiusM: this.list.ring.radiusM, stepDeg: r.stepDeg, mastsM: [...MAST_HEIGHTS_M], points: r.ring };
+          const data: HorizonData = { siteId: CUSTOM_SITE, lat, lon, elevationM: r.elevationM, stepDeg: r.stepDeg, mastsM: [...MAST_HEIGHTS_M], elevDeg: r.elevDeg, distKm: r.distKm, dem: r.model === 'polar' ? ['ldem_80s_80m', 'ldem_75s_240m'] : ['ldem_64'], generated: '' };
+          const ring: RingData = { siteId: CUSTOM_SITE, radiusM: this.list.ring.radiusM, stepDeg: r.ringStepDeg, mastsM: [...MAST_HEIGHTS_M], points: r.ring };
           const loaded: LoadedSite = { site, horizon: Horizon.fromData(data), data, ring, tiles: r.tiles };
           this.ownReady.set(key, loaded);
           return loaded;

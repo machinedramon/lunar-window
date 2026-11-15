@@ -71,6 +71,41 @@ class PolarGrid:
         return out
 
 
+class GeoGrid:
+    """A raster of the whole Moon in latitude and longitude (simple cylindrical, pixel registration):
+    the first pixel is centred half a pixel from 90 N, 0 E; longitude grows to the east. Never NaN."""
+
+    def __init__(self, a: np.ndarray, ppd: float, scale: float = 0.5, name: str = 'global'):
+        self.a, self.ppd, self.scale, self.name = a, ppd, scale, name
+        self.h, self.w = a.shape
+
+    @classmethod
+    def from_pds(cls, basename: str) -> 'GeoGrid':
+        label = open(os.path.join(RAW, basename + '.lbl'), encoding='latin-1').read()
+        w = int(re.search(r'LINE_SAMPLES\s*=\s*(\d+)', label).group(1))
+        h = int(re.search(r'^\s*LINES\s*=\s*(\d+)', label, re.M).group(1))
+        ppd = float(re.search(r'MAP_RESOLUTION\s*=\s*([\d.]+)', label).group(1))
+        scale = float(re.search(r'SCALING_FACTOR\s*=\s*([\d.eE+-]+)', label).group(1))
+        return cls(np.array(np.memmap(os.path.join(RAW, basename + '.img'), dtype='<i2', mode='r', shape=(h, w))), ppd, scale, basename)
+
+    def coarser(self, factor: int) -> 'GeoGrid':
+        """Block mean, in the same counts."""
+        h, w = self.h // factor, self.w // factor
+        a = np.rint(self.a.reshape(h, factor, w, factor).mean(axis=(1, 3), dtype=np.float32)).astype('<i2')
+        return GeoGrid(a, self.ppd / factor, self.scale, f'{self.name}/{factor}')
+
+    def sample(self, lat, lon):
+        """Bilinear sample at latitudes and longitudes in radians; wraps in longitude, holds at the poles."""
+        x = np.mod(np.degrees(lon) * self.ppd - 0.5, self.w)
+        y = np.clip((90.0 - np.degrees(lat)) * self.ppd - 0.5, 0, self.h - 1)
+        i0 = np.floor(x).astype(np.int64)
+        j0 = np.minimum(np.floor(y).astype(np.int64), self.h - 2)
+        i1 = np.where(i0 + 1 == self.w, 0, i0 + 1)
+        fi, fj = x - i0, y - j0
+        a = self.a
+        return ((a[j0, i0] * (1 - fi) + a[j0, i1] * fi) * (1 - fj) + (a[j0 + 1, i0] * (1 - fi) + a[j0 + 1, i1] * fi) * fj) * self.scale
+
+
 class FineGrid:
     """A 5 m/pixel site elevation model from NASA GSFC's PGDA (GeoTIFF, same south polar stereographic
     projection, metres above the 1737.4 km sphere). Needs the tifffile and imagecodecs packages."""
@@ -138,6 +173,23 @@ class Terrain:
         return float(self.height(np.array([lat]), np.array([lon]))[0])
 
 
+class GlobalTerrain:
+    """The whole Moon from NASA's global model ldem_64 (474 m at the equator): for the sites the polar models do not reach."""
+
+    names = ['ldem_64']
+    _grid = None
+
+    def __init__(self):
+        if GlobalTerrain._grid is None:
+            GlobalTerrain._grid = GeoGrid.from_pds('ldem_64')
+
+    def height(self, lat, lon):
+        return GlobalTerrain._grid.sample(lat, lon)
+
+    def height_at(self, lat, lon):
+        return float(self.height(np.array([lat]), np.array([lon]))[0])
+
+
 def destination(lat, lon, azimuth, distance_m):
     """Point reached from (lat, lon) along a great circle."""
     d = distance_m / R_M
@@ -153,6 +205,8 @@ DIST_FULL = np.concatenate([np.arange(40.0, 100e3, 40.0), np.arange(100e3, 300e3
 # 5 m pixels are interpolated between laser tracks), yet it would decide the horizon of a ground-level observer.
 DIST_FINE = np.concatenate([np.arange(10.0, 1000.0, 2.5), np.arange(1000.0, 5000.0, 10.0), np.arange(5000.0, 100e3, 40.0),
                             np.arange(100e3, 300e3 + 1, 120.0)])
+# For the global model (474 m at the equator): 120 m steps to 100 km, 480 m steps to 300 km.
+DIST_GLOBAL = np.concatenate([np.arange(120.0, 100e3, 120.0), np.arange(100e3, 300e3 + 1, 480.0)])
 # Coarser sampling for the many-point validation mesh.
 DIST_COARSE = np.concatenate([np.arange(80.0, 100e3, 80.0), np.arange(100e3, 300e3 + 1, 240.0)])
 

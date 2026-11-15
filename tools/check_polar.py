@@ -134,6 +134,9 @@ def main() -> None:
 
     path = os.path.join(ROOT, 'public', 'data', 'validation.json')
     v = json.load(open(path, encoding='utf-8'))
+    # The block of the global model (tools/check_global.py) is kept.
+    if 'global' in v.get('anyPoint', {}):
+        block['global'] = v['anyPoint']['global']
     v['anyPoint'] = block
     json.dump(v, open(path, 'w', encoding='utf-8'), separators=(',', ':'))
     print('written: tests/terrain/polar-horizon.json, public/data/validation.json (anyPoint)')

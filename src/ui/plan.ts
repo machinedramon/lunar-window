@@ -11,10 +11,9 @@ import { drawPoleMap, mapHit, mapLatLon, type MapGeometry } from '../viz/polemap
 import { drawTimeline } from '../viz/timeline';
 import type { ComputeResult, WindowResult } from '../worker/protocol';
 import type { App, View } from './app';
-import type { Site } from './data';
+import { isPolar, type Site } from './data';
 import { clear, h, setText } from './dom';
 import { DAY_MS, HOUR_MS, day as fmtDay, dayTime, deg, duration, isoDate, latLon, monthShort, parseUtc, pct, local } from './format';
-import { hasOwnTerrain } from './ownPoint';
 import type { Planner } from './planner';
 import { CUSTOM_SITE, MAX_SLIP, ownOn, type State } from './store';
 
@@ -27,14 +26,18 @@ const mark = (status: string) => h('span', { class: `mark ${status === 'ok' ? 'o
 
 export function createPlan(app: App, planner: Planner): View {
   const { store } = app;
-  const listed = [...app.sites].sort((a, b) => Number(a.horizon === 'sphere') - Number(b.horizon === 'sphere'));
+  const listed = [...app.sites].sort((a, b) => Number(!isPolar(a)) - Number(!isPolar(b)));
+  /** Every row of the calendar: the sites near the south pole, then the others. */
   const sites: Site[] = [...listed];
-  const terrain: Site[] = listed.filter((s) => s.horizon !== 'sphere');
-  /** The visitor's own point, once its terrain is computed, is the first row and a marker of its own. */
+  /** The sites near the south pole: the ones on the map and in the count of what still works. */
+  const terrain: Site[] = listed.filter(isPolar);
+  /** The visitor's own point, once its terrain is computed, is the first row of its group; near the pole it has a marker too. */
   const placeOwn = () => {
-    const own = planner.own ? [planner.own.site] : [];
-    sites.splice(0, sites.length, ...own, ...listed);
-    terrain.splice(0, terrain.length, ...own, ...listed.filter((s) => s.horizon !== 'sphere'));
+    const own = planner.own?.site;
+    const polar = listed.filter(isPolar);
+    const head = own && isPolar(own) ? [own] : [];
+    sites.splice(0, sites.length, ...head, ...polar, ...(own && !isPolar(own) ? [own] : []), ...listed.filter((s) => !isPolar(s)));
+    terrain.splice(0, terrain.length, ...head, ...polar);
   };
   placeOwn();
   let result: ComputeResult | null = null;
@@ -162,8 +165,6 @@ export function createPlan(app: App, planner: Planner): View {
   // ---------- map of the south pole
   const mapCanvas = h('canvas', { class: 'map-canvas', role: 'img', 'aria-label': T.map.aria, title: T.map.place });
   const mapLegend = h('p', { class: 'small muted map-legend', title: T.map.legend }, T.map.legendShort);
-  let mapFlash = '';
-  let mapFlashTimer = 0;
   const mapImage = new Image();
   mapImage.src = `${import.meta.env.BASE_URL}data/southpole.jpg`;
   mapImage.addEventListener('load', () => drawMap());
@@ -180,17 +181,13 @@ export function createPlan(app: App, planner: Planner): View {
   function renderLegend(): void {
     const st = store.state;
     clear(mapLegend);
-    if (mapFlash) {
-      mapLegend.append(mapFlash);
-      return;
-    }
     if (!ownOn(st)) {
       mapLegend.append(T.map.legendShort);
       return;
     }
     const remove = h('button', { type: 'button', class: 'map-own-x', onclick: () => store.set({ pin: false, ...(st.siteId === CUSTOM_SITE ? { siteId: listed[0].id } : {}), ...(st.detail?.siteId === CUSTOM_SITE ? { detail: null } : {}) }) }, T.map.ownRemove);
     const where = `${S.explore.custom.group}: ${latLon(st.custom.lat, st.custom.lon)}`;
-    mapLegend.append(!hasOwnTerrain(st.custom.lat) ? T.map.ownOutside : planner.own ? where : T.map.ownComputing, ' · ', remove);
+    mapLegend.append(planner.own ? where : T.map.ownComputing, ' · ', remove);
   }
   function drawMap(): void {
     if (!mapCanvas.isConnected) return;
@@ -254,18 +251,8 @@ export function createPlan(app: App, planner: Planner): View {
       store.set({ detail: { siteId: id, dayMs: startMs() + slippedDay() * DAY_MS } });
       return;
     }
-    // Anywhere else on the map: a point of one's own, where NASA's model reaches.
+    // Anywhere else on the map: a point of one's own.
     const at = mapLatLon(mapGeo, ev.clientX - box.left, ev.clientY - box.top);
-    if (!hasOwnTerrain(at.lat)) {
-      mapFlash = T.map.ownOutside;
-      renderLegend();
-      window.clearTimeout(mapFlashTimer);
-      mapFlashTimer = window.setTimeout(() => {
-        mapFlash = '';
-        renderLegend();
-      }, 2600);
-      return;
-    }
     store.set({ custom: { lat: Math.round(at.lat * 1000) / 1000, lon: Math.round(at.lon * 1000) / 1000 }, pin: true, ...(store.state.detail?.siteId === CUSTOM_SITE ? { detail: null } : {}) });
   });
 
@@ -309,7 +296,7 @@ export function createPlan(app: App, planner: Planner): View {
       label: s.name,
       note: '',
       cal: calOf(s.id),
-      heading: i === 0 ? T.headingTerrain : s.horizon === 'sphere' && sites[i - 1].horizon !== 'sphere' ? T.headingSphere : undefined,
+      heading: i === 0 ? T.headingTerrain : !isPolar(s) && isPolar(sites[i - 1]) ? T.headingSphere : undefined,
     }));
 
   const whyOf = (cal: SiteCalendar, d: number): string => {
@@ -720,7 +707,6 @@ export function createPlan(app: App, planner: Planner): View {
     el,
     dispose() {
       offOwn();
-      window.clearTimeout(mapFlashTimer);
     },
     update(state, changed) {
       syncForm(state);

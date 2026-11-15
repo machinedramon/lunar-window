@@ -12,13 +12,19 @@ export interface Site {
   lat: number;
   lon: number;
   elevationM: number;
-  /** Terrain model behind the horizon: with a 5 m site model, the 80 m polar model, the same computed in the browser for a point of one's own, or none. */
-  horizon: 'lola-5m-80m-240m' | 'lola-80m-240m' | 'lola-80m-480m' | 'sphere';
+  /**
+   * Terrain model behind the horizon: with a 5 m site model; the 80 m polar model; for a point of one's own, the
+   * polar model or the global one (474 m) computed in the browser; or none.
+   */
+  horizon: 'lola-5m-80m-240m' | 'lola-80m-240m' | 'lola-80m-480m' | 'lola-474m' | 'sphere';
   source: string;
   note?: string;
   published?: { lat: number; lon: number };
   nasa?: { sunVisibility: number; sunVisibility3x3: number; earthVisibility: number; earthVisibility3x3: number };
 }
+
+/** The sites near the south pole: the ones the planner maps and counts, where the terrain decides. */
+export const isPolar = (s: { lat: number }): boolean => s.lat <= -75;
 
 export interface SiteList {
   frame: string;

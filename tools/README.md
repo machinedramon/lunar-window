@@ -10,6 +10,8 @@ Python 3.12 with numpy. Run everything from the repository root, with `python -X
 | `fetch_golden.py` | Downloads the JPL Horizons tables used by the ephemeris tests (`tests/golden`). |
 | `build_assets.py` | Prepares the third-party 3D assets (rocks, textures) for the web. |
 | `build_polar.py` | Writes `public/data/polar/`: the elevation model the browser uses for any point of the visitor's own, from the pole to 84°S (80 m tiles and a 480 m grid, 28 MB in all). |
+| `build_global.py` | Writes `public/data/global/`: NASA's global model `ldem_64` cut in 4050 tiles of 4 x 4 degrees and a coarse grid of the whole Moon (226 MB), for any point outside the polar model. |
+| `check_global.py` | Measures the global pieces against the whole model and against the finer polar models; writes the reference of `tests/core/global.test.ts` and the `anyPoint.global` block of `public/data/validation.json`. |
 | `check_polar.py` | Measures that model against the full NASA models and against the listed sites; writes the reference of `tests/core/polar.test.ts` and the `anyPoint` block of `public/data/validation.json`. |
 | `selftest.py` | Checks the geometry: smooth-sphere horizon, projection, distances, elevation at two real landing sites. |
 | `lunar.py` | Shared code: polar rasters, 5 m site models, great-circle horizon, JPL Horizons tables. |
@@ -26,6 +28,10 @@ From the NASA PDS Geosciences Node, `https://pds-geosciences.wustl.edu/lro/lro-l
 - `ldem_80s_80m.img` and `.lbl` — elevation, 80 m/pixel, pole to 80°S
 - `ldem_60s_240m.img` and `.lbl` — elevation, 240 m/pixel, pole to 60°S
 - `ldem_75s_240m.img` and `.lbl` — elevation, 240 m/pixel, pole to 75°S (for `build_polar.py`)
+
+From the same node, `.../data/lola_gdr/cylindrical/img/`:
+
+- `ldem_64.img` and `.lbl` — elevation of the whole Moon, 64 pixels per degree (474 m at the equator), 530 MB
 
 From the LOLA team at `https://imbrium.mit.edu/EXTRAS/ILLUMINATION/IMG/` (save the labels with a lower-case `.lbl` and the images with `.img`):
 
@@ -56,20 +62,29 @@ NASA's 60 m illumination map; the published coordinates are kept in `sites.json`
 
 ## Any point
 
-The listed sites have horizons computed offline. A point of the visitor's own, from the pole to 84°S, is computed
-in the browser by `src/core/polar.ts` (a port of `lunar.horizon`, in a web worker) from `public/data/polar`:
-the nine 20.5 km tiles of `ldem_80s_80m` around the point, and `ldem_75s_240m` averaged to 480 m for the rest.
+The listed sites have horizons computed offline (`build_horizon.py`): with the polar models near the south pole,
+with the global model `ldem_64` elsewhere. A point of the visitor's own is computed in the browser by
+`src/core/polar.ts` (a port of `lunar.horizon`, in a web worker), from pieces of the same models:
+
+- from the pole to 82°S, `public/data/polar`: the nine 20.5 km tiles of `ldem_80s_80m` around the point, and
+  `ldem_75s_240m` averaged to 480 m for the rest;
+- everywhere else, `public/data/global`: three rows of 4-degree tiles of `ldem_64` around the point (NASA's
+  values, unchanged), and the same model averaged to 8 pixels per degree for the rest.
 
 ```bash
-python -X utf8 tools/build_polar.py     # public/data/polar (18 s)
-python -X utf8 tools/check_polar.py     # the measurements below, and the reference of the TypeScript test
-npm test                                # src/core/polar.ts against that reference, within 0.001 degrees
+python -X utf8 tools/build_polar.py     # public/data/polar (41 MB, 33 s)
+python -X utf8 tools/build_global.py    # public/data/global (226 MB, 90 s)
+python -X utf8 tools/check_polar.py     # the measurements below, and the references of the TypeScript tests
+python -X utf8 tools/check_global.py
+npm test                                # src/core/polar.ts against those references, within 0.001 degrees
 ```
 
-Measured: against the full models (80 m to 80°S, 240 m beyond) on 40 random points, the horizon differs by 0.002°
-on average, 0.014° at the 95th percentile, 0.11° at most. Against the listed sites that have a 5 m model, the
-horizon seen from 2 m above the ground differs by 0.03° to 1.3° on average: on a sharp crest the last metres
-decide, and the 80 m model does not see them. The Accuracy page says so.
+Measured. Polar pieces against the full polar models (80 m to 80°S, 240 m beyond), 40 random points: 0.002° on
+average, 0.015° at the 95th percentile. Global pieces against the whole `ldem_64`: identical. The global model
+against the finer polar models, on 24 points between 70°S and 82°S: 0.19° at the median, 1.2° on average, 6.9° at
+the 95th percentile — on steep ground a slope shorter than 474 m decides the horizon of an observer standing on
+it. Against the listed sites that have a 5 m model, the 80 m horizon seen from 2 m above the ground differs by
+0.03° to 1.3° on average. The Accuracy page says all of this.
 
 ## The demo film
 

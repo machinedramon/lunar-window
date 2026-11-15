@@ -7,10 +7,10 @@ the browser, from two pieces of NASA's LOLA polar elevation models, in their own
 projection and their own units (counts of 0.5 m above the 1737.4 km sphere):
 
     near/<col>_<row>.bin.gz   ldem_80s_80m cut in tiles of 256 x 256 pixels (20.5 km): 80 m/pixel, for every tile
-                              that a point down to 84 S can need (the tile of the point and the eight around it)
+                              that a point down to 82 S can need (the tile of the point and the eight around it)
     far.bin.gz                ldem_75s_240m averaged 2 x 2: 480 m/pixel, pole to 75 S, for everything farther
 
-Measured on 24 random points between 84 S and the pole (tools/README.md, "Any point"): the horizon from these
+Measured on 24 random points between 84 S and the pole (the model now reaches 82 S) (tools/README.md, "Any point"): the horizon from these
 two pieces differs from the horizon of the full 80 m + 240 m models by 0.004 degrees on average, 0.02 at the
 95th percentile.
 
@@ -31,7 +31,7 @@ from lunar import ROOT, PolarGrid
 
 OUT = os.path.join(ROOT, 'public', 'data', 'polar')
 TILE = 256
-MIN_LAT = -84.0
+MIN_LAT = -82.0
 R_KM = 1737.4
 
 

@@ -1,0 +1,1 @@
+{"source":"NASA LRO LOLA global gridded elevation ldem_64 (near), averaged 8 x 8 (far)","grid":"latitude and longitude, pixel registration, first pixel half a pixel from 90 N and 0 E, longitude to the east","radiusM":1737400.0,"unitM":0.5,"near":{"ppd":64,"tile":256},"far":{"ppd":8}}

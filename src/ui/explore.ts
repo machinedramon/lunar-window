@@ -338,7 +338,7 @@ export function createExplore(app: App): View {
     clear(facts);
     const terrain = site.horizon !== 'sphere';
     const own = site.id === CUSTOM_SITE;
-    const about: (Node | string)[] = [own ? `${site.mission}. ${terrain ? T.custom.terrain : T.custom.warning}` : `${site.mission}. ${T.status[site.status]}${site.date ? ` (${site.date})` : ''}.`];
+    const about: (Node | string)[] = [own ? `${site.mission}. ${site.horizon === 'lola-474m' ? T.custom.terrainGlobal : terrain ? T.custom.terrain : T.custom.warning}` : `${site.mission}. ${T.status[site.status]}${site.date ? ` (${site.date})` : ''}.`];
     if (site.note) about.push(' ', site.note);
     if (site.published) about.push(' ', T.facts.moved(deg(site.published.lat, 2), deg(site.published.lon, 2)));
     if (site.nasa) about.push(' ', T.facts.nasa(pct(site.nasa.sunVisibility3x3), pct(site.nasa.earthVisibility3x3)));
@@ -351,7 +351,7 @@ export function createExplore(app: App): View {
         'div',
         null,
         h('dt', null, T.facts.horizon),
-        h('dd', null, h('span', { class: `tag ${terrain ? 'terrain' : 'sphere'}` }, terrain ? T.facts.terrain : T.facts.sphere), ' ', site.horizon === 'lola-5m-80m-240m' ? T.facts.terrainFineText : site.horizon === 'lola-80m-480m' ? T.facts.terrainOwnText : terrain ? T.facts.terrainText : T.facts.sphereText),
+        h('dd', null, h('span', { class: `tag ${terrain ? 'terrain' : 'sphere'}` }, terrain ? T.facts.terrain : T.facts.sphere), ' ', site.horizon === 'lola-5m-80m-240m' ? T.facts.terrainFineText : site.horizon === 'lola-80m-480m' ? T.facts.terrainOwnText : site.horizon === 'lola-474m' ? T.facts.terrainGlobalText : terrain ? T.facts.terrainText : T.facts.sphereText),
       ),
       h('div', null, h('dt', null, T.facts.about), h('dd', null, ...about, ...(own ? [] : [' ', h('a', { href: site.source, target: '_blank', rel: 'noopener' }, T.facts.source)]))),
       checkRow,
@@ -530,7 +530,7 @@ export function createExplore(app: App): View {
     if (use3d()) {
       const kind = loaded.site.horizon;
       const sphere = kind === 'sphere';
-      setText(noteA, sphere ? T.three.realSphere : kind === 'lola-5m-80m-240m' ? T.three.realFine : T.three.realCoarse);
+      setText(noteA, sphere ? T.three.realSphere : kind === 'lola-5m-80m-240m' ? T.three.realFine : kind === 'lola-474m' ? T.three.realGlobal : T.three.realCoarse);
       setText(noteB, sphere ? T.three.illustrativeSphere : T.three.illustrative);
       heroNote.title = sphere ? T.three.noteSphere : T.three.note;
       three.redraw();

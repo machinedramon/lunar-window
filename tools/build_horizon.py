@@ -17,7 +17,7 @@ import time
 
 import numpy as np
 
-from lunar import D2R, DIST_FINE, DIST_FULL, ROOT, FineGrid, PolarGrid, Terrain, destination, horizon
+from lunar import D2R, DIST_FINE, DIST_FULL, DIST_GLOBAL, ROOT, FineGrid, GlobalTerrain, PolarGrid, Terrain, destination, horizon
 
 OUT = os.path.join(ROOT, 'public', 'data')
 MASTS = (0.0, 2.0, 10.0)
@@ -76,7 +76,7 @@ def main() -> None:
         if 'date' in src:
             site['date'] = src['date']
         lat_d, lon_d = src['lat'], src['lon']
-        if src['horizon'] != 'lola':
+        if src['horizon'] == 'sphere':
             site.update(lat=lat_d, lon=lon_d, elevationM=src['elevationM'], horizon='sphere', source=src['source'])
             if 'note' in src:
                 site['note'] = src['note']
@@ -91,9 +91,11 @@ def main() -> None:
         lat, lon = lat_d * D2R, lon_d * D2R
 
         # A 5 m site model, where NASA made one, replaces the 80 m model for the terrain near the site.
+        # Away from the pole, beyond the polar models, the global model (474 m at the equator) is the terrain.
+        whole = src['horizon'] == 'global'
         fine = FineGrid(src['fine']) if src.get('fine') else None
-        terrain = Terrain(fine)
-        dist = DIST_FINE if fine else DIST_FULL
+        terrain = GlobalTerrain() if whole else Terrain(fine)
+        dist = DIST_GLOBAL if whole else DIST_FINE if fine else DIST_FULL
         h0, elev, far, nodata = horizon(terrain, lat, lon, STEP_DEG, dist, masts=MASTS)
         size = dump(os.path.join(OUT, 'horizons', f"{src['id']}.json"), {
             'siteId': src['id'], 'lat': lat_d, 'lon': lon_d, 'elevationM': round(h0, 1),
@@ -114,7 +116,7 @@ def main() -> None:
             'mastsM': list(MASTS), 'points': points, 'dem': terrain.names, 'generated': today,
         })
 
-        site.update(lat=lat_d, lon=lon_d, elevationM=round(h0), horizon='lola-5m-80m-240m' if fine else 'lola-80m-240m', source=src['source'])
+        site.update(lat=lat_d, lon=lon_d, elevationM=round(h0), horizon='lola-474m' if whole else 'lola-5m-80m-240m' if fine else 'lola-80m-240m', source=src['source'])
         if 'note' in src:
             site['note'] = src['note']
         i, j = sun_map.nearest(lat, lon)

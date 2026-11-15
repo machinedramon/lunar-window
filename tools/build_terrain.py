@@ -29,7 +29,7 @@ import time
 
 import numpy as np
 
-from lunar import D2R, R_M, ROOT, FineGrid, Terrain, destination
+from lunar import D2R, R_M, ROOT, FineGrid, GlobalTerrain, Terrain, destination
 
 N = 257
 SPACING_M = [5.0, 50.0, 400.0, 2400.0]
@@ -68,7 +68,7 @@ def main() -> None:
         if s['horizon'] == 'sphere':
             continue
         fine_id = source[s['id']].get('fine')
-        terrain = Terrain(FineGrid(fine_id) if fine_id else None)
+        terrain = GlobalTerrain() if s['horizon'] == 'lola-474m' else Terrain(FineGrid(fine_id) if fine_id else None)
         lat, lon = s['lat'] * D2R, s['lon'] * D2R
         h0 = terrain.height_at(lat, lon)
         parts = []
@@ -83,7 +83,7 @@ def main() -> None:
         with open(os.path.join(OUT, s['id'] + '.bin'), 'wb') as f:
             for p in parts:
                 f.write(p.tobytes())
-        print(f"{s['id']:17s} {'5 m ' + fine_id if fine_id else '80 m only':14s} " + ' | '.join(notes), flush=True)
+        print(f"{s['id']:17s} {'5 m ' + fine_id if fine_id else '474 m global' if s['horizon'] == 'lola-474m' else '80 m only':14s} " + ' | '.join(notes), flush=True)
     print(f'done in {time.time() - t0:.0f} s')
 
 

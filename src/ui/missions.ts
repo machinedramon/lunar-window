@@ -12,6 +12,7 @@ import { drawPoleMap } from '../viz/polemap';
 import { drawTimeline } from '../viz/timeline';
 import type { ComputeResult, WindowResult } from '../worker/protocol';
 import type { App, View } from './app';
+import { isPolar } from './data';
 import { clear, h, reducedMotion } from './dom';
 import { DAY_MS, day as fmtDay, monthShort } from './format';
 import type { Planner } from './planner';
@@ -67,7 +68,7 @@ function stars(): Record<string, number> {
 
 export function createMissions(app: App, planner: Planner): View {
   const { store } = app;
-  const terrain = app.sites.filter((s) => s.horizon !== 'sphere');
+  const terrain = app.sites.filter(isPolar);
   const el = h('div', { class: 'doc wide missions' });
   let mission: Mission | null = null;
   let step = 0;

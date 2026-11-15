@@ -313,6 +313,7 @@ uniform sampler2D tRegN;
 uniform float uRegOn;
 uniform sampler2D tProp;
 uniform mat4 uPropMatrix;
+uniform vec2 uPropSize;
 uniform float uPropOn;
 // Where the vehicle and the mast stand: east, north, radius (0: none).
 uniform vec3 uStand[2];
@@ -488,13 +489,15 @@ void main() {
     if (q.x > 0.0 && q.x < 1.0 && q.y > 0.0 && q.y < 1.0 && q.z < 1.0) {
       // The Sun is a disc, not a point: the edge of a shadow is a penumbra that widens with the distance from
       // what casts it (0.0093 m per metre). A thin thing casts a sharp shadow at its foot and none far away.
-      // The map is 190 m wide and 24 m high, and 699 m deep.
-      const vec2 PER_M = vec2(1.0 / 190.0, 1.0 / 24.0);
+      // The map is uPropSize metres wide and high, and 699 m deep.
+      vec2 PER_M = 1.0 / uPropSize;
       float blockers = 0.0;
       float depth = 0.0;
-      for (int k = 0; k < 9; k++) {
+      // What stands between this point and the Sun is looked for at the point itself first (the leg of a lander
+      // is a few centimetres wide: a search that only looked around would step over it), then around it.
+      for (int k = 0; k < 13; k++) {
         float a = float(k) * 2.399963;
-        vec2 o = sqrt((float(k) + 0.5) / 9.0) * 0.7 * vec2(cos(a), sin(a));
+        vec2 o = sqrt(float(k) / 12.0) * 0.7 * vec2(cos(a), sin(a));
         float z = unpackRGBAToDepth(texture2D(tProp, q.xy + o * PER_M));
         if (z < q.z - 0.00016) {
           blockers += 1.0;
@@ -775,12 +778,16 @@ export class LunarScene {
   private readonly sunLight = new THREE.DirectionalLight(0xffffff, 0);
   private readonly bounce = new THREE.HemisphereLight(0x000000, 0xa8a8a8, 0);
   private readonly earthLight = new THREE.DirectionalLight(0xbdd4ff, 0);
+  /** Size of the map of the shadows of the objects: finer on a desktop, where the legs and struts of a lander deserve it. */
+  private readonly propSize: [number, number] = typeof window !== 'undefined' && window.innerWidth >= 1100 ? [4096, 1024] : [2048, 512];
   private readonly propCam = new THREE.OrthographicCamera(-95, 95, 16, -8, 1, 700);
-  private readonly propTarget = new THREE.WebGLRenderTarget(2048, 512, { minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter });
+  private readonly propTarget = new THREE.WebGLRenderTarget(this.propSize[0], this.propSize[1], { minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter });
   private readonly propDepth = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking });
   private readonly propUniforms = {
     tProp: { value: null as THREE.Texture | null },
     uPropMatrix: { value: new THREE.Matrix4() },
+    /** Width and height of the map, in metres. */
+    uPropSize: { value: new THREE.Vector2(190, 24) },
     uPropOn: { value: 0 },
     uStand: { value: [new THREE.Vector3(), new THREE.Vector3()] },
   };
@@ -1158,10 +1165,21 @@ void main() {
   }
 
   private renderPropShadows(): void {
-    // An orthographic view from the Sun: wide, low and long, because the light is nearly horizontal.
-    this.propCam.position.copy(this.sunDir).multiplyScalar(300).add(this.camera.position);
-    this.propCam.up.set(0, 1, 0);
-    this.propCam.lookAt(this.camera.position);
+    // An orthographic view from the Sun, centred on the ground under the eye. (Not on the eye: from ten metres up
+    // the ground at one's feet fell below the map, and a shadow began metres away from what cast it.) Its height
+    // follows the Sun: nearly horizontal light needs a low, long map; a high Sun a tall one. It holds the ground
+    // within 80 m of the eye and things up to 14 m tall within 30 m.
+    const sinE = Math.max(0, Math.min(1, this.sunDir.y));
+    const cosE = Math.sqrt(1 - sinE * sinE);
+    const reach = 80 * sinE + 2;
+    this.propCam.bottom = -reach;
+    this.propCam.top = Math.max(reach, 14 * cosE + 30 * sinE + 1);
+    this.propUniforms.uPropSize.value.set(this.propCam.right - this.propCam.left, this.propCam.top - this.propCam.bottom);
+    this.propCam.position.copy(this.sunDir).multiplyScalar(300);
+    // With the Sun overhead "up" cannot be the vertical: north takes its place.
+    if (sinE > 0.995) this.propCam.up.set(0, 0, -1);
+    else this.propCam.up.set(0, 1, 0);
+    this.propCam.lookAt(0, 0, 0);
     this.propCam.updateMatrixWorld();
     this.propCam.updateProjectionMatrix();
     this.propUniforms.uPropMatrix.value.multiplyMatrices(this.propCam.projectionMatrix, this.propCam.matrixWorldInverse);
@@ -1178,10 +1196,11 @@ void main() {
     // Is the eye itself in the shadow of an object? This map is the view from the Sun: where the eye is on it, an
     // object nearer the Sun than the eye means the Sun is behind that object. Then there is no glare to draw.
     const at = new THREE.Vector3().copy(this.camera.position).project(this.propCam);
-    const px = Math.round((at.x * 0.5 + 0.5) * 2048) - 2;
-    const py = Math.round((at.y * 0.5 + 0.5) * 512) - 2;
+    const [mapW, mapH] = this.propSize;
+    const px = Math.round((at.x * 0.5 + 0.5) * mapW) - 2;
+    const py = Math.round((at.y * 0.5 + 0.5) * mapH) - 2;
     let block = 0;
-    if (this.props && px >= 0 && py >= 0 && px <= 2043 && py <= 507) {
+    if (this.props && px >= 0 && py >= 0 && px <= mapW - 5 && py <= mapH - 5) {
       r.readRenderTargetPixels(this.propTarget, px, py, 5, 5, this.eyeTexels);
       const eye = at.z * 0.5 + 0.5 - 0.0008;
       let hidden = 0;

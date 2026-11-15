@@ -3,7 +3,6 @@ import type { Requirements } from '../core/requirements';
 import type { ComputeResult, Request, Response, WindowResult, WorkerSite } from '../worker/protocol';
 import type { App } from './app';
 import type { LoadedSite } from './data';
-import { hasOwnTerrain } from './ownPoint';
 import { CUSTOM_SITE, ownOn } from './store';
 
 function toWorker(l: LoadedSite): WorkerSite {
@@ -41,10 +40,10 @@ export class Planner {
     });
     // A failed download is reported where the result is awaited, not as an unhandled error.
     this.ready.catch(() => undefined);
-    // The visitor's own point joins the sites when it is in use and NASA's model reaches it.
+    // The visitor's own point joins the sites when it is in use.
     const sync = () => {
       const st = app.store.state;
-      const want = ownOn(st) && hasOwnTerrain(st.custom.lat) ? app.ownKey() : '';
+      const want = ownOn(st) ? app.ownKey() : '';
       if (want === this.wanted) return;
       this.wanted = want;
       this.setOwn(null); // the point left or moved: the old one goes at once

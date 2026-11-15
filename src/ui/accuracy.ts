@@ -23,7 +23,7 @@ interface Validation {
   fine: { description: string; sunPixel: Stats; sunArea: Stats };
   sites: { id: string; sun: number; earth: number; sunVisibility: number; sunVisibility3x3: number; earthVisibility: number; earthVisibility3x3: number; model: string; sunByHeight: number[] }[];
   /** The model used for a point of the visitor's own, measured by tools/check_polar.py. */
-  anyPoint?: { againstFull: { points: number; meanAbsDeg: number; p95Deg: number; maxDeg: number }; againstSites: { id: string; fine: boolean; meanAbsDeg: number; p95Deg: number }[] };
+  anyPoint?: { againstFull: { points: number; meanAbsDeg: number; p95Deg: number; maxDeg: number }; againstSites: { id: string; fine: boolean; meanAbsDeg: number; p95Deg: number }[]; global?: { againstPolar: { points: number; medianDeg: number; meanAbsDeg: number; p95Deg: number } } };
 }
 type Row = [string, number, number, number];
 interface Golden {
@@ -129,6 +129,8 @@ export function createAccuracy(app: App): View {
       const fine = a.againstSites.filter((x) => x.fine).sort((x, y) => x.meanAbsDeg - y.meanAbsDeg);
       const out = [h('h3', null, T.terrain.ownTitle), h('p', null, T.terrain.ownText(local(a.againstFull.meanAbsDeg.toFixed(3)), local(a.againstFull.p95Deg.toFixed(2)), a.againstFull.points))];
       if (fine.length) out.push(h('p', { class: 'small muted' }, T.terrain.ownSites(local(fine[0].meanAbsDeg.toFixed(2)), local(fine[fine.length - 1].meanAbsDeg.toFixed(1)), app.siteInfo(fine[fine.length - 1].id).name)));
+      const g = a.global?.againstPolar;
+      if (g) out.push(h('p', null, T.terrain.ownGlobal(local(g.medianDeg.toFixed(2)), local(g.meanAbsDeg.toFixed(2)), local(g.p95Deg.toFixed(1)), g.points)));
       return out;
     };
     const siteRows = h('tbody');
