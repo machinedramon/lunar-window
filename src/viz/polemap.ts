@@ -157,7 +157,7 @@ export function drawPoleMap(canvas: HTMLCanvasElement, m: MapInput): MapGeometry
       ctx.fillStyle = '#fff';
       ctx.fill();
     } else {
-      ctx.strokeStyle = s.status === null ? 'rgba(255,255,255,0.4)' : '#fff';
+      ctx.strokeStyle = s.status === null ? 'rgba(255,255,255,0.4)' : s.status === 0 ? COLORS.bad : '#fff';
       ctx.stroke();
       if (s.status === 0) {
         ctx.lineWidth = 1.6;
@@ -170,7 +170,7 @@ export function drawPoleMap(canvas: HTMLCanvasElement, m: MapInput): MapGeometry
       }
     }
     if (s.id === m.selected) {
-      ctx.strokeStyle = COLORS.earth;
+      ctx.strokeStyle = '#fff';
       ctx.lineWidth = 1.5;
       ctx.beginPath();
       ctx.arc(x, y, r + 5.5, 0, Math.PI * 2);

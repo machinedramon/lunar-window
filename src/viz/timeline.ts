@@ -68,11 +68,12 @@ export function drawTimeline(canvas: HTMLCanvasElement, m: TimelineInput): Timel
       both += s >= SUN_PRESENT && e ? 1 : 0;
     }
     const k = Math.max(1, Math.min(i1, n) - i0);
-    ctx.fillStyle = mix(off, [255, 255, 255], sun / k);
+    // Amber is the Sun, blue the Earth; where both are there the bar is white: everything a mission needs.
+    ctx.fillStyle = mix(off, [255, 200, 87], sun / k);
     ctx.fillRect(LEFT + px, rowY(0), 1.5, ROW);
     ctx.fillStyle = mix(off, [125, 184, 255], earth / k);
     ctx.fillRect(LEFT + px, rowY(1), 1.5, ROW);
-    ctx.fillStyle = mix(off, [215, 231, 255], both / k);
+    ctx.fillStyle = mix(off, [255, 255, 255], both / k);
     ctx.fillRect(LEFT + px, rowY(2), 1.5, ROW);
   }
 

@@ -101,7 +101,7 @@ export function drawStrip(canvas: HTMLCanvasElement, m: StripInput, cssHeight: n
     ctx.stroke();
     ctx.setLineDash([]);
   };
-  path(m.sunPath, 'rgba(255,255,255,0.5)');
+  path(m.sunPath, 'rgba(255,200,87,0.6)');
   path(m.earthPath, 'rgba(125,184,255,0.6)');
 
   // Discs drawn round, at the vertical scale: how high each one stands over the skyline is true; their width is
@@ -130,7 +130,7 @@ export function drawStrip(canvas: HTMLCanvasElement, m: StripInput, cssHeight: n
     }
   };
   disc(m.earth, '#cfe4ff', COLORS.earthDeep, 'rgba(125,184,255,0.32)', 26);
-  disc(m.sun, '#ffffff', '#f1f1f1', 'rgba(255,255,255,0.55)', 34);
+  disc(m.sun, '#ffffff', '#fff1cf', 'rgba(255,200,87,0.5)', 34);
 
   // Terrain: lighter where the ridge that sets the skyline is far away (smoothed, so it reads as haze, not stripes)
   const near: [number, number, number] = [46, 46, 49];
@@ -223,7 +223,7 @@ export function drawStrip(canvas: HTMLCanvasElement, m: StripInput, cssHeight: n
     ctx.fillText(full, x, y);
   };
   if (m.earth.el > m.elMin && m.earth.el < m.elMax) label(m.earth, m.labels.earth, '#a9d0ff', m.earthClear <= 0);
-  if (m.sun.el > m.elMin && m.sun.el < m.elMax) label(m.sun, m.labels.sun, '#ffffff', m.sunFrac <= 0);
+  if (m.sun.el > m.elMin && m.sun.el < m.elMax) label(m.sun, m.labels.sun, COLORS.sun, m.sunFrac <= 0);
 
   if (m.horizon.kind === 'sphere') {
     ctx.font = `500 12px ${FONT}`;

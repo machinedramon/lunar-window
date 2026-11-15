@@ -38,14 +38,14 @@ export function onResize(el: Element, draw: () => void): () => void {
 }
 
 export const COLORS = {
-  sun: '#ffffff',
-  sunDeep: '#d9d9dc',
+  sun: '#ffc857',
+  sunDeep: '#e09a2b',
   earth: '#7db8ff',
   earthDeep: '#2f6fd6',
-  both: '#d7e7ff',
+  both: '#ffffff',
   ok: '#ffffff',
   warn: '#a9a9ae',
-  bad: '#8f8f96',
+  bad: '#ff6b5e',
   off: '#1d1d20',
   text: '#f6f6f6',
   text2: '#c6c6ca',

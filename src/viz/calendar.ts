@@ -187,7 +187,7 @@ export function drawCalendar(canvas: HTMLCanvasElement, m: CalendarInput): Calen
   };
   const clash = Math.abs(m.plannedDay - m.slippedDay) * cellW < 70;
   marker(m.plannedDay, '#b9b9be', m.labels.planned, true, 0);
-  if (m.slippedDay !== m.plannedDay) marker(m.slippedDay, COLORS.earth, m.labels.slipped, false, clash ? 1 : 0);
+  if (m.slippedDay !== m.plannedDay) marker(m.slippedDay, COLORS.text, m.labels.slipped, false, clash ? 1 : 0);
 
   const box = (cell: { row: number; day: number } | null, color: string, width: number) => {
     if (!cell || cell.row < 0 || cell.row >= m.rows.length) return;

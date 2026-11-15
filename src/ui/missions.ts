@@ -155,7 +155,7 @@ export function createMissions(app: App, planner: Planner): View {
         ctx.setLineDash([]);
       };
       line(m.planned.day, 'rgba(255,255,255,0.85)', [3, 3]);
-      line(m.planned.day + m.slip, COLORS.earth, []);
+      line(m.planned.day + m.slip, COLORS.text, []);
     }
     // months
     ctx.font = `400 9.5px ${FONT}`;
