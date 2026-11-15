@@ -12,8 +12,8 @@ export interface Place {
 export interface Travel {
   /** Covers the view with the globe, above the place that is left. Resolves when it is on screen. */
   show(from: Place, to: Place, sunMoonFixed: readonly [number, number, number]): Promise<void>;
-  /** Turns the Moon to the place that is reached and comes down on it. Resolves on arrival. */
-  fly(): Promise<void>;
+  /** Turns the Moon to the place that is reached and comes down on it, in `ms` milliseconds if given. Resolves on arrival. */
+  fly(ms?: number): Promise<void>;
   /**
    * Draws one moment of the way, from 0 (over the place that is left) to 1 (over the place that is reached).
    * `back` multiplies how far the camera pulls away in the middle (a frame much wider than tall needs more).
@@ -151,9 +151,9 @@ export function createTravel(container: HTMLElement): Travel {
       el.classList.add('on');
       await new Promise<void>((resolve) => window.setTimeout(resolve, FADE_MS));
     },
-    fly() {
+    fly(ms) {
       cancelAnimationFrame(frame);
-      const length = Math.max(1300, Math.min(3300, 1300 + 950 * angle));
+      const length = ms ?? Math.max(1300, Math.min(3300, 1300 + 950 * angle));
       return new Promise<void>((resolve) => {
         const t0 = performance.now();
         const step = (now: number) => {

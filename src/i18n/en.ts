@@ -77,13 +77,20 @@ export const en = {
   guide: {
     button: 'Guide',
     buttonTip: 'The guided first landing: Mission Control talks you through the tool on a real case (with sound)',
-    offer: {
-      eyebrow: 'Incoming transmission',
-      title: 'Mission Control is calling.',
-      text: 'Two minutes, one real case: a voice from Earth talks you through the tool while you fly it. With sound.',
-      answer: 'Answer the call',
-      skip: 'Skip, go to the tool',
-      note: 'You can take the call later: the Guide button, top right.',
+    /** The briefing the guide opens on, and the stages of what is made ready once it is started. */
+    brief: {
+      eyebrow: 'Incoming transmission · Mission Control',
+      title: 'The first landing',
+      rows: [
+        ['Site', 'Malapert Massif · lunar south pole'],
+        ['Landing', '17 January 2027'],
+        ['Mission', '6 days on the surface, on sunlight, in contact with Earth'],
+        ['Your task', 'Find out what a late launch does to it'],
+      ] as [string, string][],
+      start: 'Start the guided mission',
+      skip: 'Skip, explore on my own',
+      note: 'Two minutes, with sound. You can take it again whenever you like: the Guide button, top right.',
+      status: ['Tuning the radio', 'Building the landing site', 'Plotting the descent', 'Link established'],
     },
     who: 'Mission Control',
     where: 'Earth',

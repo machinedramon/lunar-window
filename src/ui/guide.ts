@@ -3,16 +3,23 @@
 // works. Each step is a spoken line (also written out, for whoever has no sound), and most of them ask for one
 // thing to be done in the real interface, which is ringed on screen; the story goes on once it is done. Nothing
 // is staged: the buttons are the tool's own, and when the guide ends the tool is left where the story took it.
+//
+// It opens on a briefing: the mission in four lines, the language, one button to start. A first-time visitor
+// finds it under the opening screen (starting it is one click, which is also what lets the browser play sound);
+// afterwards the Guide button of the top bar brings it back, from the beginning, as often as wanted. Starting
+// covers the screen while everything is made ready (the voice, the terrain, the map of the Moon), and uncovers
+// it on the Moon seen from space, which turns to the south pole while the camera comes down on the site.
 // At the moment the voice asks for something, the rest of the screen dims and only that control stays lit;
 // while it explains something that has to be seen (the Sun, the calendar), nothing is dimmed.
 //
 // The voice is AI-generated (OpenAI text-to-speech) reading src/ui/guide.lines.json; tools/guide_voice.py adds
 // the sound of a radio link and writes the clips to public/audio/guide. The Accuracy page says so.
 import { PROFILES } from '../core/requirements';
-import { language, S, type Lang } from '../i18n';
-import { clear, h, setText } from './dom';
+import { LANGS, language, S, type Lang } from '../i18n';
+import { clear, h, reducedMotion, setText } from './dom';
 import { DAY_MS } from './format';
 import lines from './guide.lines.json';
+import { heroView, preloadJourney, preloadTerrain } from './hero3d';
 import type { State, Store } from './store';
 
 type LineId = keyof typeof lines.en;
@@ -26,13 +33,21 @@ const SLIPPED = PLANNED + SLIP * DAY_MS;
 /** The Sun goes behind the ridge on 2 February 2027 at 06:37 UTC: the running clock is stopped a little after. */
 const DARK_FROM = Date.UTC(2027, 1, 2, 6, 50);
 const DARK = Date.UTC(2027, 1, 2, 7, 10);
+/** Where the descent starts: over the first place people landed, a quarter of the Moon away from the pole. */
+const FROM = 'apollo-11';
+/** The descent over the globe, in milliseconds, and the least time the briefing stays up while things are made ready. */
+const DESCENT_MS = 6200;
+const BRIEF_MS = 3600;
 /** The tones at each end of a clip, in seconds: the words are between them. */
 const TONE_S = 0.36;
 
 interface Step {
   id: LineId;
-  /** Where the panel sits: under the top bar, over the sky; or low on the left, clear of the planner's controls. */
-  place: 'top' | 'low';
+  /**
+   * Where the panel sits: under the top bar, over the sky; low on the left, clear of the planner's controls; or,
+   * while only the picture and the voice are on, under the picture like a subtitle.
+   */
+  place: 'top' | 'low' | 'cine';
   /** The instruments are hidden while the line is spoken: only the picture and the voice. */
   cine?: boolean;
   /** Puts the tool where the line needs it. */
@@ -100,20 +115,30 @@ const PORTRAIT = `<svg viewBox="0 0 96 108" aria-hidden="true" preserveAspectRat
 const ICON = '<svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="1.6" fill="currentColor"/><path d="M4.6 4.6a4.8 4.8 0 0 0 0 6.8M11.4 4.6a4.8 4.8 0 0 1 0 6.8M2.5 2.5a7.8 7.8 0 0 0 0 11M13.5 2.5a7.8 7.8 0 0 1 0 11" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>';
 
 export interface Guide {
-  /** The button of the top bar: takes the call again. */
+  /** The button of the top bar: the guide again, from the beginning. */
   button: HTMLElement;
   /** Rewrites the words in the language in use. */
   relabel(): void;
-  /** Offers the guide to a first-time visitor, once the first screen is whole. */
-  offerWhenReady(): void;
+  /** Shows the briefing to a first-time visitor; called as the opening screen lifts, so that it is what is found under it. */
+  invite(): void;
 }
 
-export function createGuide(store: Store): Guide {
+/** What the guide needs from the app around it. */
+export interface GuideHost {
+  /** A site of the list: its name in the language in use, and where it is. */
+  site(id: string): { name: string; lat: number; lon: number };
+  /** Changes the language of the whole tool. */
+  setLanguage(code: Lang): void;
+}
+
+const wait = (ms: number): Promise<void> => new Promise((resolve) => window.setTimeout(resolve, ms));
+
+export function createGuide(store: Store, host: GuideHost): Guide {
   const G = () => S.guide;
   const steps: Step[] = [
     {
       id: 'hail',
-      place: 'top',
+      place: 'cine',
       cine: true,
       enter: (s) => {
         const own = s.profileId !== PROFILES[0].id || s.req.mast !== PROFILES[0].req.mast || s.req.earthMarginDeg !== PROFILES[0].req.earthMarginDeg;
@@ -121,7 +146,8 @@ export function createGuide(store: Store): Guide {
         store.set({ tab: 'explore', siteId: SITE, timeMs: PLANNED, plannedMs: PLANNED, slipDays: 0, detail: null, hero: '3d', ...(own ? { req: { ...PROFILES[0].req }, profileId: PROFILES[0].id } : {}) });
         lens(LENS);
       },
-      hold: (_s, spoken) => spoken && !q('.explore.is-arriving'),
+      // Until the voice is done, the descent is over and the camera has arrived.
+      hold: (_s, spoken) => spoken && !landing && !q('.explore.is-arriving'),
     },
     {
       id: 'sun',
@@ -249,22 +275,44 @@ export function createGuide(store: Store): Guide {
   /** Everything but the control that is asked for, darkened: a hole over the control, the dark around it. */
   const dim = h('div', { class: 'guide-dim', 'aria-hidden': 'true' });
 
-  // ----- the call: offered once, to a first-time visitor
-  const offerTitle = h('h2', null);
-  const offerText = h('p', null);
-  const offerEyebrow = h('span', { class: 'eyebrow' });
-  const offerNote = h('p', { class: 'small muted' });
-  const answer = h('button', { class: 'btn primary', type: 'button', onclick: () => start() });
-  const skip = h('button', { class: 'btn', type: 'button', onclick: () => dismiss() });
+  // ----- the briefing: the mission in four lines, the language, one button to start; then what is being made ready
+  const briefEyebrow = h('span', { class: 'eyebrow' });
+  const briefTitle = h('h2', null);
+  const briefRows = h('dl', { class: 'briefing-rows' });
+  const startBtn = h('button', { class: 'btn primary briefing-start', type: 'button', onclick: () => void start() });
+  const skipBtn = h('button', { class: 'btn', type: 'button', onclick: () => dismiss() });
+  const langLabel = h('span', { class: 'eyebrow' });
+  const langSeg = h('div', { class: 'seg', role: 'group' });
+  for (const l of LANGS) langSeg.append(h('button', { type: 'button', lang: l.tag, dataset: { code: l.code }, onclick: () => host.setLanguage(l.code) }, l.name));
+  const briefNote = h('p', { class: 'briefing-note' });
+  const loadBar = h('i');
+  const loadText = h('span', { class: 'briefing-status', 'aria-live': 'polite' });
+  const cancelBtn = h('button', { class: 'briefing-cancel', type: 'button', onclick: () => finish() });
   const signal = h('span', { class: 'guide-signal', 'aria-hidden': 'true' }, h('i'), h('i'), h('i'));
-  const offer = h('div', { class: 'guide-offer', role: 'dialog', hidden: true }, h('div', { class: 'guide-offer-head' }, signal, offerEyebrow), offerTitle, offerText, h('div', { class: 'guide-offer-actions' }, answer, skip), offerNote);
+  const brief = h(
+    'div',
+    { class: 'briefing', hidden: true, role: 'dialog', 'aria-modal': 'true' },
+    h(
+      'div',
+      { class: 'briefing-card' },
+      h('div', { class: 'briefing-head' }, signal, briefEyebrow),
+      briefTitle,
+      briefRows,
+      h(
+        'div',
+        { class: 'briefing-foot' },
+        h('div', { class: 'briefing-go' }, h('div', { class: 'briefing-buttons' }, startBtn, skipBtn), h('div', { class: 'briefing-lang' }, langLabel, langSeg), briefNote),
+        h('div', { class: 'briefing-load' }, h('span', { class: 'briefing-bar' }, loadBar), h('div', { class: 'briefing-line' }, loadText, cancelBtn)),
+      ),
+    ),
+  );
 
   const buttonLabel = h('span', null);
-  const button = h('button', { class: 'btn guide-btn', type: 'button', onclick: () => start() });
+  const button = h('button', { class: 'btn guide-btn', type: 'button', onclick: () => void start() });
   button.innerHTML = ICON;
   button.append(buttonLabel);
 
-  document.body.append(dim, panel, ring, offer);
+  document.body.append(dim, panel, ring, brief);
 
   // ----- state
   let at = -1;
@@ -277,6 +325,15 @@ export function createGuide(store: Store): Guide {
   let nextAt = 0;
   let raf = 0;
   let sliding = false;
+  /** Counts the starts: one that was called off, or started again, finds its number changed and stops. */
+  let run = 0;
+  /** True from the moment the guide is asked for until its first line is on air. */
+  let opening = false;
+  /** True while the camera comes down over the globe. */
+  let landing = false;
+  /** The stage of the making ready that is shown on the briefing. */
+  let stageNow = 0;
+  let closeTimer = 0;
   let audio: HTMLAudioElement | null = null;
   let silent = 0;
   let ctx: AudioContext | null = null;
@@ -336,6 +393,7 @@ export function createGuide(store: Store): Guide {
     spoken = false;
     const a = clip(language(), steps[at].id);
     audio = a;
+    a.muted = false;
     a.currentTime = 0;
     const text = line();
     // Without sound (a blocked or missing file) the line stays for the time it takes to read it.
@@ -496,10 +554,38 @@ export function createGuide(store: Store): Guide {
   }
   let aimed: HTMLElement | null = null;
 
-  function start(): void {
-    offer.hidden = true;
-    remember();
-    if (at >= 0) finish(true);
+  /** The briefing comes up: with its button and the languages (`invite`), or covering the screen while things are made ready. */
+  function openBrief(mode: 'invite' | 'loading'): void {
+    window.clearTimeout(closeTimer);
+    brief.hidden = false;
+    brief.classList.toggle('busy', mode === 'loading');
+    void brief.offsetWidth;
+    brief.classList.add('in');
+    if (mode === 'invite') startBtn.focus({ preventScroll: true });
+  }
+
+  function closeBrief(): void {
+    if (brief.hidden) return;
+    brief.classList.remove('in');
+    window.clearTimeout(closeTimer);
+    closeTimer = window.setTimeout(() => {
+      brief.hidden = true;
+      brief.classList.remove('busy');
+    }, 950);
+  }
+
+  function stage(i: number): void {
+    stageNow = i;
+    loadBar.style.transform = `scaleX(${((i + 1) / G().brief.status.length).toFixed(3)})`;
+    setText(loadText, G().brief.status[i]);
+  }
+
+  /**
+   * Sound, allowed from inside the click that asks for the guide: the output is opened and every line of the
+   * language in use is started silently and stopped, which also reads it ahead. Some browsers only let a sound
+   * play later if it was first played from a click.
+   */
+  function unlock(): void {
     if (!ctx) {
       try {
         ctx = new AudioContext();
@@ -512,18 +598,111 @@ export function createGuide(store: Store): Guide {
         analyser = null;
       }
     }
-    panel.hidden = false;
-    document.body.classList.add('guide-on');
+    void ctx?.resume();
+    for (const step of steps) {
+      const a = clip(language(), step.id);
+      if (a.dataset.primed) continue;
+      a.dataset.primed = '1';
+      a.muted = true;
+      a.play()
+        .then(() => {
+          if (audio !== a) {
+            a.pause();
+            a.currentTime = 0;
+          }
+        })
+        .catch(() => undefined)
+        .finally(() => {
+          if (audio !== a) a.muted = false;
+        });
+    }
+  }
+
+  /** Resolves when enough of a line is read to play it through, or after `ms` at the latest. */
+  const heard = (a: HTMLAudioElement, ms: number): Promise<void> =>
+    new Promise((resolve) => {
+      if (a.readyState >= 3) return resolve();
+      const done = () => resolve();
+      a.addEventListener('canplaythrough', done, { once: true });
+      a.addEventListener('error', done, { once: true });
+      window.setTimeout(done, ms);
+    });
+
+  /**
+   * Starts the guide, from the beginning. The briefing covers the screen while the first line is read ahead, the
+   * site of the story is built behind it and the globe is put above the place the descent starts from; then the
+   * voice comes on, the screen is uncovered on the Moon seen from space and the camera comes down.
+   */
+  async function start(): Promise<void> {
+    if (opening) return;
+    if (at >= 0) finish(true);
+    const mine = ++run;
+    const live = () => mine === run;
+    opening = true;
+    remember();
+    unlock();
+    openBrief('loading');
+    stage(0);
+    document.body.classList.add('guide-on', 'guide-cine');
     button.setAttribute('aria-pressed', 'true');
+    const began = performance.now();
+    // Behind the briefing, the tool goes where the story starts.
+    steps[0].enter?.(store.state);
+    preloadJourney();
+    void preloadTerrain([SITE]);
+    await heard(clip(language(), steps[0].id), 6000);
+    if (!live()) return;
+    stage(1);
+    let view = heroView();
+    for (let i = 0; i < 150 && live() && view?.place() !== SITE; i++) {
+      await wait(120);
+      view = heroView();
+    }
+    if (!live()) return;
+    stage(2);
+    const from = host.site(FROM);
+    const descent = view && view.ok() && !reducedMotion() ? await Promise.race([view.approach(from), wait(7000).then(() => null)]).catch(() => null) : null;
+    if (!live()) {
+      descent?.cancel();
+      return;
+    }
+    // The briefing is read before it goes: its four lines take a little over three seconds to come in.
+    await wait(Math.max(0, BRIEF_MS - (performance.now() - began)));
+    if (!live()) {
+      descent?.cancel();
+      return;
+    }
+    stage(3);
+    await wait(700);
+    if (!live()) {
+      descent?.cancel();
+      return;
+    }
+    // On air.
+    opening = false;
+    landing = !!descent;
+    panel.hidden = false;
     void panel.offsetWidth;
     panel.classList.add('in');
     cancelAnimationFrame(raf);
     raf = requestAnimationFrame(frame);
     go(0);
+    closeBrief();
+    if (descent) {
+      await wait(1100);
+      if (live()) await descent.fly(DESCENT_MS);
+      else descent.cancel();
+      if (live()) landing = false;
+    }
   }
 
   /** Ends the guide where it is: the tool stays as the story left it. */
   function finish(quiet = false): void {
+    // A start still on its way (the briefing is up, things are being made ready) is called off.
+    run++;
+    opening = false;
+    landing = false;
+    closeBrief();
     window.clearTimeout(silent);
     audio?.pause();
     audio = null;
@@ -547,8 +726,9 @@ export function createGuide(store: Store): Guide {
     }
   }
 
+  /** The briefing is declined: the tool, as it is. The Guide button shows where to find it again. */
   function dismiss(): void {
-    offer.hidden = true;
+    closeBrief();
     remember();
     button.classList.remove('nudge');
     void button.offsetWidth;
@@ -556,15 +736,26 @@ export function createGuide(store: Store): Guide {
   }
 
   function relabel(): void {
+    const B = G().brief;
     setText(buttonLabel, G().button);
     button.title = G().buttonTip;
     button.setAttribute('aria-label', G().buttonTip);
-    setText(offerEyebrow, G().offer.eyebrow);
-    setText(offerTitle, G().offer.title);
-    setText(offerText, G().offer.text);
-    setText(answer, G().offer.answer);
-    setText(skip, G().offer.skip);
-    setText(offerNote, G().offer.note);
+    setText(briefEyebrow, B.eyebrow);
+    setText(briefTitle, B.title);
+    clear(briefRows);
+    B.rows.forEach(([label, value], i) => {
+      const row = h('div', null, h('dt', null, label), h('dd', null, value));
+      row.style.setProperty('--i', String(i));
+      briefRows.append(row);
+    });
+    setText(startBtn, B.start);
+    setText(skipBtn, B.skip);
+    setText(langLabel, S.lang.label);
+    langSeg.setAttribute('aria-label', S.lang.label);
+    langSeg.querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.code === language())));
+    setText(briefNote, B.note);
+    setText(cancelBtn, G().end);
+    setText(loadText, B.status[stageNow]);
     if (at >= 0) {
       const share = said.textContent!.length;
       write();
@@ -576,25 +767,14 @@ export function createGuide(store: Store): Guide {
   relabel();
   button.setAttribute('aria-pressed', 'false');
 
-  function offerWhenReady(): void {
+  function invite(): void {
     const asked = new URLSearchParams(location.search).get('guide');
-    // A scripted browser (the recordings, the tests) is not offered the call unless it asks for it.
+    // A scripted browser (the recordings, the tests) is not shown the briefing unless it asks for it.
     if (asked === '0' || (asked !== '1' && (seen() || navigator.webdriver))) return;
-    let tries = 0;
-    const look = () => {
-      if (at >= 0) return;
-      const whole = document.body.classList.contains('ready') && !document.getElementById('intro') && !q('.explore.is-arriving');
-      if (whole && store.state.tab === 'explore') {
-        window.setTimeout(() => {
-          if (at >= 0 || store.state.tab !== 'explore') return;
-          offer.hidden = false;
-          void offer.offsetWidth;
-          offer.classList.add('in');
-        }, 1400);
-      } else if (++tries < 150 && (store.state.tab === 'explore' || tries < 40)) window.setTimeout(look, 400);
-    };
-    look();
+    // A link to a planner or to another screen was followed for what it shows: the guide waits in the top bar.
+    if (store.state.tab !== 'explore' || at >= 0 || opening) return;
+    openBrief('invite');
   }
 
-  return { button, relabel, offerWhenReady };
+  return { button, relabel, invite };
 }

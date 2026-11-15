@@ -86,13 +86,19 @@ export const pt: Strings = {
   guide: {
     button: 'Guia',
     buttonTip: 'A primeira missão guiada: o Controle da Missão conduz você pela ferramenta em um caso real (com som)',
-    offer: {
-      eyebrow: 'Transmissão chegando',
-      title: 'O Controle da Missão está chamando.',
-      text: 'Dois minutos, um caso real: uma voz da Terra conduz você pela ferramenta enquanto você pilota. Com som.',
-      answer: 'Atender',
-      skip: 'Pular e ir para a ferramenta',
-      note: 'Dá para atender depois: botão Guia, no canto superior direito.',
+    brief: {
+      eyebrow: 'Transmissão chegando · Controle da Missão',
+      title: 'O primeiro pouso',
+      rows: [
+        ['Local', 'Malapert Massif · polo sul lunar'],
+        ['Pouso', '17 de janeiro de 2027'],
+        ['Missão', '6 dias na superfície, com luz do Sol e contato com a Terra'],
+        ['Sua tarefa', 'Descobrir o que um lançamento atrasado faz com ela'],
+      ] as [string, string][],
+      start: 'Iniciar a missão guiada',
+      skip: 'Pular e explorar por conta própria',
+      note: 'Dois minutos, com som. Dá para rever quando quiser: botão Guia, no canto superior direito.',
+      status: ['Sintonizando o rádio', 'Montando o local de pouso', 'Traçando a descida', 'Enlace estabelecido'],
     },
     who: 'Controle da Missão',
     where: 'Terra',

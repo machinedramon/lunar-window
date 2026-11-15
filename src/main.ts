@@ -31,9 +31,15 @@ const relabel: (() => void)[] = [];
 /** Set by the app once it runs: changes the language without reloading anything. */
 let changeLanguage: (code: Lang) => void = () => undefined;
 
+/** What a first-time visitor finds under the opening screen: the briefing of the guided mission. Set once the app runs. */
+let underIntro: () => void = () => undefined;
+
 /** Lifts the opening screen, once: from then on the bar and the view come in, one piece at a time. */
 function uncover(): void {
-  introLift(() => document.body.classList.add('ready'));
+  introLift(() => {
+    document.body.classList.add('ready');
+    underIntro();
+  });
 }
 
 /** The blocks of a view arrive one after the other, in reading order. */
@@ -164,7 +170,8 @@ async function boot(): Promise<void> {
   const store = new Store(fromHash(location.hash, known));
   const app = new App(store, list);
   // Mission Control, on the radio: the guided first landing. Its button sits with the tools of the top bar.
-  const guide = createGuide(store);
+  const guide = createGuide(store, { site: (id) => app.siteInfo(id), setLanguage: (code) => changeLanguage(code) });
+  underIntro = () => guide.invite();
   document.querySelector('.top-tools')?.prepend(guide.button);
   relabel.push(guide.relabel);
 
@@ -259,7 +266,6 @@ async function boot(): Promise<void> {
       requestAnimationFrame(uncover);
     });
   window.setTimeout(uncover, 12000);
-  guide.offerWhenReady();
 
   // Behind the first screen, everything that takes time is done ahead: the year of every site for the planner and
   // for the missions (in the worker), the terrain of the other sites and the other vehicle. After that, changing

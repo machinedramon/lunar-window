@@ -69,6 +69,14 @@ export interface Hero3D {
   onReady: (() => void) | null;
   /** True when a place is on screen and the camera is not arriving: the instruments can be shown at once. */
   settled(): boolean;
+  /** Id of the site that is on screen whole (terrain, vehicle, programs compiled), or null while one is being built. */
+  place(): string | null;
+  /**
+   * The opening of the guide: the Moon seen from space above another place, which then turns to the place on
+   * screen while the camera comes down on it, and the arrival shot plays. Resolves once the globe is on screen,
+   * with what starts the flight (its length in milliseconds) and what calls it off; null when it cannot be shown.
+   */
+  approach(from: Place): Promise<{ fly(ms: number): Promise<void>; cancel(): void } | null>;
 }
 
 interface Look {
@@ -112,6 +120,8 @@ const NAMED_DIRS: [string, number[]][] = NAMED_SKY.map(([name, ra, dec]) => {
 });
 
 let shared: { api: Hero3D; relabel: () => void } | null = null;
+/** The 3D view, once there is one. */
+export const heroView = (): Hero3D | null => shared?.api ?? null;
 
 /**
  * The 3D view. There is one for the life of the page: when the screens are rebuilt in another language, the same
@@ -164,6 +174,8 @@ export function createHero3D(): Hero3D {
   let mast = 1;
   let terrainKey = '';
   let pendingKey = '';
+  /** Id of the site on screen once it is whole; empty while one is being built. */
+  let whole = '';
   /** The journey between places, and the place on screen (where a journey starts from). */
   let travel: Travel | null = null;
   let shownPlace: Place | null = null;
@@ -198,6 +210,8 @@ export function createHero3D(): Hero3D {
     ok: () => !failed,
     setSite,
     setMoment,
+    place: () => whole || null,
+    approach,
     redraw: wake,
     lenses(sun, earth) {
       outerSun = sun;
@@ -277,6 +291,7 @@ export function createHero3D(): Hero3D {
       return;
     }
     pendingKey = key;
+    if (framed !== place) whole = '';
     const target0 = site;
     const targetMast = mast;
     const newSite = framed !== place;
@@ -351,8 +366,31 @@ export function createHero3D(): Hero3D {
       }
       arrive(target0);
     }
+    whole = target0.site.id;
     ready();
     wake();
+  }
+
+  async function approach(from: Place): Promise<{ fly(ms: number): Promise<void>; cancel(): void } | null> {
+    if (!scene || !site || !moment || !whole || reducedMotion()) return null;
+    const here = site;
+    const to: Place = { lat: here.site.lat, lon: here.site.lon, name: here.site.name };
+    try {
+      const { createTravel } = await loadTravel();
+      travel ??= createTravel(el);
+      await travel.show(from, to, sunMoonFixed(to, moment));
+    } catch (err) {
+      console.warn(err);
+      return null;
+    }
+    return {
+      fly: async (ms) => {
+        await travel?.fly(ms);
+        if (site === here && scene) arrive(here);
+        else travel?.hide();
+      },
+      cancel: () => travel?.hide(),
+    };
   }
 
   /** Arrival shot: from the ground at one's feet up to the sky, with the name of the place. */
