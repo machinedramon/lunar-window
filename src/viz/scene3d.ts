@@ -54,7 +54,7 @@ export interface SceneSky {
   earthNorth: [number, number, number];
   earthGreenwich: [number, number, number];
   /** Local east, north and up of the site in J2000 equatorial coordinates, to place the stars. */
-  starAxes: { east: readonly number[]; north: readonly number[]; up: readonly number[]; planets?: { name: string; dir: readonly number[]; mag: number }[] };
+  starAxes: { east: readonly number[]; north: readonly number[]; up: readonly number[]; planets?: { name: string; dir: readonly number[]; mag: number }[]; timeMs?: number };
 }
 
 /** Planets drawn among the stars: Mercury, Venus, Mars, Jupiter, Saturn. */

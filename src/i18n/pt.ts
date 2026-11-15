@@ -37,7 +37,7 @@ export const pt: Strings = {
     'im2-athena': 'Pousou de lado dentro de uma pequena cratera; a missão terminou depois de cerca de meio dia.',
     'im1-odysseus': 'Pousou tombado. A maior parte do terreno em volta deste local só é coberta pelo modelo de 240 m.',
   },
-  sky: { lmc: 'Grande Nuvem de Magalhães', smc: 'Pequena Nuvem de Magalhães' },
+  sky: { lmc: 'Grande Nuvem de Magalhães', smc: 'Pequena Nuvem de Magalhães', planets: { Mercury: 'Mercúrio', Venus: 'Vênus', Mars: 'Marte', Jupiter: 'Júpiter', Saturn: 'Saturno' } },
   replays: {
     'apollo-11': {
       when: '20 de julho de 1969, 20:17 UTC',
@@ -173,6 +173,19 @@ export const pt: Strings = {
       illustrative: 'Ilustrativo: relevo fino · pedras · veículos · nuvens',
       illustrativeSphere: 'Ilustrativo: o solo, sem modelo de terreno aqui · pedras · veículos · nuvens',
       noteSphere: 'Sol, Terra, planetas e estrelas são reais; a Via Láctea é o Deep Star Map da NASA. Não há modelo de terreno para este lugar: o solo, as pedras e os veículos são ilustrativos. A face da Terra é um dia real visto pelos satélites da NASA (7 fev 2026): as nuvens não são as da data mostrada.',
+      scope: {
+        title: 'Telescópio',
+        open: (name: string) => `${name}: ver pelo telescópio`,
+        close: 'Fechar o telescópio',
+        across: (s: string) => `${s}″ de diâmetro`,
+        lit: (p: string) => `${p}% iluminado`,
+        away: (au: string, mkm: string) => `a ${au} ua · ${mkm} milhões de km`,
+        frame: (s: string) => `campo de ${s}″ · o Sol: 1.900″`,
+        noteMars: 'Tamanho, fase e inclinação reais, e a face que Marte mostra à Lua neste momento. Mapa: NASA.',
+        noteClouds: 'Tamanho, fase, inclinação e achatamento reais para este momento. As nuvens são as do dia em que a NASA as mapeou, não as desta data.',
+        noteRings: 'Tamanho, inclinação e abertura dos anéis reais para este momento, com as sombras. As nuvens são as do dia em que a NASA as mapeou.',
+        notePlain: 'Tamanho e fase reais para este momento. Desenhado liso: neste tamanho um telescópio não mostra detalhes.',
+      },
       faceSun: 'Seguir o Sol',
       faceSunTip: 'Vira a câmera para o Sol e o acompanha enquanto o tempo corre; clique de novo, ou arraste, para soltar (tecla S)',
       faceEarth: 'Seguir a Terra',
@@ -520,7 +533,7 @@ export const pt: Strings = {
       text: 'A vista 3D mostra o resultado do mesmo cálculo. Ela não acrescenta nada aos números.',
       items: [
         'Real: o terreno (NASA LOLA, 5 m perto de sete dos locais) e as suas sombras, a linha do horizonte, as direções e os tamanhos do Sol e da Terra, a fase e a face da Terra, as estrelas (Yale Bright Star Catalogue, mostradas quando o Sol está oculto), a altura do painel solar.',
-        'Ilustrativo: o relevo mais fino que o modelo de terreno, as pedras, o veículo e o mastro do painel solar (o rover é o conceito Space Exploration Vehicle da NASA; o mastro é desenho nosso), e a linha fina da antena até a Terra (ela marca a linha de visada, cuja direção é real; o rádio em si é invisível). A face da Terra é um dia real visto pelos instrumentos VIIRS da NASA (7 de fevereiro de 2026, pelo NASA GIBS), iluminada pelo Sol do momento: os continentes estão onde estariam; as nuvens são as daquele dia, não as da data mostrada. Nada na vista pisca ou pulsa por efeito.',
+        'Ilustrativo: o relevo mais fino que o modelo de terreno, as pedras, o veículo e o mastro do painel solar (o rover é o conceito Space Exploration Vehicle da NASA; o mastro é desenho nosso), e a linha fina da antena até a Terra (ela marca a linha de visada, cuja direção é real; o rádio em si é invisível). A face da Terra é um dia real visto pelos instrumentos VIIRS da NASA (7 de fevereiro de 2026, pelo NASA GIBS), iluminada pelo Sol do momento: os continentes estão onde estariam; as nuvens são as daquele dia, não as da data mostrada. Nada na vista pisca ou pulsa por efeito. Pelo telescópio, um planeta tem tamanho, fase, inclinação e, em Saturno, anéis reais para o momento mostrado (tamanho, fase, distância e orientação conferem com o JPL Horizons, da NASA, nos testes); Marte mostra a face verdadeira; as nuvens de Júpiter e de Saturno são as do dia em que as sondas da NASA as mapearam; Mercúrio e Vênus são desenhados lisos.',
       ],
     },
     made: {

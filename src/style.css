@@ -4394,3 +4394,144 @@ body.guide-cine .three-hint {
     opacity: 1;
   }
 }
+
+/* ---------- The planets: a name in the sky that is a button, and the telescope it opens (viz/telescope.ts) ---------- */
+.three-planets {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+/* The button's own corner is on the planet: a ring around the point of light, a line, the name. */
+.three-planet {
+  appearance: none;
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: rgb(255 255 255 / 0.9);
+  font: 500 9.5px/1 var(--mono);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  cursor: pointer;
+  pointer-events: auto;
+}
+.three-planet i {
+  position: absolute;
+  left: -11px;
+  top: -11px;
+  width: 22px;
+  height: 22px;
+  border: 1px solid rgb(255 255 255 / 0.5);
+  border-radius: 50%;
+  transition:
+    border-color 0.15s,
+    transform 0.2s var(--ease);
+}
+.three-planet span {
+  position: absolute;
+  left: 20px;
+  top: -24px;
+  padding: 4px 6px 3px;
+  border-bottom: 1px solid rgb(255 255 255 / 0.45);
+}
+.three-planet span::after {
+  content: ' ⌕';
+  opacity: 0.6;
+}
+.three-planet:hover i,
+.three-planet:focus-visible i,
+.three-planet[aria-pressed='true'] i {
+  border-color: #fff;
+  transform: scale(1.25);
+}
+.three-planet:hover span,
+.three-planet:focus-visible span,
+.three-planet[aria-pressed='true'] span {
+  color: #000;
+  background: #fff;
+  border-color: #fff;
+}
+.three.arriving .three-planets,
+body.guide-cine .three-planets {
+  opacity: 0;
+  pointer-events: none;
+}
+.scope {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 5;
+  width: 252px;
+  padding: 10px 12px 12px;
+  background: rgb(0 0 0 / 0.9);
+  border: 1px solid var(--rule-2);
+  border-radius: var(--r);
+  box-shadow: 0 16px 50px rgb(0 0 0 / 0.7);
+}
+.scope header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 9px;
+}
+.scope header div {
+  display: grid;
+  gap: 5px;
+}
+.scope header b {
+  font: 500 22px/1 var(--display);
+}
+.scope header .btn {
+  height: 26px;
+  min-width: 26px;
+  padding: 0 7px;
+}
+/* the eyepiece: a round field on black, as a telescope gives */
+.scope-glass {
+  position: relative;
+  aspect-ratio: 1;
+  background: #000;
+  border: 1px solid var(--rule);
+  border-radius: 50%;
+  overflow: hidden;
+}
+.scope-view {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+/* how much sky the eyepiece holds: the measure of the magnification */
+.scope-frame {
+  display: block;
+  margin-top: 7px;
+  font: 400 8.5px/1.2 var(--code);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  text-align: center;
+  color: var(--ink-3);
+}
+.scope-figures {
+  display: grid;
+  gap: 4px;
+  margin-top: 10px;
+  font: 500 10.5px/1.3 var(--mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+}
+.scope-figures span:first-child {
+  color: var(--ink);
+}
+.scope p {
+  margin: 9px 0 0;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--ink-3);
+}

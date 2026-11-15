@@ -77,12 +77,12 @@ export function earthAxes(date: Date): { north: Vec3; greenwich: Vec3 } {
  * The local directions of a site (east, north, up) expressed in J2000 equatorial coordinates.
  * With them a star of known right ascension and declination can be placed in the site's sky.
  */
-export function localAxesJ2000(date: Date, latDeg: number, lonDeg: number): { east: Vec3; north: Vec3; up: Vec3; planets: Planet[] } {
+export function localAxesJ2000(date: Date, latDeg: number, lonDeg: number): { east: Vec3; north: Vec3; up: Vec3; planets: Planet[]; timeMs: number } {
   const time = MakeTime(date);
   const f = moonFrame(time);
   const s = siteFrame(latDeg, lonDeg, 0);
   const out = (v: Vec3): Vec3 => [v[0] * f.x[0] + v[1] * f.y[0] + v[2] * f.z[0], v[0] * f.x[1] + v[1] * f.y[1] + v[2] * f.z[1], v[0] * f.x[2] + v[1] * f.y[2] + v[2] * f.z[2]];
-  return { east: out(s.east), north: out(s.north), up: out(s.up), planets: planetsFromMoon(time) };
+  return { east: out(s.east), north: out(s.north), up: out(s.up), planets: planetsFromMoon(time), timeMs: date.getTime() };
 }
 
 /** A planet in the lunar sky: unit direction from the Moon in J2000 equatorial coordinates, and visual magnitude. */
@@ -107,6 +107,88 @@ function planetsFromMoon(time: Time): Planet[] {
     const g = GeoVector(body, time, true);
     return { name, dir: unit([g.x - moon.x, g.y - moon.y, g.z - moon.z]), mag: Illumination(body, time).mag };
   });
+}
+
+/**
+ * A planet as a telescope on the Moon sees it at a moment: where it is, how it is lit and how it is turned.
+ * Directions are unit vectors in J2000 equatorial coordinates.
+ */
+export interface PlanetView {
+  name: string;
+  /** From the Moon to the planet. */
+  toPlanet: Vec3;
+  /** From the planet to the Sun. */
+  toSun: Vec3;
+  /** The planet's north pole, and the direction of its prime meridian on its equator (IAU model), when the light left it. */
+  north: Vec3;
+  prime: Vec3;
+  /** Equatorial radius in km, and flattening (1 - polar radius / equatorial radius). */
+  radiusKm: number;
+  flattening: number;
+  distanceKm: number;
+  distanceAu: number;
+  /** Apparent equatorial diameter, in seconds of arc. */
+  arcsec: number;
+  /** Share of the disc that is lit, from 0 to 1. */
+  lit: number;
+  mag: number;
+  /** Where the centre of the disc is on the planet: east longitude and planetocentric latitude, degrees. */
+  subLon: number;
+  subLat: number;
+}
+
+const AU_KM = 149597870.7;
+/** Days light takes to cross one astronomical unit. */
+const LIGHT_DAYS_PER_AU = 499.004784 / 86400;
+/** Equatorial radius (km) and flattening, from the IAU report the JPL Horizons System also uses. */
+const PLANET_SHAPE: Record<string, [Body, number, number]> = {
+  Mercury: [Body.Mercury, 2440.53, 0.0009],
+  Venus: [Body.Venus, 6051.8, 0],
+  Mars: [Body.Mars, 3396.19, 0.00589],
+  Jupiter: [Body.Jupiter, 71492, 0.06487],
+  Saturn: [Body.Saturn, 60268, 0.09796],
+};
+const dot3 = (a: Vec3, b: Vec3): number => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+const cross3 = (a: Vec3, b: Vec3): Vec3 => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+
+export function planetView(name: string, date: Date): PlanetView | null {
+  const shape = PLANET_SHAPE[name];
+  if (!shape) return null;
+  const [body, radiusKm, flattening] = shape;
+  const time = MakeTime(date);
+  const moon = GeoMoon(time);
+  const g = GeoVector(body, time, true);
+  const sun = GeoVector(Body.Sun, time, true);
+  const rel: Vec3 = [g.x - moon.x, g.y - moon.y, g.z - moon.z];
+  const distanceAu = Math.hypot(rel[0], rel[1], rel[2]);
+  const toPlanet = unit(rel);
+  const toSun = unit([sun.x - g.x, sun.y - g.y, sun.z - g.z]);
+  // The planet is seen as it was when the light left it: for Jupiter, forty minutes and a tenth of a turn ago.
+  const axis = RotationAxis(body, time.AddDays(-distanceAu * LIGHT_DAYS_PER_AU));
+  const north: Vec3 = [axis.north.x, axis.north.y, axis.north.z];
+  // IAU: the prime meridian is the angle W east of the node where the planet's equator rises through the Earth's (of J2000).
+  const node = unit(cross3([0, 0, 1], north));
+  const beside = cross3(north, node);
+  const w = axis.spin * D2R;
+  const prime: Vec3 = [node[0] * Math.cos(w) + beside[0] * Math.sin(w), node[1] * Math.cos(w) + beside[1] * Math.sin(w), node[2] * Math.cos(w) + beside[2] * Math.sin(w)];
+  const toUs: Vec3 = [-toPlanet[0], -toPlanet[1], -toPlanet[2]];
+  const east = cross3(north, prime);
+  return {
+    name,
+    toPlanet,
+    toSun,
+    north,
+    prime,
+    radiusKm,
+    flattening,
+    distanceAu,
+    distanceKm: distanceAu * AU_KM,
+    arcsec: (2 * Math.atan(radiusKm / (distanceAu * AU_KM)) * 3600) / D2R,
+    lit: (1 + dot3(toSun, toUs)) / 2,
+    mag: Illumination(body, time).mag,
+    subLon: ((Math.atan2(dot3(toUs, east), dot3(toUs, prime)) / D2R) % 360 + 360) % 360,
+    subLat: Math.asin(Math.max(-1, Math.min(1, dot3(toUs, north)))) / D2R,
+  };
 }
 
 /** Local directions of a site, in the Moon-fixed frame, and its position in km. */

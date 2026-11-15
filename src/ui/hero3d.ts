@@ -1,6 +1,7 @@
 // The 3D view of Explore: stand on the landing site and look around.
 // Camera work is deliberate: every move eases in and out, a site opens with an arrival shot and
 // a title card, and the view never sits completely still.
+import { planetView, type Vec3 } from '../core/ephemeris';
 import { MAST_HEIGHTS_M } from '../core/horizon';
 import { S } from '../i18n';
 import { FONT, MONO } from '../viz/canvas';
@@ -11,7 +12,8 @@ import type { LunarScene, SceneSky } from '../viz/scene3d';
 import type { LoadedSite } from './data';
 import { h, reducedMotion, setText } from './dom';
 import type { Moment } from './exploreModel';
-import { compass, latLon } from './format';
+import { compass, latLon, num } from './format';
+import { drawPlanet, planetMap, scopeSpan } from '../viz/telescope';
 
 const T = S.explore.three;
 
@@ -166,7 +168,35 @@ export function createHero3D(): Hero3D {
   const sunInset = inset('sun', T.teleSun);
   const earthInset = inset('earth', T.teleEarth);
   const insets = h('div', { class: 'three-insets' }, sunInset.frame, earthInset.frame);
-  const el = h('div', { class: 'three' }, canvas, skyNames, tape, sunLabel, earthLabel, insets, controls, title, fade, loading, hint);
+  // The planets: each has its name in the sky, which is a button; it opens the telescope on that planet.
+  const planetNames = ['Mercury', 'Venus', 'Mars', 'Jupiter', 'Saturn'];
+  const planetBtns = new Map<string, { button: HTMLButtonElement; label: HTMLElement }>();
+  const planetLayer = h('div', { class: 'three-planets' });
+  for (const name of planetNames) {
+    const label = h('span', null);
+    const button = h('button', { class: 'three-planet', type: 'button', hidden: true, onclick: () => openScope(scoped === name ? null : name) }, h('i', { 'aria-hidden': 'true' }), label);
+    planetBtns.set(name, { button, label });
+    planetLayer.append(button);
+  }
+  const scopeView = h('canvas', { class: 'scope-view', width: '320', height: '320', role: 'img' });
+  const scopeKind = h('span', { class: 'eyebrow' });
+  const scopeName = h('b', null);
+  const scopeClose = h('button', { class: 'btn icon', type: 'button', onclick: () => openScope(null) }, '✕');
+  const scopeSize = h('span', null);
+  const scopeLit = h('span', null);
+  const scopeAway = h('span', null);
+  const scopeFrame = h('span', { class: 'scope-frame' });
+  const scopeNote = h('p', null);
+  const scope = h(
+    'aside',
+    { class: 'scope', hidden: true },
+    h('header', null, h('div', null, scopeKind, scopeName), scopeClose),
+    h('div', { class: 'scope-glass' }, scopeView),
+    scopeFrame,
+    h('div', { class: 'scope-figures' }, scopeSize, scopeLit, scopeAway),
+    scopeNote,
+  );
+  const el = h('div', { class: 'three' }, canvas, skyNames, tape, planetLayer, sunLabel, earthLabel, insets, controls, title, fade, loading, hint, scope);
 
   let outerSun: HTMLElement | null = null;
   let outerEarth: HTMLElement | null = null;
@@ -199,6 +229,10 @@ export function createHero3D(): Hero3D {
    */
   let following: 'sun' | 'earth' | null = null;
   let swing = { at: 0, az: 0, pitch: 0 };
+  /** The planet the telescope is on, or null; what its picture was last drawn for, and when. */
+  let scoped: string | null = null;
+  let scopeDrawn = '';
+  let scopeAt = 0;
   const SWING_MS = 1100;
   let slow = 0.016;
   let loweredAt = -1e9;
@@ -665,7 +699,11 @@ export function createHero3D(): Hero3D {
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, w, ht);
     const level = scene.starLevel;
-    if (level < 0.2 || !sky || !site) return;
+    if (level < 0.2 || !sky || !site) {
+      for (const { button } of planetBtns.values()) button.hidden = true;
+      if (scoped) openScope(null);
+      return;
+    }
     const ax = sky.starAxes;
     const dot = (a: readonly number[], b: readonly number[]) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
     // On a wide window the corners belong to the instruments; names keep clear of them.
@@ -674,16 +712,22 @@ export function createHero3D(): Hero3D {
     ctx.font = `500 9.5px ${MONO}`;
     ctx.textBaseline = 'middle';
     ctx.lineWidth = 1;
-    const one = (name: string, d: readonly number[], strong: boolean) => {
+    /** Where a direction of the sky falls on the picture, if it is above the skyline, in frame and clear of the instruments. */
+    const spot = (d: readonly number[]): { x: number; y: number } | null => {
       const up = dot(d, ax.up);
       const elv = (Math.asin(Math.max(-1, Math.min(1, up))) * 180) / Math.PI;
       const az = ((Math.atan2(dot(d, ax.east), dot(d, ax.north)) * 180) / Math.PI + 360) % 360;
-      if (elv < site!.horizon.at(az, mast) + 0.4) return;
+      if (elv < site!.horizon.at(az, mast) + 0.4) return null;
       const p = scene!.project(az, elv);
-      if (!p || p.x < 0.02 || p.x > 0.94 || p.y < 0.07 || p.y > 0.97) return;
+      if (!p || p.x < 0.02 || p.x > 0.94 || p.y < 0.07 || p.y > 0.97) return null;
       const x = p.x * w;
       const y = p.y * ht;
-      if (busy(x, y)) return;
+      return busy(x, y) ? null : { x, y };
+    };
+    const one = (name: string, d: readonly number[], strong: boolean) => {
+      const at = spot(d);
+      if (!at) return;
+      const { x, y } = at;
       const a = level * (strong ? 0.85 : 0.5);
       ctx.strokeStyle = `rgba(255,255,255,${(a * 0.7).toFixed(3)})`;
       ctx.beginPath();
@@ -695,7 +739,73 @@ export function createHero3D(): Hero3D {
       ctx.fillText(name.toUpperCase().split('').join('\u200a'), x + 24, y - 14);
     };
     for (const [name, d] of NAMED_DIRS) one(name === 'Large Magellanic Cloud' ? S.sky.lmc : name === 'Small Magellanic Cloud' ? S.sky.smc : name, d, false);
-    for (const p of ax.planets ?? []) one(p.name, p.dir, true);
+    // The planets: their names are buttons laid over the picture, and the telescope stays beside the one it is on.
+    let scopedAt: { x: number; y: number } | null = null;
+    for (const p of ax.planets ?? []) {
+      const b = planetBtns.get(p.name);
+      if (!b) continue;
+      const at = spot(p.dir);
+      b.button.hidden = !at;
+      if (!at) continue;
+      b.button.style.transform = `translate(${at.x.toFixed(1)}px, ${at.y.toFixed(1)}px)`;
+      b.button.style.opacity = Math.min(1, level * 1.1).toFixed(2);
+      const name = S.sky.planets[p.name] ?? p.name;
+      setText(b.label, name);
+      b.button.title = T.scope.open(name);
+      b.button.setAttribute('aria-pressed', String(scoped === p.name));
+      if (scoped === p.name) scopedAt = at;
+    }
+    if (scoped) {
+      if (!scopedAt) openScope(null);
+      else {
+        // To the right of the planet, or to its left where there is no room; inside the picture.
+        const boxW = scope.offsetWidth || 252;
+        const boxH = scope.offsetHeight || 380;
+        // (On a wide window the right of the picture belongs to the instruments.)
+        const left = scopedAt.x + 34 + boxW < w - (wide ? 344 : 12) ? scopedAt.x + 34 : scopedAt.x - 34 - boxW;
+        scope.style.transform = `translate(${Math.round(Math.max(12, Math.min(w - boxW - 12, left)))}px, ${Math.round(Math.max(12, Math.min(ht - boxH - 12, scopedAt.y - boxH * 0.42)))}px)`;
+        showScope();
+      }
+    }
+  }
+
+  /** Opens the telescope on a planet, or closes it. */
+  function openScope(name: string | null): void {
+    scoped = name;
+    scopeDrawn = '';
+    scope.hidden = !name;
+    if (name) void planetMap(name).then(() => wake());
+    wake();
+  }
+
+  /** The planet as the telescope shows it at the moment on screen: drawn again when the moment changed, a few times a second at most. */
+  function showScope(): void {
+    if (!scoped || !sky) return;
+    const timeMs = sky.starAxes.timeMs;
+    if (timeMs === undefined) return;
+    const key = `${scoped}/${timeMs}`;
+    const now = performance.now();
+    if (key === scopeDrawn || now - scopeAt < 90) return;
+    const view = planetView(scoped, new Date(timeMs));
+    if (!view) return;
+    const name = scoped;
+    void planetMap(name).then((map) => {
+      if (scoped !== name || !sky) return;
+      drawPlanet(scopeView, view, sky.starAxes.up as unknown as Vec3, map);
+    });
+    scopeDrawn = key;
+    scopeAt = now;
+    const shown = S.sky.planets[name] ?? name;
+    setText(scopeKind, T.scope.title);
+    setText(scopeName, shown);
+    scopeClose.title = T.scope.close;
+    scopeClose.setAttribute('aria-label', T.scope.close);
+    scopeView.setAttribute('aria-label', `${shown}: ${T.scope.title}`);
+    setText(scopeSize, T.scope.across(num(view.arcsec, 1)));
+    setText(scopeLit, T.scope.lit(num(view.lit * 100, view.lit > 0.995 ? 1 : 0)));
+    setText(scopeAway, T.scope.away(num(view.distanceAu, 2), num(view.distanceKm / 1e6, 0)));
+    setText(scopeFrame, T.scope.frame(num((scopeSpan(name) * view.arcsec) / 2, 0)));
+    setText(scopeNote, name === 'Mars' ? T.scope.noteMars : name === 'Saturn' ? T.scope.noteRings : name === 'Jupiter' ? T.scope.noteClouds : T.scope.notePlain);
   }
 
   function overlay(): void {
@@ -906,6 +1016,7 @@ export function createHero3D(): Hero3D {
       title.classList.remove('show');
       canvas.setAttribute('aria-label', T.aria);
       setText(loadingText, T.loading);
+      scopeDrawn = '';
       setText(faceSunBtn, T.faceSun);
       faceSunBtn.title = T.faceSunTip;
       setText(faceEarthBtn, T.faceEarth);

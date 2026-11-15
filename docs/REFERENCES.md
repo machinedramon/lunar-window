@@ -23,6 +23,7 @@ Every external resource used by the project: data, 3D assets, code and reading.
 |---|---|---|
 | Space Exploration Vehicle (concept rover) | Public domain (NASA) | NASA 3D Resources — https://github.com/nasa/NASA-3D-Resources |
 | Apollo Lunar Module | Public domain (NASA) | NASA 3D Resources — https://github.com/nasa/NASA-3D-Resources |
+| Maps of Jupiter, Saturn and Mars (the planets in the telescope) | Public domain (NASA: "free and without copyright") | NASA 3D Resources, folder *Images and Textures* — https://github.com/nasa/NASA-3D-Resources . Made smaller; the colours of the map of Saturn are softened (`tools/build_planets.py`) |
 | Moon Rock 01, 03 and 05 (scanned rocks) | CC0 | Poly Haven — https://polyhaven.com/models/rocks |
 | Moon Dusted 01 and Moon Footprints 01 (surface textures) | CC0 | Poly Haven — https://polyhaven.com/textures |
 | Solar array mast | MIT (this project) | Original, built in code (`src/viz/mast.ts`), loosely after NASA's vertical solar array concept |

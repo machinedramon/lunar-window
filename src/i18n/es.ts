@@ -37,7 +37,7 @@ export const es: Strings = {
     'im2-athena': 'Alunizó de lado dentro de un pequeño cráter; la misión terminó después de medio día, aproximadamente.',
     'im1-odysseus': 'Alunizó volcado. La mayor parte del terreno alrededor de este sitio solo está cubierta por el modelo de 240 m.',
   },
-  sky: { lmc: 'Gran Nube de Magallanes', smc: 'Pequeña Nube de Magallanes' },
+  sky: { lmc: 'Gran Nube de Magallanes', smc: 'Pequeña Nube de Magallanes', planets: { Mercury: 'Mercurio', Venus: 'Venus', Mars: 'Marte', Jupiter: 'Júpiter', Saturn: 'Saturno' } },
   replays: {
     'apollo-11': {
       when: '20 de julio de 1969, 20:17 UTC',
@@ -173,6 +173,19 @@ export const es: Strings = {
       illustrative: 'Ilustrativo: relieve fino · rocas · vehículos · nubes',
       illustrativeSphere: 'Ilustrativo: el suelo, sin modelo de terreno aquí · rocas · vehículos · nubes',
       noteSphere: 'El Sol, la Tierra, los planetas y las estrellas son reales; la Vía Láctea es el Deep Star Map de la NASA. No hay modelo de terreno para este lugar: el suelo, las rocas y los vehículos son ilustrativos. La cara de la Tierra es un día real visto por los satélites de la NASA (7 feb 2026): las nubes no son las de la fecha mostrada.',
+      scope: {
+        title: 'Telescopio',
+        open: (name: string) => `${name}: mirar por el telescopio`,
+        close: 'Cerrar el telescopio',
+        across: (s: string) => `${s}″ de diámetro`,
+        lit: (p: string) => `${p}% iluminado`,
+        away: (au: string, mkm: string) => `a ${au} ua · ${mkm} millones de km`,
+        frame: (s: string) => `campo de ${s}″ · el Sol: 1.900″`,
+        noteMars: 'Tamaño, fase e inclinación reales, y la cara que Marte muestra a la Luna en este momento. Mapa: NASA.',
+        noteClouds: 'Tamaño, fase, inclinación y achatamiento reales para este momento. Las nubes son las del día en que la NASA las cartografió, no las de esta fecha.',
+        noteRings: 'Tamaño, inclinación y apertura de los anillos reales para este momento, con sus sombras. Las nubes son las del día en que la NASA las cartografió.',
+        notePlain: 'Tamaño y fase reales para este momento. Dibujado liso: a este tamaño un telescopio no muestra detalles.',
+      },
       faceSun: 'Seguir el Sol',
       faceSunTip: 'Gira la cámara hacia el Sol y lo acompaña mientras corre el tiempo; pulsa de nuevo, o arrastra, para soltar (tecla S)',
       faceEarth: 'Seguir la Tierra',
@@ -520,7 +533,7 @@ export const es: Strings = {
       text: 'La vista 3D muestra el resultado del mismo cálculo. No añade nada a los números.',
       items: [
         'Real: el terreno (NASA LOLA, 5 m cerca de siete de los sitios) y sus sombras, la línea del horizonte, las direcciones y los tamaños del Sol y de la Tierra, la fase y la cara de la Tierra, las estrellas (Yale Bright Star Catalogue, mostradas cuando el Sol está oculto), la altura del panel solar.',
-        'Ilustrativo: el relieve más fino que el modelo de terreno, las rocas, el vehículo y el mástil del panel solar (el rover es el concepto Space Exploration Vehicle de la NASA; el mástil es diseño nuestro), y la línea fina de la antena a la Tierra (marca la línea de visión, cuya dirección es real; la radio en sí es invisible). La cara de la Tierra es un día real visto por los instrumentos VIIRS de la NASA (7 de febrero de 2026, por NASA GIBS), iluminada por el Sol del momento: los continentes están donde estarían; las nubes son las de ese día, no las de la fecha mostrada. Nada en la vista parpadea ni pulsa por efecto.',
+        'Ilustrativo: el relieve más fino que el modelo de terreno, las rocas, el vehículo y el mástil del panel solar (el rover es el concepto Space Exploration Vehicle de la NASA; el mástil es diseño nuestro), y la línea fina de la antena a la Tierra (marca la línea de visión, cuya dirección es real; la radio en sí es invisible). La cara de la Tierra es un día real visto por los instrumentos VIIRS de la NASA (7 de febrero de 2026, por NASA GIBS), iluminada por el Sol del momento: los continentes están donde estarían; las nubes son las de ese día, no las de la fecha mostrada. Nada en la vista parpadea ni pulsa por efecto. Por el telescopio, un planeta tiene tamaño, fase, inclinación y, en Saturno, anillos reales para el momento mostrado (tamaño, fase, distancia y orientación coinciden con JPL Horizons, de la NASA, en las pruebas); Marte muestra su cara verdadera; las nubes de Júpiter y de Saturno son las del día en que las sondas de la NASA las cartografiaron; Mercurio y Venus se dibujan lisos.',
       ],
     },
     made: {

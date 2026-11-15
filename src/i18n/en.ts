@@ -24,7 +24,7 @@ export const en = {
   // Names of sites and notes about them that are written differently in another language (English: as in the data).
   siteNames: {} as Record<string, string>,
   siteNotes: {} as Record<string, string>,
-  sky: { lmc: 'Large Magellanic Cloud', smc: 'Small Magellanic Cloud' },
+  sky: { lmc: 'Large Magellanic Cloud', smc: 'Small Magellanic Cloud', planets: { Mercury: 'Mercury', Venus: 'Venus', Mars: 'Mars', Jupiter: 'Jupiter', Saturn: 'Saturn' } as Record<string, string> },
   // Real landings to replay. Every statement in `happened` was checked against the source given with it (ui/replays.ts).
   replays: {
     'apollo-11': {
@@ -168,6 +168,20 @@ export const en = {
       illustrative: 'Illustrative: fine relief · rocks · vehicles · clouds',
       illustrativeSphere: 'Illustrative: the ground, no terrain model here · rocks · vehicles · clouds',
       noteSphere: 'Sun, Earth, planets and stars are real; the Milky Way is NASA’s Deep Star Map. There is no terrain model for this place: the ground, the rocks and the vehicles are illustrative. The face of the Earth is one real day as NASA’s satellites saw it (7 Feb 2026): its clouds are not those of the date shown.',
+      /** The telescope: a planet as a world, at its true size, phase and tilt (viz/telescope.ts). */
+      scope: {
+        title: 'Telescope',
+        open: (name: string) => `${name}: look through the telescope`,
+        close: 'Close the telescope',
+        across: (s: string) => `${s}″ across`,
+        lit: (p: string) => `${p}% lit`,
+        away: (au: string, mkm: string) => `${au} au away · ${mkm} million km`,
+        frame: (s: string) => `field ${s}″ wide · the Sun: 1,900″`,
+        noteMars: 'True size, phase and tilt, and the side Mars turns to the Moon at this moment. Map: NASA.',
+        noteClouds: 'True size, phase, tilt and flattening for this moment. The clouds are those of the day NASA mapped them, not of this date.',
+        noteRings: 'True size, tilt and opening of the rings for this moment, with their shadows. The clouds are those of the day NASA mapped them.',
+        notePlain: 'True size and phase for this moment. Drawn plain: at this size a telescope shows no markings.',
+      },
       faceSun: 'Follow the Sun',
       faceSunTip: 'Turn the camera to the Sun and keep it there while time runs; click again, or drag, to let go (key S)',
       faceEarth: 'Follow the Earth',
@@ -514,7 +528,7 @@ export const en = {
       text: 'The 3D view shows the result of the same computation. It adds nothing to the numbers.',
       items: [
         'Real: the terrain (NASA LOLA, 5 m near seven of the sites) and its shadows, the skyline, the directions and sizes of the Sun and the Earth, the phase and the face of the Earth, the stars (Yale Bright Star Catalogue, shown when the Sun is hidden), the height of the solar array.',
-        "Illustrative: relief finer than the terrain model, the rocks, the vehicle and the solar array mast (the rover is NASA's Space Exploration Vehicle concept; the mast is our own design), and the fine line from the antenna to the Earth (it marks the line of sight, whose direction is real; radio itself is invisible). The face of the Earth is one real day as NASA's VIIRS instruments saw it (7 February 2026, through NASA GIBS), lit by the Sun of the moment: the continents are where they would be; the clouds are those of that day, not of the date shown. Nothing in the view blinks or pulses for effect.",
+        "Illustrative: relief finer than the terrain model, the rocks, the vehicle and the solar array mast (the rover is NASA's Space Exploration Vehicle concept; the mast is our own design), and the fine line from the antenna to the Earth (it marks the line of sight, whose direction is real; radio itself is invisible). The face of the Earth is one real day as NASA's VIIRS instruments saw it (7 February 2026, through NASA GIBS), lit by the Sun of the moment: the continents are where they would be; the clouds are those of that day, not of the date shown. Nothing in the view blinks or pulses for effect. Through the telescope a planet has its true size, phase, tilt and, for Saturn, rings for the moment shown (size, phase, distance and orientation agree with NASA's JPL Horizons, in the tests); Mars turns its true face; the clouds of Jupiter and Saturn are those of the day NASA's spacecraft mapped them; Mercury and Venus are drawn plain.",
       ],
     },
     made: {
