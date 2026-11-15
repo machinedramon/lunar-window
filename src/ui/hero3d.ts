@@ -7,7 +7,7 @@ import { S } from '../i18n';
 import { FONT, MONO } from '../viz/canvas';
 import { EYE_MIN_M } from '../viz/eye';
 import { introStage } from './intro';
-import type { Place, Travel } from '../viz/travel';
+import { TRAVEL_FOV, type Place, type Travel } from '../viz/travel';
 import type { LunarScene, SceneSky } from '../viz/scene3d';
 import type { LoadedSite } from './data';
 import { h, reducedMotion, setText } from './dom';
@@ -121,6 +121,8 @@ const NAMED_DIRS: [string, number[]][] = NAMED_SKY.map(([name, ra, dec]) => {
   return [name, [Math.cos(d) * Math.cos(a), Math.cos(d) * Math.sin(a), Math.sin(d)]];
 });
 
+/** Radians in a degree. */
+const RAD = Math.PI / 180;
 let shared: { api: Hero3D; relabel: () => void } | null = null;
 /** The 3D view, once there is one. */
 export const heroView = (): Hero3D | null => shared?.api ?? null;
@@ -263,6 +265,8 @@ export function createHero3D(): Hero3D {
   let runs = 0;
   let readySaid = false;
   let arrivingSaid = false;
+  /** True while the camera comes down on a place from the globe: it is driven from there, not by the pointer or the easing. */
+  let landing = false;
   const ready = () => {
     if (readySaid) return;
     readySaid = true;
@@ -335,8 +339,9 @@ export function createHero3D(): Hero3D {
     // Between two places the Moon turns under the camera, lit as it is at this moment, and the camera comes down
     // on the new one. (A dip to black where motion is not wanted, or if the globe cannot be drawn.)
     let flying = false;
+    let from: Place | null = null;
     if (newSite && terrainKey) {
-      const from = shownPlace;
+      from = shownPlace;
       if (from && moment && !reducedMotion()) {
         const sun = sunMoonFixed(from, moment);
         try {
@@ -397,11 +402,12 @@ export function createHero3D(): Hero3D {
       introStage(0.85);
       await scene.warm();
       if (run !== runs || !scene) return;
-      if (flying && travel) {
-        await travel.fly();
+      if (flying && travel && from) {
+        // The longer the way over the globe, the longer the Moon takes to turn; the descent takes its own time.
+        const far = Math.acos(Math.max(-1, Math.min(1, Math.sin(from.lat * RAD) * Math.sin(target0.site.lat * RAD) + Math.cos(from.lat * RAD) * Math.cos(target0.site.lat * RAD) * Math.cos((from.lon - target0.site.lon) * RAD))));
+        await land(target0, from, 1300 + 1000 * Math.min(2.4, far), 4600);
         if (run !== runs || !scene) return;
-      }
-      arrive(target0);
+      } else arrive(target0);
     }
     whole = target0.site.id;
     ready();
@@ -421,13 +427,117 @@ export function createHero3D(): Hero3D {
       return null;
     }
     return {
-      fly: async (ms) => {
-        await travel?.fly(ms);
-        if (site === here && scene) arrive(here);
-        else travel?.hide();
-      },
+      fly: (ms) => land(here, from, ms * 0.55, ms),
       cancel: () => travel?.hide(),
     };
+  }
+
+  /**
+   * From the Moon seen whole to the ground of a place, in one move, with no cut. The globe turns to the place (in
+   * `turnMs`) and the camera comes down (in `fallMs`, starting before the turn is over): first over the globe;
+   * then over the real terrain of the place seen from above, which is drawn underneath at the same scale, with the
+   * same middle and the same way up, and into which the globe dissolves on the way; down to the height of the eye,
+   * where the camera looks up to the view the place is shown from. The height falls evenly on a scale of powers
+   * of ten, slowly at both ends, so that the zoom neither stops nor jumps.
+   */
+  function land(here: LoadedSite, from: Place, turnMs: number, fallMs: number): Promise<void> {
+    const way = travel;
+    if (!scene || !way) {
+      arrive(here);
+      return Promise.resolve();
+    }
+    const to = here.site;
+    // Which way is up on screen above the place: the axis the Moon turned about, as it lies on the ground there.
+    const at = (p: { lat: number; lon: number }): Vec3 => [Math.cos(p.lat * RAD) * Math.cos(p.lon * RAD), Math.cos(p.lat * RAD) * Math.sin(p.lon * RAD), Math.sin(p.lat * RAD)];
+    const a = at(from);
+    const b = at(to);
+    const axis: Vec3 = [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+    const east: Vec3 = [-Math.sin(to.lon * RAD), Math.cos(to.lon * RAD), 0];
+    const north: Vec3 = [-Math.sin(to.lat * RAD) * Math.cos(to.lon * RAD), -Math.sin(to.lat * RAD) * Math.sin(to.lon * RAD), Math.cos(to.lat * RAD)];
+    const dot3 = (u: Vec3, v: Vec3) => u[0] * v[0] + u[1] * v[1] + u[2] * v[2];
+    // (A hop too short to have an axis is flown with north up, as the globe shows it.)
+    const upAz = Math.hypot(axis[0], axis[1], axis[2]) > 0.03 ? (Math.atan2(dot3(axis, east), dot3(axis, north)) / RAD + 360) % 360 : 0;
+    const h = way.heights();
+    const tall = Math.max(1, el.clientHeight);
+    // The lens under which the place is as large, in pixels, as the globe shows it.
+    const lens = (2 * Math.atan((Math.tan((TRAVEL_FOV * RAD) / 2) * tall) / h.tall)) / RAD;
+    // The terrain of the place reaches 307 km from it, in a square: the globe starts to go at the height from which
+    // the whole picture, corners included, falls within 295 km of the place, and is gone by half that height.
+    const reach = 295 / (Math.tan((lens * RAD) / 2) * Math.hypot(1, el.clientWidth / tall));
+    const high = Math.min(reach, h.far * 0.92);
+    const low = high / 2.1;
+    const eye = Math.max(EYE_MIN_M, MAST_HEIGHTS_M[mast]);
+    const lnFar = Math.log(h.far * 1000);
+    const lnEye = Math.log(eye);
+    const fallAt = turnMs * 0.62;
+    const ease = (t: number) => {
+      const c = Math.max(0, Math.min(1, t));
+      return c * c * c * (c * (c * 6 - 15) + 10);
+    };
+    // What an arrival says and hides: the name of the place for the title card, the instruments out of the way.
+    setText(titleName, to.name);
+    setText(titleSub, `${latLon(to.lat, to.lon)}${when ? ` · ${when}` : ''}`);
+    shownPlace = { lat: to.lat, lon: to.lon, name: to.name };
+    fade.classList.remove('on');
+    follow(null);
+    landing = true;
+    arriving = 0;
+    arrivingSaid = true;
+    api.onArriving?.(true);
+    el.classList.add('arriving');
+    slow = 0.016;
+    frames = 0;
+    let gone = false;
+    let titled = false;
+    return new Promise<void>((resolve) => {
+      const t0 = performance.now();
+      const done = () => {
+        if (scene) {
+          scene.flight = null;
+          Object.assign(scene.look, target);
+        }
+        if (!gone) way.hide();
+        landing = false;
+        el.classList.remove('arriving');
+        arrivingSaid = false;
+        api.onArriving?.(false);
+        wake();
+        resolve();
+      };
+      const step = (now: number) => {
+        if (!scene || site !== here) return done();
+        const ms = now - t0;
+        const x = (ms - fallAt) / fallMs;
+        // Above the place that is left the camera first draws back a little; then it falls.
+        const metres = x <= 0 ? (h.start + (h.far - h.start) * ease(ms / (turnMs * 0.45))) * 1000 : Math.exp(lnFar + (lnEye - lnFar) * ease(x));
+        const km = metres / 1000;
+        const alpha = Math.max(0, Math.min(1, (Math.log(km) - Math.log(low)) / (Math.log(high) - Math.log(low))));
+        // On the way down, before the globe starts to go, its picture closes to the frame the place is drawn in.
+        const crop = ease((Math.log(h.far) - Math.log(km)) / Math.max(0.1, Math.log(h.far) - Math.log(high)));
+        if (alpha > 0) way.frameAt(ease(ms / turnMs), km, alpha, x <= 0 ? 0 : crop);
+        else if (!gone) {
+          gone = true;
+          way.hide();
+        }
+        // The place itself, underneath: from the same height, the same way up, through the matching lens; near
+        // the ground the camera looks up, turns to where the place is shown from, and its lens opens.
+        const up = ease((x - 0.72) / 0.28);
+        scene.flight = metres;
+        scene.look.az = (upAz + shortest(upAz, target.az) * up + 360) % 360;
+        scene.look.pitch = -90 + (target.pitch + 90) * up;
+        scene.look.fov = lens + (target.fov - lens) * ease((x - 0.45) / 0.55);
+        if (!titled && x > 0.76) {
+          titled = true;
+          title.classList.remove('show');
+          void title.offsetWidth; // restart the animation
+          title.classList.add('show');
+        }
+        wake();
+        if (x < 1) requestAnimationFrame(step);
+        else done();
+      };
+      requestAnimationFrame(step);
+    });
   }
 
   /** Arrival shot: from the ground at one's feet up to the sky, with the name of the place. */
@@ -589,7 +699,9 @@ export function createHero3D(): Hero3D {
     const k = still ? 1 : 1 - Math.exp(-dt * rate);
     // An instrument holds still: left alone, the camera does not move, so the picture is the same frame
     // after frame and nothing fine in it can shimmer. It moves when the visitor moves it or time flows.
-    if (following) {
+    if (landing) {
+      // Coming down from the globe, the camera is driven by the descent itself.
+    } else if (following) {
       // A body that is followed is held exactly: an eased camera would trail behind it by a few degrees when
       // the clock runs fast. The turn towards it is one smooth move, which ends on the body wherever it then is.
       const u = still ? 1 : Math.min(1, (now - swing.at) / SWING_MS);
@@ -600,10 +712,10 @@ export function createHero3D(): Hero3D {
       scene.look.az = (scene.look.az + shortest(scene.look.az, target.az) * k + 360) % 360;
       scene.look.pitch += (target.pitch - scene.look.pitch) * k;
     }
-    scene.look.fov += (target.fov - scene.look.fov) * k;
+    if (!landing) scene.look.fov += (target.fov - scene.look.fov) * k;
     if (arriving && now - arriving > 5200) arriving = 0;
     // The title card plays over a clean picture; the instruments come in afterwards.
-    const coming = arriving > 0 && now - arriving < 3600;
+    const coming = landing || (arriving > 0 && now - arriving < 3600);
     el.classList.toggle('arriving', coming);
     if (arrivingSaid && !coming) {
       arrivingSaid = false;
@@ -621,7 +733,7 @@ export function createHero3D(): Hero3D {
     slow += (Math.min(dt, 0.066) - slow) * 0.08;
     // Not while the camera arrives: the long frames of the loading say nothing about the speed of the machine,
     // and a change of resolution in the middle of that move would be seen.
-    if (++frames % 40 === 0 && !lockedQuality && !(arriving && now - arriving < 4200)) {
+    if (++frames % 40 === 0 && !lockedQuality && !landing && !(arriving && now - arriving < 4200)) {
       if (slow > 0.03 && scene.quality > 0.6) {
         // If raising the resolution is what made it slow again, wait longer before the next try.
         if (now - raisedAt < 5000) holdMs = Math.min(120000, holdMs * 2);
@@ -642,7 +754,7 @@ export function createHero3D(): Hero3D {
   function teleWindows(): { x: number; y: number; size: number; az: number; el: number; fov: number }[] {
     if (!moment || !site) return [];
     // The telephoto views come in with their instruments, a moment after the arrival.
-    if (arriving && performance.now() - arriving < 4600) return [];
+    if (landing || (arriving && performance.now() - arriving < 4600)) return [];
     // Nor while the guide has the instruments step back: a window without its instrument would hang in the sky.
     if (document.body.classList.contains('guide-cine')) return [];
     const box = canvas.getBoundingClientRect();

@@ -33,10 +33,25 @@ export interface Travel {
    * `back` multiplies how far the camera pulls away (a frame much wider than tall needs more).
    */
   pose(t: number, back?: number): void;
+  /**
+   * For a descent that goes on into the place itself (ui/hero3d.ts): how high above the ground the journey starts
+   * and how high it goes, in km; and how tall its picture is and where its middle is on the page, in pixels.
+   */
+  heights(): { start: number; far: number; tall: number; middle: number };
+  /**
+   * Draws the way at fraction `turn` of the great circle, seen from `altKm` above the ground, with the globe at
+   * opacity `alpha`: below 1 the place itself, drawn underneath, shows through, and the globe dissolves into it.
+   * `crop`, from 0 to 1, closes the picture from the whole screen to the frame of the 3D view, as two dark bands
+   * coming in: the place is drawn in that frame, and the globe has to be in it too by the time it dissolves.
+   */
+  frameAt(turn: number, altKm: number, alpha: number, crop?: number): void;
   /** Uncovers the view. */
   hide(): void;
   dispose(): void;
 }
+
+/** The lens of the journey: its vertical field of view, in degrees. */
+export const TRAVEL_FOV = 30;
 
 const D2R = Math.PI / 180;
 const MOON_KM = 1737.4;
@@ -156,7 +171,7 @@ export function createTravel(container: HTMLElement): Travel {
 
   let renderer: THREE.WebGLRenderer | null = null;
   const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(30, 2, 0.05, 30);
+  const camera = new THREE.PerspectiveCamera(TRAVEL_FOV, 2, 0.02, 30);
   const moon = new THREE.ShaderMaterial({
     vertexShader: MOON_VERT,
     fragmentShader: MOON_FRAG,
@@ -224,6 +239,8 @@ export function createTravel(container: HTMLElement): Travel {
   let lift = 0;
   let frame = 0;
   let wayKm = 0;
+  /** Where the middle of the picture is on the page, in pixels from the top. */
+  let middle = 0;
   const points: THREE.Vector3[] = [];
   const scratch = new THREE.Vector3();
 
@@ -251,8 +268,13 @@ export function createTravel(container: HTMLElement): Travel {
     renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
     renderer.setSize(w, h, false);
     camera.aspect = w / h;
-    // Over the whole screen the foot of the picture belongs to the voice: the globe sits a little higher.
-    if (whole) camera.setViewOffset(w, h, 0, Math.round(h * 0.06), w, h);
+    // Over the whole screen the middle of the picture stays where the middle of the 3D view is (the foot of the
+    // screen belongs to the voice): the place the descent ends on is then drawn where the globe showed it.
+    const view = container.getBoundingClientRect();
+    const here = el.getBoundingClientRect();
+    middle = view.top + view.height / 2;
+    const shift = Math.round(here.top + h / 2 - middle);
+    if (whole && Math.abs(shift) > 0) camera.setViewOffset(w, h, 0, shift, w, h);
     else camera.clearViewOffset();
     camera.updateProjectionMatrix();
     for (const line of [ahead, behind]) (line.material as LineMaterial).resolution.set(w, h);
@@ -263,15 +285,29 @@ export function createTravel(container: HTMLElement): Travel {
    * along the great circle while the point of light draws the way; over the place that is reached the camera
    * comes down, slowly at first.
    */
-  const place = (t: number, back = 1) => {
+  /** How far the journey is seen from, in Moon radii from the centre: at its start, and at its farthest. */
+  const reach = (back = 1): { start: number; far: number } => {
     // A short hop stays low; a journey across the Moon is seen from where the whole globe is in view.
     // (Seen whole, the Moon takes two thirds of the height of the picture: the rest is the dark around it.)
     const far = NEAR + Math.min(4.2, angle * 3.3) * back;
-    const start = NEAR + (far - NEAR) * 0.9;
+    return { start: NEAR + (far - NEAR) * 0.9, far };
+  };
+
+  const place = (t: number, back = 1) => {
+    const { start, far } = reach(back);
     const turn = smooth(t / 0.76);
     const fall = smooth((t - 0.4) / 0.6);
     const out = smooth(t / 0.3);
     const d = (start + (far - start) * out) * (1 - fall) + NEAR * fall;
+    // The last of the descent goes into the dark: the place itself comes out of it, on the ground.
+    draw(turn, d, far, 1 - smooth((t - 0.84) / 0.15), 1 - smooth((t - 0.8) / 0.12), 1 - smooth((t - 0.8) / 0.1));
+  };
+
+  /**
+   * The picture: at fraction `turn` of the way, from `d` Moon radii; the globe at opacity `alpha`, the point of
+   * light at `tip`, the words at `words`.
+   */
+  const draw = (turn: number, d: number, far: number, alpha: number, tip: number, words: number) => {
     along(turn, scratch);
     camera.position.copy(scratch).multiplyScalar(d);
     camera.up.copy(up);
@@ -283,25 +319,23 @@ export function createTravel(container: HTMLElement): Travel {
     const drawn = Math.max(1, Math.round(turn * SEGMENTS));
     (behind.geometry as LineGeometry).instanceCount = drawn;
     behind.visible = turn > 0.004;
-    const tip = points[Math.min(SEGMENTS, drawn)] ?? points[0];
+    const end = points[Math.min(SEGMENTS, drawn)] ?? points[0];
     // The marks keep their size on screen whatever the distance.
     const px = (pixels: number, at: THREE.Vector3) => (camera.position.distanceTo(at) * 2 * Math.tan((camera.fov * D2R) / 2) * pixels) / Math.max(1, el.clientHeight);
-    if (tip) {
-      head.position.copy(tip);
-      head.scale.setScalar(px(34, tip));
-      (head.material as THREE.SpriteMaterial).opacity = 1 - smooth((t - 0.8) / 0.12);
+    if (end) {
+      head.position.copy(end);
+      head.scale.setScalar(px(34, end));
+      (head.material as THREE.SpriteMaterial).opacity = tip;
     }
     origin.scale.setScalar(px(15, origin.position));
     const beat = 1 + 0.07 * Math.sin(performance.now() / 260);
     sight.scale.setScalar(px(50, sight.position) * beat);
-    (sight.material as THREE.SpriteMaterial).opacity = 0.4 + 0.6 * smooth(t / 0.5);
+    (sight.material as THREE.SpriteMaterial).opacity = (0.4 + 0.6 * smooth(turn / 0.6)) * Math.min(1, alpha * 1.4);
     // The words: the line between the two names fills, the kilometres go by.
     wayFill.style.transform = `scaleX(${turn.toFixed(4)})`;
     km.textContent = `${thousands(turn * wayKm)} / ${thousands(wayKm)} km`;
-    // The last of the descent goes into the dark: the place itself comes out of it, on the ground.
-    const dark = smooth((t - 0.84) / 0.15);
-    canvas.style.opacity = (1 - dark).toFixed(3);
-    route.style.opacity = km.style.opacity = (1 - smooth((t - 0.8) / 0.1)).toFixed(3);
+    canvas.style.opacity = alpha.toFixed(3);
+    route.style.opacity = km.style.opacity = words.toFixed(3);
     renderer?.render(scene, camera);
   };
 
@@ -341,6 +375,8 @@ export function createTravel(container: HTMLElement): Travel {
       wayKm = angle * MOON_KM;
       fromName.textContent = from.name;
       toName.textContent = to.name;
+      el.classList.remove('through');
+      el.style.clipPath = '';
       place(0);
       el.classList.add('on');
       await new Promise<void>((resolve) => window.setTimeout(resolve, FADE_MS));
@@ -362,6 +398,21 @@ export function createTravel(container: HTMLElement): Travel {
     pose(t, back = 1) {
       cancelAnimationFrame(frame);
       place(clamp(t), back);
+    },
+    heights() {
+      const { start, far } = reach();
+      return { start: (start - 1) * MOON_KM, far: (far - 1) * MOON_KM, tall: Math.max(1, el.clientHeight), middle };
+    },
+    frameAt(turn, altKm, alpha, crop = 0) {
+      cancelAnimationFrame(frame);
+      // Dissolving: the dark behind the globe goes with it, so that what is underneath shows.
+      el.classList.toggle('through', alpha < 1);
+      if (crop > 0 && el.classList.contains('whole')) {
+        const view = container.getBoundingClientRect();
+        const here = el.getBoundingClientRect();
+        el.style.clipPath = `inset(${(Math.max(0, view.top - here.top) * crop).toFixed(1)}px 0 ${(Math.max(0, here.bottom - view.bottom) * crop).toFixed(1)}px 0)`;
+      } else el.style.clipPath = '';
+      draw(clamp(turn), 1 + Math.max(0, altKm) / MOON_KM, reach().far, alpha, alpha, clamp(alpha * 1.6 - 0.6));
     },
     hide() {
       cancelAnimationFrame(frame);

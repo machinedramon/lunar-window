@@ -89,6 +89,7 @@ export const pt: Strings = {
     brief: {
       call: 'Alguém está chamando da Terra.',
       skip: 'Pular',
+      begin: 'Clique em qualquer lugar para começar',
       hint: 'Clique em qualquer lugar para ter som',
     },
     alerts: {

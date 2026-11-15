@@ -81,6 +81,7 @@ export const en = {
     brief: {
       call: 'Someone is calling from Earth.',
       skip: 'Skip',
+      begin: 'Click anywhere to begin',
       hint: 'Click anywhere for sound',
     },
     /** The bands across the screen at the three turns of the story: a title and a line under it. */

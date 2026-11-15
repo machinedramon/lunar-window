@@ -327,6 +327,7 @@ uniform vec3 uSun;
 uniform float uSunPower;
 uniform vec3 uEarth;
 uniform float uEarthshine;
+uniform float uAloft;
 varying vec3 vPos;
 
 vec2 slopeOf(sampler2D t, vec2 p, float halfSize, float e) {
@@ -519,7 +520,12 @@ void main() {
   }
 
   float albedo = 0.125 * (1.0 + albedoNoise);
-  vec3 col = vec3(albedo) * (7.5 * direct * phase * shadow * uSunPower);
+  // Seen from high above, on the way down from the globe, the ground is shown as the globe showed it: its relief
+  // by the Sun without the long shadows, and a light of its own so that the dark side reads. Both go as the
+  // camera comes down: on the ground, only what the Sun and the Earth really give.
+  float thrown = mix(shadow, 1.0, uAloft * 0.8);
+  vec3 col = vec3(albedo) * (7.5 * direct * phase * thrown * uSunPower);
+  col += vec3(albedo) * uAloft * (0.5 + 1.6 * max(n.y, 0.0) * max(n.y, 0.0));
   col += vec3(0.80, 0.88, 1.0) * albedo * uEarthshine * (0.35 + 0.65 * max(dot(n, uEarth), 0.0));
   // In shadow the ground still receives the light scattered by the sunlit ground around: dark, not a hole.
   col += vec3(albedo) * 0.034 * uSunPower;
@@ -776,6 +782,8 @@ export class LunarScene {
   private readonly shadowSun = new THREE.Vector3();
   private shadowsDirty = true;
   private readonly fine = { value: 0 };
+  /** How much the ground is shown as a map, from 0 (on the ground) to 1 (from high above, coming down from the globe). */
+  private readonly aloft = { value: 0 };
   private readonly sunLight = new THREE.DirectionalLight(0xffffff, 0);
   private readonly bounce = new THREE.HemisphereLight(0x000000, 0xa8a8a8, 0);
   private readonly earthLight = new THREE.DirectionalLight(0xbdd4ff, 0);
@@ -805,6 +813,11 @@ export class LunarScene {
   private mastGoal = 2;
   /** Where the camera looks: azimuth and pitch in degrees, vertical field of view in degrees. */
   look = { az: 0, pitch: 4, fov: 46 };
+  /**
+   * The camera lifted off the ground, for the descent on a place from the globe: its height above the ground of
+   * the site in metres, or null when it stands at eye height. The terrain is the same real one, seen from above.
+   */
+  flight: number | null = null;
 
   constructor(canvas: HTMLCanvasElement) {
     // The recording tool asks for a picture that stays in the canvas after it is shown, so that a frame grab never finds it empty.
@@ -825,7 +838,7 @@ export class LunarScene {
     }
     const heights = { tH0: { value: this.heightTex[0] }, tH1: { value: this.heightTex[1] }, tH2: { value: this.heightTex[2] }, tH3: { value: this.heightTex[3] } };
     const shadows = { tS0: { value: this.shadowTargets[0].texture }, tS1: { value: this.shadowTargets[1].texture }, tS2: { value: this.shadowTargets[2].texture }, tS3: { value: this.shadowTargets[3].texture } };
-    const light = { uSun: { value: this.sunDir }, uSunPower: { value: 1 }, uEarth: { value: new THREE.Vector3(0, 0.1, -1) }, uEarthshine: { value: 0.012 }, uFine: this.fine };
+    const light = { uSun: { value: this.sunDir }, uSunPower: { value: 1 }, uEarth: { value: new THREE.Vector3(0, 0.1, -1) }, uEarthshine: { value: 0.012 }, uFine: this.fine, uAloft: this.aloft };
     const texLoader = new THREE.TextureLoader();
     const regolith = { tRegA: { value: null as THREE.Texture | null }, tRegN: { value: null as THREE.Texture | null }, uRegOn: { value: 0 } };
     let loadedMaps = 0;
@@ -1543,6 +1556,15 @@ void main() {
     if (now - this.shadowMapAt > 1000) this.renderer.shadowMap.needsUpdate = true;
     if (this.renderer.shadowMap.needsUpdate) this.shadowMapAt = now;
     this.props?.mast?.animate();
+    // Aloft, the camera sees as far as the terrain goes; the far ring that draws the skyline for an eye on the
+    // ground has no place in a view from above.
+    const aloft = this.flight !== null && this.flight > this.eye;
+    this.camera.position.y = aloft ? this.flight! : this.eye;
+    this.camera.far = aloft ? Math.max(FAR_M, this.flight! * 1.25 + FAR_M) : FAR_M;
+    if (this.skyline) this.skyline.visible = !aloft || this.flight! < 30;
+    // From 60 km up the ground is all map; under 1.5 km it is only itself.
+    const high = aloft ? (Math.log(this.flight!) - Math.log(1500)) / (Math.log(60000) - Math.log(1500)) : 0;
+    this.aloft.value = Math.max(0, Math.min(1, high));
     this.camera.fov = this.look.fov;
     this.camera.rotation.set(this.look.pitch * D2R, -this.look.az * D2R, 0);
     this.camera.updateProjectionMatrix();

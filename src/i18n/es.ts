@@ -89,6 +89,7 @@ export const es: Strings = {
     brief: {
       call: 'Alguien llama desde la Tierra.',
       skip: 'Saltar',
+      begin: 'Haz clic en cualquier lugar para empezar',
       hint: 'Haz clic en cualquier lugar para tener sonido',
     },
     alerts: {

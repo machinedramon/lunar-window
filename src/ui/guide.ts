@@ -12,8 +12,10 @@
 // while the camera comes down on the site. The Guide button of the top bar brings all of it back, from the
 // beginning, as often as wanted.
 //
-// A browser plays no sound before the visitor has clicked or pressed something. Until then the guide runs with
-// its words written out, at reading pace, and says so in a line: the first click anywhere brings the voice in.
+// A browser plays no sound before the visitor has clicked or pressed something. So the dark, which comes by
+// itself, waits there for one click anywhere (a line under the sentence says so): the click starts the guide and
+// lets the voice be heard. Should a sound still be refused, the guide runs with its words written out, at
+// reading pace, and the first click brings the voice in.
 //
 // From there on the guide wears the marks of a display: a sight that closes on what is asked for, a band across
 // the screen when something decisive happens (the Sun is lost, the launch is late, the Earth is in view). The
@@ -56,7 +58,7 @@ const DARK = Date.UTC(2027, 1, 4);
 const FROM = 'apollo-11';
 /** The descent over the globe, in milliseconds, and the least time the dark stays while things are made ready: its three words are read. */
 const DESCENT_MS = 6200;
-const BRIEF_MS = 4300;
+const BRIEF_MS = 1500;
 /** The tones at each end of a clip, in seconds: the words are between them. */
 const TONE_S = 0.36;
 
@@ -353,6 +355,8 @@ export function createGuide(store: Store, host: GuideHost): Guide {
   let readMs = 0;
   /** True once a sound may play: the visitor has clicked or pressed something, or the browser let one play. */
   let audible = false;
+  /** While the dark waits for the click that starts the guide: what that click sets going. */
+  let begin: (() => void) | null = null;
   let ctx: AudioContext | null = null;
   let analyser: AnalyserNode | null = null;
   let level = 0;
@@ -368,10 +372,16 @@ export function createGuide(store: Store, host: GuideHost): Guide {
   /** Whether the browser will play a sound now: it does once the visitor has clicked or pressed something. */
   const soundFree = (): boolean => audible || !!(navigator as Navigator & { userActivation?: { hasBeenActive: boolean } }).userActivation?.hasBeenActive;
   /** The first click or key anywhere: sound is allowed from now on, and a line that was only written out is said aloud. */
-  const gesture = (): void => {
+  const gesture = (ev: Event): void => {
+    // On the way out or on a language: that is what was meant, not "begin".
+    const aside = ev.target instanceof Element && !!ev.target.closest('.call-skip, .call-lang');
+    if (begin && !aside) {
+      const go = begin;
+      begin = null;
+      go();
+    }
     if (audible) return;
     audible = true;
-    callHint.hidden = true;
     if (at < 0 && !opening) return;
     unlock();
     if (at >= 0 && !spoken && readMs) speak();
@@ -427,7 +437,6 @@ export function createGuide(store: Store, host: GuideHost): Guide {
     void ctx?.resume();
     a.play().then(() => {
       audible = true;
-      callHint.hidden = true;
     }, read);
     // the lines that follow are read ahead
     for (const next of steps.slice(at + 1, at + 3)) clip(language(), next.id);
@@ -605,7 +614,7 @@ export function createGuide(store: Store, host: GuideHost): Guide {
     brief.hidden = false;
     brief.classList.remove('open');
     say(G().brief.call, true);
-    callHint.hidden = soundFree();
+    callHint.hidden = true;
     if (atOnce) brief.style.transition = 'none';
     void brief.offsetWidth;
     brief.classList.add('in');
@@ -697,25 +706,30 @@ export function createGuide(store: Store, host: GuideHost): Guide {
    * Starts the guide, from the beginning. The dark covers the screen while the first line is read ahead, the site
    * of the story is built behind it and the globe is put above the place the descent starts from; then the voice
    * comes on, the screen is uncovered on the Moon seen from space and the camera comes down.
-   * @param grace  milliseconds before the tool is taken to where the story starts: when the guide opens by itself
-   *               over a scenario that came with the address, skipping it at once leaves that scenario as it was
+   * @param byItself  the guide opens the tool by itself: the dark waits for one click anywhere before going on
+   *                  (the click is what lets the browser play the voice), and it is there at once, under the
+   *                  opening screen. Skipped before that click, the tool is left exactly as it was.
    */
-  async function start(grace = 0, atOnce = false): Promise<void> {
+  async function start(byItself = false): Promise<void> {
     if (opening) return;
     if (at >= 0) finish(true);
     const mine = ++run;
     const live = () => mine === run;
     opening = true;
-    unlock();
-    openBrief(atOnce);
+    openBrief(byItself);
     stage(0);
     document.body.classList.add('guide-on', 'guide-cine');
     button.setAttribute('aria-pressed', 'true');
-    const began = performance.now();
-    if (grace) {
-      await wait(grace);
+    if (byItself && !soundFree()) {
+      // What can be made ready meanwhile, is: the lines are read ahead.
+      for (const step of steps.slice(0, 3)) clip(language(), step.id);
+      callHint.hidden = false;
+      await new Promise<void>((resolve) => (begin = resolve));
+      callHint.hidden = true;
       if (!live()) return;
     }
+    unlock();
+    const began = performance.now();
     // Behind the dark, the tool goes where the story starts.
     steps[0].enter?.(store.state);
     preloadJourney();
@@ -774,6 +788,7 @@ export function createGuide(store: Store, host: GuideHost): Guide {
     run++;
     opening = false;
     landing = false;
+    begin = null;
     closeBrief();
     window.clearTimeout(silent);
     audio?.pause();
@@ -805,7 +820,7 @@ export function createGuide(store: Store, host: GuideHost): Guide {
     button.title = G().buttonTip;
     button.setAttribute('aria-label', G().buttonTip);
     setText(skipBtn, B.skip);
-    setText(callHint, B.hint);
+    setText(callHint, B.begin);
     langSeg.setAttribute('aria-label', S.lang.label);
     langSeg.querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.code === language())));
     // The sentence of the call, in the new language.
@@ -823,8 +838,7 @@ export function createGuide(store: Store, host: GuideHost): Guide {
 
   function auto(): void {
     if (!guideOpens(store.state.tab) || at >= 0 || opening) return;
-    // Over a scenario that came with the address, a moment is left to skip before the tool is taken elsewhere.
-    void start(store.state.siteId === SITE ? 0 : 1700, true);
+    void start(true);
   }
 
   return { button, relabel, auto };

@@ -3318,6 +3318,10 @@ table.compare tbody tr.cmp-actions td {
   width: 100%;
   height: 100%;
 }
+/* While the globe dissolves into the place itself, the dark behind it goes with it. */
+.travel.through {
+  background: transparent;
+}
 /* While the guide has only the picture on, the journey covers the whole screen (it is then a child of the page). */
 .travel.whole {
   position: fixed;
