@@ -34,7 +34,8 @@ Other candidate sites come from Wueller et al. 2026 (see Reading).
 |---|---|---|
 | [astronomy-engine](https://github.com/cosinekitty/astronomy) | MIT | Positions of the Sun, Earth and Moon and the lunar rotation, in the browser |
 | [three.js](https://threejs.org) | MIT | 3D view |
-| [Geist and Geist Mono](https://github.com/vercel/geist-font), via Fontsource | OFL 1.1 | Typefaces |
+| [Jost](https://indestructibletype.com/Jost.html) by Owen Earl (indestructible type*), via Fontsource | OFL 1.1 | Typeface of the headings and of the explanations. An open family in the tradition of Futura, the typeface of the plaque Apollo 11 left on the Moon; it is not NASA's lettering |
+| [B612](https://github.com/polarsys/b612) by Airbus, ENAC, Université de Toulouse III and Intactile Design, via Fontsource | OFL 1.1 | Typeface of the labels, the figures and the controls. Designed and tested for the cockpit displays of aircraft; its figures all have the same width |
 | [Vite](https://vitejs.dev), [TypeScript](https://www.typescriptlang.org), [Vitest](https://vitest.dev), [Playwright](https://playwright.dev) | MIT / Apache-2.0 | Build, tests and development screenshots |
 | [NumPy](https://numpy.org), [tifffile](https://github.com/cgohlke/tifffile), [Pillow](https://python-pillow.org) | BSD / BSD / MIT-CMU | Offline tools: horizons, terrain tiles, textures |
 | [glTF-Transform](https://gltf-transform.dev) | MIT | Re-encoding the NASA models for the web |

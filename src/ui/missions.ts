@@ -6,7 +6,7 @@ import { PROFILES, type Requirements } from '../core/requirements';
 import { STATUS_CODES, type SiteCalendar } from '../core/calendar';
 import { S } from '../i18n/en';
 import { calendarCell, drawCalendar, type CalendarGeometry, type CalendarRow } from '../viz/calendar';
-import { onResize } from '../viz/canvas';
+import { COLORS, FONT, onResize, surface } from '../viz/canvas';
 import type { ComputeResult } from '../worker/protocol';
 import type { App, View } from './app';
 import { clear, h, reducedMotion } from './dom';
@@ -75,6 +75,90 @@ export function createMissions(app: App, planner: Planner): View {
   let slipShown = 0;
   let canvas: HTMLCanvasElement | null = null;
 
+  /** The computed board of each mission: drawn on its card, and ready when the mission starts. */
+  const boards = new Map<string, ComputeResult>();
+  const board = (m: Mission): Promise<ComputeResult> => {
+    const have = boards.get(m.id);
+    if (have) return Promise.resolve(have);
+    return planner.compute(m.startMs, m.days, m.req).then((res) => {
+      boards.set(m.id, res);
+      return res;
+    });
+  };
+
+  /** The mission's real calendar in small: one row per site, one column per day, white where a landing works. */
+  function drawBoard(cv: HTMLCanvasElement, m: Mission, res: ComputeResult | null): void {
+    if (!cv.isConnected) return;
+    // The board takes the room the card has left, within reason.
+    const room = cv.parentElement ? cv.parentElement.clientHeight - 22 : 136;
+    const { ctx, w, h: height } = surface(cv, Math.max(118, Math.min(250, room)));
+    ctx.clearRect(0, 0, w, height);
+    const AXIS = 18;
+    const GAP = 3;
+    const rowH = (height - AXIS - GAP * (terrain.length - 1)) / terrain.length;
+    const cellW = w / m.days;
+    // whole pixels, so that neighbouring days never leave a seam
+    const xOf = (d: number) => Math.round(d * cellW);
+    terrain.forEach((site, i) => {
+      const top = i * (rowH + GAP);
+      ctx.fillStyle = '#131315';
+      ctx.fillRect(0, top, w, rowH);
+      const cal = res?.calendars.find((c) => c.siteId === site.id)?.cal;
+      if (!cal) return;
+      for (let d = 0; d < m.days; d++) {
+        const st = cal.status[d];
+        if (!st) continue;
+        const share = cal.points > 1 ? cal.robust[d] / cal.points : 1;
+        ctx.fillStyle = `rgba(255,255,255,${(0.34 + 0.66 * share).toFixed(3)})`;
+        // as on the planner's calendar: a marginal day is a short bar
+        if (st === 2) ctx.fillRect(xOf(d), top, xOf(d + 1) - xOf(d), rowH);
+        else ctx.fillRect(xOf(d), top + rowH * 0.55, xOf(d + 1) - xOf(d), rowH * 0.45);
+      }
+    });
+    const bottom = height - AXIS;
+    // days that may not be chosen step back
+    ctx.fillStyle = 'rgba(0,0,0,0.62)';
+    if (m.from > 0) ctx.fillRect(0, 0, m.from * cellW, bottom);
+    if (m.to < m.days - 1) ctx.fillRect((m.to + 1) * cellW, 0, w - (m.to + 1) * cellW, bottom);
+    // the planned landing, and where the slip moves it
+    if (m.planned) {
+      const line = (day: number, color: string, dash: number[]) => {
+        const x = Math.round((day + 0.5) * cellW) + 0.5;
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 1;
+        ctx.setLineDash(dash);
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, bottom);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      };
+      line(m.planned.day, 'rgba(255,255,255,0.85)', [3, 3]);
+      line(m.planned.day + m.slip, COLORS.earth, []);
+    }
+    // months
+    ctx.font = `400 9.5px ${FONT}`;
+    ctx.textBaseline = 'alphabetic';
+    ctx.textAlign = 'left';
+    for (let d = 0; d < m.days; d++) {
+      const date = new Date(m.startMs + d * DAY_MS);
+      if (date.getUTCDate() !== 1 && d !== 0) continue;
+      const x = Math.round(d * cellW) + 0.5;
+      if (d > 0) {
+        ctx.strokeStyle = 'rgba(255,255,255,0.28)';
+        ctx.beginPath();
+        ctx.moveTo(x, bottom + 2);
+        ctx.lineTo(x, bottom + 7);
+        ctx.stroke();
+      }
+      // the first label is skipped when the next month starts too close to it
+      const next = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 1));
+      if (d === 0 && ((next.getTime() - m.startMs) / DAY_MS) * cellW < 46) continue;
+      ctx.fillStyle = COLORS.muted;
+      ctx.fillText(monthShort(m.startMs + d * DAY_MS).toUpperCase(), x + (d > 0 ? 4 : 0), height - 3);
+    }
+  }
+
   const calOf = (id: string): SiteCalendar | null => result?.calendars.find((c) => c.siteId === id)?.cal ?? null;
   const rowOf = (id: string) => terrain.findIndex((s) => s.id === id);
 
@@ -109,21 +193,26 @@ export function createMissions(app: App, planner: Planner): View {
     const cards = MISSIONS.map((m, i) => {
       const t = T.list[m.id];
       const got = earned[m.id] ?? 0;
+      const cv = h('canvas', { role: 'img', 'aria-label': T.boardAria(t.title) });
+      const paintBoard = () => drawBoard(cv, m, boards.get(m.id) ?? null);
+      void board(m).then(paintBoard);
+      onResize(cv, paintBoard);
+      const spec = (label: string, text: string) => h('span', { class: 'mission-spec-row' }, h('b', null, label), h('span', null, text));
       return h(
         'button',
         { class: 'mission-card', type: 'button', onclick: () => begin(m) },
-        h('span', { class: 'mission-n' }, String(i + 1).padStart(2, '0')),
+        h('span', { class: 'mission-top' }, h('span', { class: 'mission-n' }, String(i + 1).padStart(2, '0')), h('span', { class: 'mission-stars', 'aria-label': T.starsLabel(got) }, '★'.repeat(got) + '☆'.repeat(3 - got))),
         h('span', { class: 'mission-title' }, t.title),
         h('span', { class: 'mission-tag' }, t.tagline),
-        h('span', { class: 'mission-meta' }, t.meta),
-        h('span', { class: 'mission-stars', 'aria-label': T.starsLabel(got) }, '★'.repeat(got) + '☆'.repeat(3 - got)),
+        h('span', { class: 'mission-board' }, h('span', { class: 'mission-board-cap' }, T.boardCap(terrain.length, m.days, fmtDay(m.startMs))), cv),
+        h('span', { class: 'mission-spec' }, spec(T.spec.mission, t.meta), spec(T.spec.needs, t.needs), spec(T.spec.choose, T.choose(fmtDay(m.startMs + m.from * DAY_MS).replace(/ \d{4}$/, ''), fmtDay(m.startMs + m.to * DAY_MS)))),
         h('span', { class: 'mission-go', 'aria-hidden': 'true' }, T.go, ' →'),
       );
     });
     el.append(
       h('header', { class: 'doc-head' }, h('p', { class: 'eyebrow' }, T.eyebrow), h('h1', null, T.title), h('p', { class: 'lead' }, T.lead)),
       h('div', { class: 'mission-grid' }, ...cards),
-      h('p', { class: 'small muted' }, T.honest),
+      h('p', { class: 'small muted mission-foot' }, h('span', null, T.scoring), h('span', null, T.honest)),
     );
   }
 
@@ -133,15 +222,16 @@ export function createMissions(app: App, planner: Planner): View {
     step = 0;
     pick = null;
     cursor = null;
-    result = null;
+    result = boards.get(m.id) ?? null;
     slipShown = 0;
     tick();
     paint();
-    void planner.compute(m.startMs, m.days, m.req).then((res) => {
-      if (mission !== m) return;
-      result = res;
-      paint();
-    });
+    if (!result)
+      void board(m).then((res) => {
+        if (mission !== m) return;
+        result = res;
+        paint();
+      });
   }
 
   function rows(): CalendarRow[] {

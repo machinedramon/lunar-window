@@ -8,7 +8,7 @@ import type { LunarScene, SceneSky } from '../viz/scene3d';
 import type { LoadedSite } from './data';
 import { h, reducedMotion, setText } from './dom';
 import type { Moment } from './exploreModel';
-import { compass, deg, latLon, pct } from './format';
+import { compass, latLon } from './format';
 
 const T = S.explore.three;
 
@@ -19,6 +19,11 @@ export interface Hero3D {
   setSite(loaded: LoadedSite, mast: number): void;
   setMoment(m: Moment, axes: { north: [number, number, number]; greenwich: [number, number, number] }, stars: SceneSky['starAxes'], when: string): void;
   redraw(): void;
+  /**
+   * Frames elsewhere on the page, over the picture, in which the telephoto views are drawn when they are
+   * visible. When they are not (a phone, where the readings sit below the picture), the view's own windows are used.
+   */
+  lenses(sun: HTMLElement, earth: HTMLElement): void;
   onFail: (() => void) | null;
 }
 
@@ -93,6 +98,8 @@ export function createHero3D(): Hero3D {
   const insets = h('div', { class: 'three-insets' }, sunInset.frame, earthInset.frame);
   const el = h('div', { class: 'three' }, canvas, skyNames, tape, sunLabel, earthLabel, insets, controls, title, fade, loading, hint);
 
+  let outerSun: HTMLElement | null = null;
+  let outerEarth: HTMLElement | null = null;
   let scene: LunarScene | null = null;
   let failed = false;
   let starting: Promise<void> | null = null;
@@ -119,7 +126,19 @@ export function createHero3D(): Hero3D {
   let lockedQuality = false;
   let frames = 0;
   const target: Look = { az: 0, pitch: 4, fov: 46 };
-  const api: Hero3D = { el, ok: () => !failed, setSite, setMoment, redraw: wake, onFail: null };
+  const api: Hero3D = {
+    el,
+    ok: () => !failed,
+    setSite,
+    setMoment,
+    redraw: wake,
+    lenses(sun, earth) {
+      outerSun = sun;
+      outerEarth = earth;
+      wake();
+    },
+    onFail: null,
+  };
 
   function fail(err: unknown): void {
     console.warn('3D view unavailable:', err);
@@ -364,12 +383,16 @@ export function createHero3D(): Hero3D {
     const box = canvas.getBoundingClientRect();
     const out: { x: number; y: number; size: number; az: number; el: number; fov: number }[] = [];
     const m = moment;
-    const one = (frameEl: HTMLElement, note: HTMLElement, az: number, elv: number, radius: number, clear: number, fov: number, widest: number, text: string) => {
+    const one = (inner: { frame: HTMLElement; note: HTMLElement }, outer: HTMLElement | null, az: number, elv: number, radius: number, clear: number, fov: number, widest: number) => {
       const hiddenDeep = clear < -radius - 1.5;
-      frameEl.classList.toggle('off', hiddenDeep);
-      setText(note, hiddenDeep ? T.teleBelow : text);
+      inner.frame.classList.toggle('off', hiddenDeep);
+      outer?.classList.toggle('off', hiddenDeep);
+      // The figures are beside the picture, said once; the window only says when there is nothing to show.
+      setText(inner.note, hiddenDeep ? T.teleBelow : '');
       if (hiddenDeep) return;
-      const r = frameEl.getBoundingClientRect();
+      // The frame beside the figures when it is on screen and over the picture; the view's own window otherwise.
+      let r = outer?.getBoundingClientRect();
+      if (!r || r.width < 20 || r.left < box.left || r.right > box.right || r.top < box.top || r.bottom > box.bottom) r = inner.frame.getBoundingClientRect();
       if (r.width < 20) return;
       // Widen the lens until the skyline under the body is in the window; beyond `widest`, show the body alone.
       const need = (Math.abs(clear) + radius * 2.2) * 2.1;
@@ -378,8 +401,8 @@ export function createHero3D(): Hero3D {
       out.push({ x: Math.round(r.left - box.left) + 1, y: Math.round(r.top - box.top) + 1, size: Math.round(r.width) - 2, az, el: aim, fov: lens });
     };
     const sunClear = m.sun.el - site.horizon.at(m.sun.az, mast);
-    one(sunInset.frame, sunInset.note, m.sun.az, m.sun.el, m.sun.radius, sunClear, 2.6, 12, T.teleSunNote(pct(m.sunFrac)));
-    one(earthInset.frame, earthInset.note, m.earth.az, m.earth.el, m.earth.radius, m.earthClear, 5.0, 13, T.teleEarthNote(deg(m.earthClear, 1)));
+    one(sunInset, outerSun, m.sun.az, m.sun.el, m.sun.radius, sunClear, 2.6, 12);
+    one(earthInset, outerEarth, m.earth.az, m.earth.el, m.earth.radius, m.earthClear, 5.0, 13);
     return out;
   }
 
@@ -446,8 +469,8 @@ export function createHero3D(): Hero3D {
     if (!scene || !moment) return;
     const m = moment;
     nameSky();
-    place(sunLabel, m.sun.az, m.sun.el + m.sun.radius, m.eclipse > 0.5 ? T.sunEclipsed : m.sunFrac <= 0 ? T.sunHidden : T.sunLabel(pct(m.sunFrac)));
-    place(earthLabel, m.earth.az, m.earth.el + m.earth.radius, m.earthClear > 0 ? T.earthLabel(deg(m.earthClear, 1)) : T.earthHidden);
+    place(sunLabel, m.sun.az, m.sun.el + m.sun.radius, m.eclipse > 0.5 ? T.sunEclipsed : m.sunFrac <= 0 ? T.sunHidden : T.sunLabel);
+    place(earthLabel, m.earth.az, m.earth.el + m.earth.radius, m.earthClear > 0 ? T.earthLabel : T.earthHidden);
 
     // Compass tape
     const dpr = Math.min(2, window.devicePixelRatio || 1);

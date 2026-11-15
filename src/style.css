@@ -1,8 +1,10 @@
 /* Lunar Window — visual system.
    A flight instrument in black and white: hairlines instead of boxes, capitals in a monospace for
    every label, large quiet type for every answer. The only colour on screen is the Earth. */
-@import '@fontsource-variable/geist/wght.css';
-@import '@fontsource-variable/geist-mono/wght.css';
+@import '@fontsource-variable/jost/wght.css';
+@import '@fontsource/b612/latin-400.css';
+@import '@fontsource/b612/latin-700.css';
+@import '@fontsource/b612-mono/latin-400.css';
 
 :root {
   --bg: #000000;
@@ -17,8 +19,9 @@
   --rule-2: rgb(255 255 255 / 0.26);
   --earth: #7db8ff;
   --earth-deep: #2f6fd6;
-  --sans: 'Geist Variable', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-  --mono: 'Geist Mono Variable', ui-monospace, 'SF Mono', Consolas, monospace;
+  --sans: 'B612', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --mono: 'B612', system-ui, sans-serif;
+  --code: 'B612 Mono', ui-monospace, Consolas, monospace;
   --r: 2px;
   --bar: 52px;
   --gut: 20px;
@@ -33,7 +36,7 @@
   --panel: var(--surface);
   --panel-3: var(--surface-3);
   --font: var(--sans);
-  --display: var(--sans);
+  --display: 'Jost Variable', 'Century Gothic', 'Futura', sans-serif;
   --focus: #ffffff;
   color-scheme: dark;
 }
@@ -53,18 +56,30 @@ html {
 body {
   margin: 0;
   min-height: 100dvh;
-  font: 400 14px/1.5 var(--sans);
+  font: 400 13.5px/1.5 var(--sans);
   color: var(--ink);
   background: var(--bg);
+  font-variant-numeric: tabular-nums;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+}
+/* Two voices. Jost, of the lineage of the plaque Apollo 11 left on the Moon, says what the screen concludes
+   and explains. B612, drawn for the cockpit displays of aircraft, carries the labels, the figures and the
+   controls. */
+.lead,
+.doc-section p,
+.mission-tag,
+.mission-text,
+.brand-tag,
+.prose {
+  font-family: var(--display);
 }
 h1,
 h2,
 h3 {
-  font-family: var(--sans);
-  font-weight: 600;
-  letter-spacing: -0.03em;
+  font-family: var(--display);
+  font-weight: 500;
+  letter-spacing: 0;
   margin: 0;
   text-wrap: balance;
 }
@@ -139,13 +154,13 @@ a:hover {
   flex: none;
 }
 .brand-name {
-  font: 600 13px/1 var(--sans);
-  letter-spacing: 0.24em;
+  font: 600 14px/1 var(--display);
+  letter-spacing: 0.26em;
   text-transform: uppercase;
   white-space: nowrap;
 }
 .brand-tag {
-  font: 400 12.5px/1 var(--sans);
+  font: 400 14px/1 var(--display);
   color: var(--ink-3);
   padding-left: 16px;
   border-left: 1px solid var(--rule);
@@ -257,6 +272,9 @@ main {
   font: 400 11px/1.5 var(--sans);
   color: var(--ink-3);
   background: var(--bg);
+}
+.foot-short {
+  display: none;
 }
 .foot a {
   margin-left: auto;
@@ -651,9 +669,13 @@ input:disabled {
   width: 316px;
 }
 .hud-data {
-  right: var(--gut);
-  top: 46px;
-  width: 292px;
+  right: 10px;
+  top: 40px;
+  width: 324px;
+  gap: 8px;
+}
+.hud-data > .hud-row {
+  padding: 0 10px;
 }
 .hud-verdict {
   left: var(--gut);
@@ -665,11 +687,6 @@ input:disabled {
 .hud-verdict > * {
   pointer-events: auto;
 }
-.hud-close {
-  right: var(--gut);
-  bottom: 20px;
-  width: 292px;
-}
 /* While the camera arrives at a new site the readings step back and the title card takes the frame. */
 .three.arriving ~ .hud-data,
 .three.arriving ~ .hud-verdict,
@@ -679,8 +696,8 @@ input:disabled {
 }
 .site-field select {
   height: 44px;
-  font: 600 19px/1 var(--sans);
-  letter-spacing: -0.02em;
+  font: 500 19px/1 var(--display);
+  letter-spacing: 0;
   background-color: rgb(0 0 0 / 0.55);
 }
 .site-meta {
@@ -809,7 +826,7 @@ input:disabled {
 }
 .replay-item b {
   font: 600 14px/1.2 var(--sans);
-  letter-spacing: -0.01em;
+  letter-spacing: 0;
 }
 .replay-item i {
   font: 500 11px var(--mono);
@@ -830,53 +847,157 @@ input:disabled {
 }
 
 /* telemetry: label on the left, reading on the right, nothing moves when a number changes */
-.telemetry {
+/* One instrument per body: the state, the lens and three figures. Every size is fixed, so a figure that
+   changes never moves anything. */
+.inst {
+  --lens: 104px;
+  --pad: 10px;
+  --head: 12px;
+  --gap: 9px;
+  position: relative;
+  isolation: isolate;
   display: grid;
+  gap: var(--gap);
+  padding: var(--pad);
   border-top: 1px solid var(--rule-2);
 }
-.tm-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: baseline;
-  align-content: start;
-  gap: 0 10px;
-  height: 46px;
-  padding-top: 7px;
-  border-bottom: 1px solid var(--rule);
+/* A dark plate keeps the figures readable over bright ground. The lens is a window onto the picture below,
+   so the plate has a hole exactly where the lens is. */
+.inst::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: rgb(0 0 0 / 0.62);
+  -webkit-mask:
+    linear-gradient(#000 0 0) var(--pad) calc(var(--pad) + var(--head) + var(--gap)) / var(--lens) var(--lens) no-repeat,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#000 0 0) var(--pad) calc(var(--pad) + var(--head) + var(--gap)) / var(--lens) var(--lens) no-repeat,
+    linear-gradient(#000 0 0);
+  mask-composite: exclude;
 }
-.tm-label {
+.inst-head {
   display: flex;
   align-items: center;
-  gap: 7px;
-  font: 500 10.5px/1.2 var(--mono);
-  letter-spacing: 0.12em;
+  gap: 8px;
+  height: var(--head);
+  font: 700 11px/1 var(--sans);
+  letter-spacing: 0.16em;
   text-transform: uppercase;
+  white-space: nowrap;
+}
+.inst-state {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  font-weight: 400;
+  font-size: 10px;
+  letter-spacing: 0.12em;
   color: var(--ink-2);
+}
+.inst.no .inst-state {
+  color: var(--ink-3);
+}
+.inst.no .inst-head .dot {
+  background: none;
+  box-shadow: none;
+  border: 1px solid var(--ink-3);
+}
+.inst-body {
+  display: grid;
+  grid-template-columns: var(--lens) minmax(0, 1fr);
+  gap: 14px;
+}
+.inst-lens {
+  position: relative;
+  width: var(--lens);
+  height: var(--lens);
+  border: 1px solid rgb(255 255 255 / 0.5);
+  border-radius: var(--r);
+  overflow: hidden;
+}
+.inst-lens.earth {
+  border-color: rgb(125 184 255 / 0.75);
+}
+.inst-lens.off {
+  background: rgb(0 0 0 / 0.72);
+  border-style: dashed;
+  border-color: rgb(255 255 255 / 0.3);
+}
+.inst-lens canvas {
+  display: none;
+  width: 100%;
+}
+.stage.is-pano .inst-lens canvas {
+  display: block;
+}
+.inst-lens-note {
+  position: absolute;
+  left: 6px;
+  bottom: 5px;
+  font: 400 8.5px/1 var(--sans);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgb(255 255 255 / 0.62);
+  text-shadow: 0 1px 3px #000;
+  white-space: nowrap;
+}
+.inst-nums {
+  display: grid;
+  grid-template-rows: 30px 30px 44px;
+  margin: 0;
+}
+.inst-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-rows: 22px;
+  align-items: baseline;
+  align-content: start;
+  gap: 0 8px;
+  padding-top: 5px;
+  border-bottom: 1px solid var(--rule);
+}
+.inst-row:first-child {
+  padding-top: 0;
+  grid-template-rows: 25px;
+}
+.inst-row:last-child {
+  border-bottom: 0;
+}
+.inst-row dt {
+  font: 400 9.5px/1.2 var(--sans);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-3);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.tm-value {
-  font: 500 17px/1.1 var(--mono);
-  letter-spacing: -0.02em;
-  font-variant-numeric: tabular-nums;
+.inst-row dd {
+  margin: 0;
+  font: 400 17px/1.1 var(--sans);
   text-align: right;
   white-space: nowrap;
 }
-.tm-value small {
-  font-size: 11px;
-  color: var(--ink-2);
-  margin-left: 2px;
-}
-.tm-sub {
+.inst-row small {
   grid-column: 1 / -1;
-  margin-top: 3px;
-  font: 400 11px/1.2 var(--sans);
+  font: 400 10.5px/1.2 var(--sans);
   color: var(--ink-3);
   text-align: right;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+.inst-row small:empty {
+  display: none;
+}
+/* In the panorama the lens holds the close-up drawing, which has its own scale mark at the bottom. */
+.stage.is-pano .inst-lens-note {
+  top: 6px;
+  bottom: auto;
 }
 
 /* verdict */
@@ -896,39 +1017,8 @@ input:disabled {
   max-width: 13.5em;
   font-size: clamp(26px, 2.75vw, 42px);
   line-height: 1.04;
-  letter-spacing: -0.035em;
+  letter-spacing: -0.01em;
   text-shadow: 0 2px 30px rgb(0 0 0 / 0.8);
-}
-.status-rows {
-  display: grid;
-  gap: 5px;
-}
-.pill {
-  display: grid;
-  grid-template-columns: 8px 12px 46px minmax(0, 1fr);
-  align-items: center;
-  gap: 9px;
-  height: 22px;
-  font: 400 13px/1 var(--sans);
-  color: var(--ink);
-  white-space: nowrap;
-}
-.pill b {
-  font: 600 10.5px/1 var(--mono);
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-}
-.pill > span:last-child {
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.pill.no {
-  color: var(--ink-3);
-}
-.pill.no .dot {
-  background: none;
-  box-shadow: none;
-  border: 1px solid var(--ink-3);
 }
 .next-step {
   appearance: none;
@@ -1000,7 +1090,7 @@ input:disabled {
 .pano {
   position: absolute;
   left: 356px;
-  right: 332px;
+  right: 344px;
   top: 78px;
   bottom: 20px;
 }
@@ -1008,33 +1098,6 @@ input:disabled {
   display: block;
   width: 100%;
 }
-.closeups {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-}
-.closeup {
-  border: 1px solid var(--rule-2);
-  border-radius: var(--r);
-  background: #000;
-  overflow: hidden;
-}
-.closeup canvas {
-  display: block;
-  width: 100%;
-}
-.closeup .cap {
-  min-height: 28px;
-  padding: 0 8px;
-  gap: 6px;
-  font-size: 9.5px;
-  letter-spacing: 0.1em;
-  white-space: nowrap;
-}
-.closeup .cap .muted {
-  display: none;
-}
-
 /* the dock: time, under the stage */
 .dock {
   display: grid;
@@ -1235,7 +1298,7 @@ input:disabled {
   bottom: 20px;
   display: flex;
   gap: 4px;
-  width: 292px;
+  width: 304px;
 }
 .three-controls .btn {
   flex: 1 1 0;
@@ -1301,8 +1364,8 @@ input:disabled {
   animation: title-card 5.4s ease forwards;
 }
 .three-title-name {
-  font: 600 clamp(34px, 5.4vw, 84px) / 0.96 var(--sans);
-  letter-spacing: -0.05em;
+  font: 500 clamp(34px, 5.4vw, 84px) / 0.96 var(--display);
+  letter-spacing: -0.01em;
 }
 .three-title-sub {
   margin-top: 14px;
@@ -1536,8 +1599,8 @@ input:disabled {
   text-align: right;
 }
 .slip-value {
-  font: 600 22px/1.05 var(--sans);
-  letter-spacing: -0.03em;
+  font: 500 22px/1.05 var(--display);
+  letter-spacing: -0.01em;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
@@ -1589,8 +1652,8 @@ input[type='range']::-moz-range-thumb {
   min-height: 88px;
 }
 .summary-main {
-  font: 600 clamp(19px, 1.85vw, 28px) / 1.14 var(--sans);
-  letter-spacing: -0.03em;
+  font: 500 clamp(19px, 1.85vw, 28px) / 1.14 var(--display);
+  letter-spacing: -0.01em;
   text-wrap: balance;
   max-width: 44em;
 }
@@ -1853,8 +1916,8 @@ table.sites.plain tbody th {
   padding: 12px 14px;
   border: 1px solid var(--rule-2);
   border-radius: var(--r);
-  font: 600 15px/1.35 var(--sans);
-  letter-spacing: -0.01em;
+  font: 500 15px/1.35 var(--display);
+  letter-spacing: 0;
 }
 .verdict-box.ok {
   border-color: #fff;
@@ -1963,11 +2026,11 @@ table.reqtable tr.failed th {
 .doc-head h1 {
   font-size: clamp(32px, 3.5vw, 52px);
   line-height: 0.98;
-  letter-spacing: -0.05em;
+  letter-spacing: -0.01em;
 }
 .lead {
-  font-size: 15px;
-  line-height: 1.5;
+  font-size: 16.5px;
+  line-height: 1.45;
   color: var(--ink-2);
   max-width: 68ch;
   padding-bottom: 3px;
@@ -1984,10 +2047,11 @@ table.reqtable tr.failed th {
 }
 .doc-section h3 {
   font-size: 16px;
-  letter-spacing: -0.02em;
+  letter-spacing: 0;
   margin-top: 10px;
 }
 .doc-section p {
+  font-size: 15.5px;
   color: var(--ink-2);
   max-width: 82ch;
   text-wrap: pretty;
@@ -2018,7 +2082,7 @@ table.reqtable tr.failed th {
 }
 .stat .value {
   font: 500 30px/1.05 var(--mono);
-  letter-spacing: -0.04em;
+  letter-spacing: -0.01em;
   font-variant-numeric: tabular-nums;
 }
 .stat .value small {
@@ -2059,55 +2123,220 @@ table.reqtable tr.failed th {
 .bullets li::marker {
   color: var(--ink-4);
 }
+/* Compare: one column per option. The verdict and the hour-by-hour picture come first; every figure
+   below carries a measure, so the options can be read across without doing sums. */
+.cmp-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
+  padding: 12px 20px 12px;
+  min-height: 0;
+}
+.cmp-tools {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+}
+.cmp-tools .field:first-child {
+  width: 300px;
+}
+.cmp-notes {
+  flex: 1 1 0;
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+  padding: 0 8px 1px;
+}
+.cmp-notes p {
+  margin: 0;
+  font-size: 11.5px;
+  line-height: 1.35;
+}
 table.compare {
   width: 100%;
   border-collapse: collapse;
-  font-size: 13px;
+  font-size: 12.5px;
   table-layout: fixed;
 }
 table.compare th,
 table.compare td {
   text-align: left;
-  padding: 8px 14px;
+  padding: 0 14px;
+  height: 27px;
   border-bottom: 1px solid var(--rule);
-  vertical-align: top;
+  vertical-align: middle;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-table.compare thead th {
-  border-bottom: 1px solid var(--rule-2);
-  padding-bottom: 12px;
+table.compare td:first-child,
+table.compare tbody th {
+  width: 214px;
+  padding-left: 0;
 }
 table.compare tbody th {
-  width: 230px;
   font-weight: 400;
   color: var(--ink-2);
 }
-table.compare td:first-child {
-  width: 230px;
+table.compare thead th {
+  height: auto;
+  padding: 10px 14px 9px;
+  vertical-align: top;
+  border-bottom: 0;
+  border-top: 2px solid var(--rule-2);
+  background: var(--surface-2);
 }
-table.compare td {
-  font-variant-numeric: tabular-nums;
+table.compare thead th.ok,
+table.compare thead th.marginal {
+  border-top-color: #fff;
 }
-table.compare td.best {
-  font-weight: 600;
-  color: #fff;
-  box-shadow: inset 2px 0 0 #fff;
-}
-.cmp-site {
-  font: 600 18px/1.15 var(--sans);
-  letter-spacing: -0.03em;
+table.compare thead th + th,
+table.compare tbody td + td {
+  border-left: 1px solid var(--rule);
 }
 .cmp-date {
-  margin-top: 4px;
-  font: 500 11px var(--mono);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font: 400 10.5px var(--mono);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
   color: var(--ink-2);
   white-space: nowrap;
+}
+.cmp-site {
+  margin-top: 5px;
+  font: 500 22px/1.15 var(--display);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cmp-verdict {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin-top: 7px;
+  font-size: 12.5px;
+  font-weight: 400;
+  white-space: nowrap;
+}
+.cmp-verdict b {
+  font-weight: 700;
+}
+.cmp-verdict > span:last-child {
+  color: var(--ink-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cmp-head.fail .cmp-site,
+.cmp-head.fail .cmp-verdict b {
+  color: var(--ink-2);
+}
+table.compare tr.cmp-line-row th,
+table.compare tr.cmp-line-row td {
+  height: auto;
+  padding-top: 8px;
+  padding-bottom: 6px;
+  vertical-align: top;
+  background: var(--surface-2);
+}
+table.compare tr.cmp-line-row th {
+  background: none;
+  padding-top: 12px;
 }
 .cmp-line canvas {
   display: block;
   width: 100%;
 }
-.cmp-verdict .muted {
-  font-size: 12px;
+table.compare tr.cmp-group th {
+  height: 25px;
+  padding-top: 7px;
+  font: 400 9.5px var(--mono);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  border-bottom-color: var(--rule-2);
+}
+.cmp-meter {
+  display: grid;
+  grid-template-columns: 76px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+}
+.cmp-num {
+  color: var(--ink-2);
+}
+.cmp-bar {
+  height: 3px;
+  background: var(--rule);
+}
+.cmp-bar i {
+  display: block;
+  height: 100%;
+  background: var(--ink-3);
+}
+.cmp-bar.earth i {
+  background: rgb(125 184 255 / 0.55);
+}
+.cmp-bar.loss i {
+  background: none;
+  border-bottom: 3px dotted var(--ink-3);
+  box-sizing: border-box;
+}
+.cmp-pips {
+  display: flex;
+  gap: 5px;
+}
+.cmp-pips i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  border: 1px solid var(--ink-3);
+}
+.cmp-pips i.on {
+  background: var(--ink-3);
+}
+table.compare td.best .cmp-num,
+table.compare td.best {
+  color: #fff;
+  font-weight: 700;
+}
+table.compare td.best .cmp-bar i {
+  background: #fff;
+}
+table.compare td.best .cmp-bar.earth i {
+  background: var(--earth);
+}
+table.compare td.best .cmp-pips i {
+  border-color: #fff;
+}
+table.compare td.best .cmp-pips i.on {
+  background: #fff;
+}
+table.compare tbody tr:last-child td {
+  height: auto;
+  padding-top: 10px;
+  border-bottom: 0;
+  border-left: 0;
+}
+/* The headings of the wide pages leave the room to their content. */
+.doc.wide {
+  gap: 12px;
+}
+.doc.wide .doc-head {
+  padding: 0;
+  align-items: center;
+}
+.doc.wide .doc-head .eyebrow {
+  display: none;
+}
+.doc.wide .doc-head .lead {
+  font-size: 15px;
+  line-height: 1.35;
+  padding-bottom: 0;
+}
+.doc.wide .doc-head h1 {
+  font-size: clamp(26px, 2.5vw, 36px);
 }
 .mission-grid {
   display: grid;
@@ -2115,82 +2344,132 @@ table.compare td.best {
   border: 1px solid var(--rule);
   border-radius: var(--r);
 }
+/* A mission's card shows its real board: the calendar the mission is played on, already computed. */
 .mission-card {
   appearance: none;
+  position: relative;
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
+  align-items: stretch;
   gap: 10px;
-  min-height: 300px;
-  padding: 22px 22px 20px;
+  min-width: 0;
+  padding: 20px 22px 54px;
   text-align: left;
   color: var(--ink);
   font: inherit;
   background: var(--surface);
   border: 0;
   cursor: pointer;
-  transition:
-    background 0.2s ease,
-    color 0.2s ease;
-}
-.mission-card {
-  position: relative;
-}
-.mission-go {
-  position: absolute;
-  right: 22px;
-  bottom: 20px;
-  font: 600 11px var(--mono);
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  opacity: 0.45;
-  transition:
-    opacity 0.2s,
-    transform 0.3s var(--ease);
-}
-.mission-card:hover .mission-go,
-.mission-card:focus-visible .mission-go {
-  opacity: 1;
-  transform: translateX(4px);
+  transition: background 0.2s ease;
 }
 .mission-card + .mission-card {
   border-left: 1px solid var(--rule);
 }
-.mission-card:hover {
-  background: #fff;
-  color: #000;
+.mission-card:hover,
+.mission-card:focus-visible {
+  background: var(--surface-3);
 }
-.mission-card:hover .mission-n,
-.mission-card:hover .mission-tag,
-.mission-card:hover .mission-meta {
-  color: rgb(0 0 0 / 0.62);
+.mission-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 18px;
 }
 .mission-n {
-  font: 500 11px var(--mono);
+  font: 400 11px var(--mono);
   letter-spacing: 0.18em;
   color: var(--ink-3);
 }
 .mission-title {
-  font: 600 clamp(28px, 3.1vw, 48px) / 0.98 var(--sans);
-  letter-spacing: -0.05em;
-  margin-top: 30px;
+  font: 500 clamp(26px, 2.7vw, 40px) / 1 var(--display);
+  margin-top: 14px;
+  white-space: nowrap;
 }
 .mission-tag {
   color: var(--ink-2);
-  font-size: 15px;
-  line-height: 1.4;
+  font-size: 16.5px;
+  line-height: 1.3;
+  height: 2.6em;
+  text-wrap: balance;
 }
-.mission-meta {
-  margin-top: auto;
-  font: 500 10.5px var(--mono);
+.mission-board {
+  display: grid;
+  align-content: start;
+  gap: 9px;
+  flex: 1 1 0;
+  min-height: 150px;
+  margin-top: 16px;
+  overflow: hidden;
+}
+.mission-board-cap,
+.mission-spec-row b {
+  font: 400 9.5px/1.2 var(--mono);
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--ink-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mission-board canvas {
+  display: block;
+  width: 100%;
+}
+.mission-spec {
+  display: grid;
+  margin-top: 8px;
+  border-top: 1px solid var(--rule);
+}
+.mission-spec-row {
+  display: grid;
+  align-content: start;
+  gap: 4px;
+  height: 45px;
+  padding-top: 8px;
+  border-bottom: 1px solid var(--rule);
+  font-size: 12.5px;
+  line-height: 1.2;
+  color: var(--ink);
+}
+.mission-spec-row > span {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mission-go {
+  position: absolute;
+  right: 22px;
+  bottom: 16px;
+  display: inline-flex;
+  align-items: center;
+  height: 28px;
+  padding: 0 14px;
+  border: 1px solid var(--rule-2);
+  border-radius: var(--r);
+  font: 700 10.5px var(--mono);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  transition:
+    background 0.2s,
+    color 0.2s;
+}
+.mission-card:hover .mission-go,
+.mission-card:focus-visible .mission-go {
+  background: #fff;
+  color: #000;
 }
 .mission-stars,
 .score-stars {
-  font-size: 18px;
+  font-size: 15px;
   letter-spacing: 0.14em;
+}
+.score-stars {
+  font-size: 18px;
+}
+.mission-foot {
+  display: grid;
+  gap: 2px;
+  margin-top: 12px;
 }
 .mission-run {
   display: grid;
@@ -2206,7 +2485,7 @@ table.compare td.best {
 .mission-h {
   font-size: clamp(30px, 3.2vw, 46px);
   line-height: 0.98;
-  letter-spacing: -0.05em;
+  letter-spacing: -0.01em;
 }
 .mission-dots {
   display: flex;
@@ -2224,7 +2503,7 @@ table.compare td.best {
   background: #fff;
 }
 .mission-text {
-  font-size: 15.5px;
+  font-size: 16.5px;
   line-height: 1.5;
   color: var(--ink-2);
   text-wrap: pretty;
@@ -2233,8 +2512,8 @@ table.compare td.best {
   padding: 14px 16px;
   border: 1px solid #fff;
   border-radius: var(--r);
-  font: 600 21px/1.2 var(--sans);
-  letter-spacing: -0.03em;
+  font: 500 21px/1.2 var(--display);
+  letter-spacing: -0.01em;
   animation: pop 0.4s var(--ease);
 }
 .score {
@@ -2244,7 +2523,7 @@ table.compare td.best {
 }
 .score-n {
   font: 500 84px/0.9 var(--mono);
-  letter-spacing: -0.06em;
+  letter-spacing: -0.01em;
   animation: pop 0.5s var(--ease);
 }
 .score-row {
@@ -2308,6 +2587,9 @@ table.compare td.best {
     height: 100%;
     grid-template-rows: minmax(0, 1fr) auto;
   }
+  .stage .three-insets {
+    display: none;
+  }
   .stage.is-pano .hud-verdict {
     width: 316px;
   }
@@ -2338,19 +2620,30 @@ table.compare td.best {
   }
 }
 
+/* The footer stays on one line: below a wide monitor it says the same in fewer words. */
+@media (min-width: 1100px) and (min-height: 700px) and (max-width: 1599px) {
+  .foot-long {
+    display: none;
+  }
+  .foot-short {
+    display: inline;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .foot {
+    flex-wrap: nowrap;
+  }
+}
+
 /* A short wide window (a 768-pixel laptop): the same instrument, drawn tighter. */
 @media (min-width: 1100px) and (min-height: 700px) and (max-height: 830px) {
-  .tm-row {
-    height: 31px;
+  .inst {
+    --pad: 8px;
+    --gap: 7px;
   }
-  .tm-sub {
-    display: none;
-  }
-  .three-inset {
-    width: 112px;
-  }
-  .three-inset-note {
-    display: none;
+  .hud-data {
+    gap: 5px;
   }
   .hud-verdict h1 {
     font-size: 26px;
@@ -2419,6 +2712,30 @@ table.compare td.best {
   }
   .hud-verdict {
     order: -1;
+  }
+  .cmp-tools {
+    flex-wrap: wrap;
+  }
+  table.compare {
+    min-width: 1000px;
+  }
+  .cmp-site {
+    font-size: 18px;
+  }
+  .cmp-tools .field:first-child,
+  .cmp-notes {
+    flex: 1 1 100%;
+    width: auto;
+    padding: 0;
+  }
+  .mission-title {
+    white-space: normal;
+  }
+  .stage:not(.is-pano) .inst-lens {
+    display: none;
+  }
+  .stage:not(.is-pano) .inst-body {
+    grid-template-columns: minmax(0, 1fr);
   }
   .sheet {
     position: static;

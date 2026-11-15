@@ -55,11 +55,12 @@ function shell(): void {
     h(
       'footer',
       { class: 'foot' },
-      h('span', null, S.footer.notNasa),
-      h('span', null, S.footer.data),
-      h('span', null, S.footer.utc),
-      h('span', null, S.footer.license),
-      h('span', null, S.footer.ai),
+      h('span', { class: 'foot-long' }, S.footer.notNasa),
+      h('span', { class: 'foot-long' }, S.footer.data),
+      h('span', { class: 'foot-long' }, S.footer.utc),
+      h('span', { class: 'foot-long' }, S.footer.license),
+      h('span', { class: 'foot-long' }, S.footer.ai),
+      h('span', { class: 'foot-short' }, S.footer.short),
       h('a', { href: 'https://github.com/machinedramon/lunar-window', target: '_blank', rel: 'noopener' }, 'GitHub'),
     ),
   );

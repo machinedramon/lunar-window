@@ -30,7 +30,7 @@ const mark = (status: string) => h('span', { class: `mark ${status === 'ok' ? 'o
 
 export function createCompare(app: App, planner: Planner): View {
   const { store } = app;
-  const el = h('div', { class: 'doc wide' });
+  const el = h('div', { class: 'doc wide compare-page' });
   const body = h('div');
   let key = '';
   let columns: Column[] = [];
@@ -100,22 +100,36 @@ export function createCompare(app: App, planner: Planner): View {
     if (!columns.length) return;
 
     const table = h('table', { class: 'compare' });
+    // Each option opens with its verdict: the answer first, the figures after.
     const head = h('tr', null, h('td'));
     for (const c of columns) {
       const site = app.siteInfo(c.item.siteId);
+      const r = c.result;
+      const why = !r ? '' : r.status === 'fail' ? S.plan.why[r.failed ?? ''] : r.status === 'marginal' ? S.plan.table.tight : S.plan.table.allMet;
       head.append(
         h(
           'th',
-          { scope: 'col' },
+          { scope: 'col', class: r ? `cmp-head ${r.status}` : 'cmp-head' },
+          h('div', { class: 'cmp-date' }, fmtDay(c.item.dayMs), site.horizon === 'sphere' ? h('span', { class: 'tag sphere' }, S.explore.facts.sphere) : null),
           h('div', { class: 'cmp-site' }, site.name),
-          h('div', { class: 'cmp-date' }, fmtDay(c.item.dayMs)),
-          site.horizon === 'sphere' ? h('span', { class: 'tag sphere' }, S.explore.facts.sphere) : null,
+          h('div', { class: 'cmp-verdict' }, r ? mark(r.status) : null, r ? h('b', null, S.status[r.status]) : '…', h('span', null, why)),
         ),
       );
     }
     table.append(h('thead', null, head));
     const tb = h('tbody');
+
+    // The picture of each option, straight under its verdict: Sun, Earth and both, over the mission.
+    const lineRow = h('tr', { class: 'cmp-line-row' }, h('th', { scope: 'row' }, T.rows.timeline));
+    for (const c of columns) {
+      const canvas = h('canvas', { role: 'img', 'aria-label': S.plan.detail.mission });
+      canvases.push(canvas);
+      lineRow.append(h('td', { class: 'cmp-line' }, c.win ? canvas : '…'));
+    }
+    tb.append(lineRow);
+
     type Pick = (c: Column) => { node: Node | string; value?: number } | null;
+    const group = (label: string) => tb.append(h('tr', { class: 'cmp-group' }, h('th', { scope: 'rowgroup', colspan: columns.length + 1 }, label)));
     const row = (label: string, tip: string, pick: Pick, better: 'high' | 'low' | null = null) => {
       const cells = columns.map((c) => (c.result ? pick(c) : null));
       const nums = cells.map((x) => x?.value).filter((v): v is number => v !== undefined);
@@ -124,30 +138,27 @@ export function createCompare(app: App, planner: Planner): View {
       for (const x of cells) tr.append(h('td', { class: x && best !== null && x.value === best ? 'best' : '' }, x ? x.node : '…'));
       tb.append(tr);
     };
-    row(T.rows.verdict, '', (c) => {
-      const r = c.result!;
-      const why = r.status === 'fail' ? S.plan.why[r.failed ?? ''] : r.status === 'marginal' ? S.plan.table.tight : S.plan.table.allMet;
-      return { node: h('span', { class: 'cmp-verdict' }, mark(r.status), ' ', h('b', null, S.status[r.status]), h('br'), h('span', { class: 'muted' }, why)), value: STATUS_RANK[r.status] };
-    });
-    row(T.rows.time, T.tips.time, (c) => ({ node: `${String((LANDING_STEPS[c.time] * STEP_MS) / HOUR_MS).padStart(2, '0')}:00 UTC` }));
-    row(T.rows.robust, S.plan.table.nearbyTip, (c) => (c.points > 1 ? { node: S.plan.table.of9(c.robust, c.points), value: c.robust } : { node: '—' }), 'high');
-    row(T.rows.sunLanding, S.plan.sunAtLandingTip, (c) => ({ node: pct(c.result!.sunAtLanding), value: c.result!.sunAtLanding }), 'high');
-    row(T.rows.earthLanding, S.plan.earthAtLandingTip, (c) => ({ node: deg(c.result!.earthClearAtLanding, 1), value: c.result!.earthClearAtLanding }), 'high');
-    row(T.rows.contSun, S.plan.minSunTip, (c) => ({ node: duration(c.result!.continuousSunH), value: c.result!.continuousSunH }), 'high');
-    row(T.rows.dark, S.plan.maxDarkTip, (c) => ({ node: c.result!.longestDarkH ? duration(c.result!.longestDarkH) : S.plan.detail.none, value: c.result!.longestDarkH }), 'low');
-    row(T.rows.blackout, S.plan.maxBlackoutTip, (c) => ({ node: c.result!.longestBlackoutH ? duration(c.result!.longestBlackoutH) : S.plan.detail.none, value: c.result!.longestBlackoutH }), 'low');
-    row(T.rows.sunShare, '', (c) => ({ node: pct(c.result!.sunShare), value: c.result!.sunShare }), 'high');
-    row(T.rows.earthShare, '', (c) => ({ node: pct(c.result!.earthShare), value: c.result!.earthShare }), 'high');
-    row(T.rows.bothShare, '', (c) => ({ node: pct(c.result!.bothShare), value: c.result!.bothShare }), 'high');
-    row(T.rows.power, S.plan.detail.powerTip, (c) => ({ node: c.result!.powerIndex.toFixed(2), value: c.result!.powerIndex }), 'high');
+    // A figure with its measure: the number, and a bar that shows how much of the whole it is.
+    const meter = (text: string, share: number, kind = '') =>
+      h('span', { class: 'cmp-meter' }, h('span', { class: 'cmp-num' }, text), h('span', { class: `cmp-bar ${kind}`, 'aria-hidden': 'true' }, h('i', { style: `width:${(Math.max(0, Math.min(1, share)) * 100).toFixed(1)}%` })));
+    const pips = (n: number, total: number) =>
+      h('span', { class: 'cmp-meter' }, h('span', { class: 'cmp-num' }, S.plan.table.of9(n, total)), h('span', { class: 'cmp-pips', 'aria-hidden': 'true' }, ...Array.from({ length: total }, (_, k) => h('i', { class: k < n ? 'on' : '' }))));
+    const missionH = s.req.durationDays * 24;
 
-    const lineRow = h('tr', null, h('th', { scope: 'row' }, T.rows.timeline));
-    for (const c of columns) {
-      const canvas = h('canvas', { role: 'img', 'aria-label': S.plan.detail.mission });
-      canvases.push(canvas);
-      lineRow.append(h('td', { class: 'cmp-line' }, c.win ? canvas : '…'));
-    }
-    tb.append(lineRow);
+    group(T.groups.landing);
+    row(T.rows.time, T.tips.time, (c) => ({ node: `${String((LANDING_STEPS[c.time] * STEP_MS) / HOUR_MS).padStart(2, '0')}:00 UTC` }));
+    row(T.rows.sunLanding, S.plan.sunAtLandingTip, (c) => ({ node: meter(pct(c.result!.sunAtLanding), c.result!.sunAtLanding), value: c.result!.sunAtLanding }), 'high');
+    row(T.rows.earthLanding, S.plan.earthAtLandingTip, (c) => ({ node: meter(deg(c.result!.earthClearAtLanding, 1), c.result!.earthClearAtLanding / 12, 'earth'), value: c.result!.earthClearAtLanding }), 'high');
+    group(T.groups.mission);
+    row(T.rows.sunShare, '', (c) => ({ node: meter(pct(c.result!.sunShare), c.result!.sunShare), value: c.result!.sunShare }), 'high');
+    row(T.rows.earthShare, '', (c) => ({ node: meter(pct(c.result!.earthShare), c.result!.earthShare, 'earth'), value: c.result!.earthShare }), 'high');
+    row(T.rows.bothShare, '', (c) => ({ node: meter(pct(c.result!.bothShare), c.result!.bothShare, 'both'), value: c.result!.bothShare }), 'high');
+    row(T.rows.contSun, S.plan.minSunTip, (c) => ({ node: meter(duration(c.result!.continuousSunH), c.result!.continuousSunH / missionH), value: c.result!.continuousSunH }), 'high');
+    row(T.rows.dark, S.plan.maxDarkTip, (c) => ({ node: meter(c.result!.longestDarkH ? duration(c.result!.longestDarkH) : S.plan.detail.none, c.result!.longestDarkH / missionH, 'loss'), value: c.result!.longestDarkH }), 'low');
+    row(T.rows.blackout, S.plan.maxBlackoutTip, (c) => ({ node: meter(c.result!.longestBlackoutH ? duration(c.result!.longestBlackoutH) : S.plan.detail.none, c.result!.longestBlackoutH / missionH, 'loss'), value: c.result!.longestBlackoutH }), 'low');
+    row(T.rows.power, S.plan.detail.powerTip, (c) => ({ node: meter(c.result!.powerIndex.toFixed(2), c.result!.powerIndex), value: c.result!.powerIndex }), 'high');
+    group(T.groups.miss);
+    row(T.rows.robust, S.plan.table.nearbyTip, (c) => (c.points > 1 ? { node: pips(c.robust, c.points), value: c.robust } : { node: '—' }), 'high');
 
     const actions = h('tr', null, h('td'));
     for (const c of columns) {
@@ -196,10 +207,16 @@ export function createCompare(app: App, planner: Planner): View {
     h('header', { class: 'doc-head' }, h('p', { class: 'eyebrow' }, T.eyebrow), h('h1', null, T.title), h('p', { class: 'lead' }, T.lead)),
     h(
       'section',
-      { class: 'panel doc-section' },
-      h('div', { class: 'row' }, h('div', { class: 'field' }, h('span', null, S.explore.site), siteSelect), h('div', { class: 'field' }, h('span', null, T.date), dateIn), addBtn, h('div', { class: 'grow' }), h('button', { class: 'btn', type: 'button', onclick: () => store.set({ tab: 'plan' }) }, T.edit)),
-      reqLine,
-      example,
+      { class: 'panel cmp-panel' },
+      h(
+        'div',
+        { class: 'cmp-tools' },
+        h('div', { class: 'field' }, h('span', null, S.explore.site), siteSelect),
+        h('div', { class: 'field' }, h('span', null, T.date), dateIn),
+        addBtn,
+        h('div', { class: 'cmp-notes' }, reqLine, example),
+        h('button', { class: 'btn', type: 'button', onclick: () => store.set({ tab: 'plan' }) }, T.edit),
+      ),
       body,
     ),
   );

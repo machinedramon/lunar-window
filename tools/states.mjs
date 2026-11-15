@@ -9,7 +9,7 @@ page.on('pageerror', (e) => problems.push(`pageerror: ${e.message}`));
 await page.goto('http://localhost:5700/', { waitUntil: 'networkidle' });
 await page.waitForTimeout(9000);
 const boxes = () => page.evaluate(() => {
-  const pick = ['.hud-site', '.hud-data', '.hud-verdict', '.dock', '.dock-transport', '.dock-time', '.dock-events', '.where', '.hud-verdict h1', '.status-rows', '.next-step', '.telemetry', '.top', '.foot'];
+  const pick = ['.hud-site', '.hud-data', '.hud-verdict', '.dock', '.dock-transport', '.dock-time', '.dock-events', '.where', '.hud-verdict h1', '.next-step', '.inst.sun', '.inst.earth', '.inst.sun .inst-nums', '.inst.earth .inst-nums', '.top', '.foot'];
   const o = {};
   for (const sel of pick) { const el = document.querySelector(sel); if (el) { const r = el.getBoundingClientRect(); o[sel] = [Math.round(r.left), Math.round(r.top), Math.round(r.width), Math.round(r.height)]; } }
   o.scroll = [document.documentElement.scrollWidth - innerWidth, document.documentElement.scrollHeight - innerHeight];

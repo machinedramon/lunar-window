@@ -18,7 +18,8 @@ import { CUSTOM_SITE, MAX_MS, MIN_MS, type State } from './store';
 
 const T = S.explore;
 const STRIP_H = 330;
-const CLOSE_H = 128;
+/** Side of the lens of an instrument, inside its border, CSS pixels. */
+const LENS = 102;
 /** Rows of the list of coming events: always the same number, so that the dock never changes height. */
 const EVENT_ROWS = 4;
 
@@ -153,11 +154,9 @@ export function createExplore(app: App): View {
   // ----- verdict
   const where = h('p', { class: 'where' });
   const headline = h('h1', { 'aria-live': 'polite' });
-  const sunPill = h('div', { class: 'pill' });
-  const earthPill = h('div', { class: 'pill' });
   // The next step of the story, for a first visit: from one moment at one site to every landing day of the year.
   const nextStep = h('button', { class: 'next-step', type: 'button', onclick: () => store.set({ tab: 'plan' }) }, T.nextStep, h('span', { 'aria-hidden': 'true' }, ' →'));
-  const hudVerdict = h('div', { class: 'hud hud-verdict' }, replayNote, where, headline, h('div', { class: 'status-rows' }, sunPill, earthPill), nextStep);
+  const hudVerdict = h('div', { class: 'hud hud-verdict' }, replayNote, where, headline, nextStep);
 
   // ----- hero: panorama
   const stripCanvas = h('canvas', { role: 'img', 'aria-label': T.panorama });
@@ -183,7 +182,6 @@ export function createExplore(app: App): View {
     const on = use3d();
     three.el.hidden = !on;
     stripWrap.hidden = on;
-    hudClose.hidden = on;
     stage.classList.toggle('is-pano', !on);
     view3dBtn.setAttribute('aria-pressed', String(on));
     viewPanBtn.setAttribute('aria-pressed', String(!on));
@@ -211,32 +209,42 @@ export function createExplore(app: App): View {
   });
   stripCanvas.addEventListener('mouseleave', () => (readout.hidden = true));
 
-  // ----- stat cards
-  const stat = (title: string, tip: string, lead = false, dot?: 'sun' | 'earth') => {
-    const value = h('div', { class: 'tm-value' });
-    const sub = h('div', { class: 'tm-sub' });
-    const label = h('span', null, title);
-    const el = h('div', { class: `tm-row${lead ? ' lead' : ''}`, title: tip }, h('div', { class: 'tm-label' }, dot ? h('span', { class: `dot ${dot}` }) : null, label), value, sub);
-    return { el, value, sub, label };
+  // ----- one instrument per body: its state, its lens and its three figures. Each fact is said once.
+  const instrument = (kind: 'sun' | 'earth', name: string, aria: string, rows: [string, string][]) => {
+    const state = h('span', { class: 'inst-state' });
+    // In the 3D view the lens is a window onto the picture below (the telephoto view is drawn through it);
+    // in the panorama it holds the 2D close-up, at true scale.
+    const canvas = h('canvas', { role: 'img', 'aria-label': aria });
+    const lensNote = h('span', { class: 'inst-lens-note' });
+    const lens = h('div', { class: `inst-lens ${kind}` }, canvas, lensNote);
+    const cells = rows.map(([title, tip]) => {
+      const label = h('dt', null, title);
+      const value = h('dd');
+      const sub = h('small');
+      return { el: h('div', { class: 'inst-row', title: tip }, label, value, sub), label, value, sub };
+    });
+    const el = h(
+      'section',
+      { class: `inst ${kind}`, 'aria-label': name },
+      h('header', { class: 'inst-head' }, h('span', { class: `dot ${kind}` }), h('b', null, name), state),
+      h('div', { class: 'inst-body' }, lens, h('dl', { class: 'inst-nums' }, ...cells.map((c) => c.el))),
+    );
+    return { el, state, lens, lensNote, canvas, rows: cells };
   };
-  const stSunEl = stat(T.stat.sunEl, T.stat.sunElTip, true, 'sun');
-  const stSunVis = stat(T.stat.sunVisible, T.stat.sunVisibleTip, false, 'sun');
-  const stSunNext = stat(T.stat.nextSun, T.stat.sunVisibleTip, false, 'sun');
-  const stEarth = stat(T.stat.earthEl, T.stat.earthElTip, false, 'earth');
-  const stEarthNext = stat(T.stat.nextEarth, T.stat.earthElTip, false, 'earth');
-  const telemetry = h('div', { class: 'telemetry' }, stSunEl.el, stSunVis.el, stSunNext.el, stEarth.el, stEarthNext.el);
-  const hudData = h('div', { class: 'hud hud-data' }, telemetry, h('div', { class: 'hud-row' }, h('span', { class: 'eyebrow' }, T.view), viewSeg));
+  const sunInst = instrument('sun', S.sun, T.closeSun, [
+    [T.stat.sunEl, T.stat.sunElTip],
+    [T.stat.sunVisible, T.stat.sunVisibleTip],
+    [T.stat.nextSun, T.stat.sunNextTip],
+  ]);
+  const earthInst = instrument('earth', S.earth, T.closeEarth, [
+    [T.stat.earthAlt, T.stat.earthAltTip],
+    [T.stat.earthEl, T.stat.earthElTip],
+    [T.stat.nextEarth, T.stat.earthNextTip],
+  ]);
+  three.lenses(sunInst.lens, earthInst.lens);
+  const hudData = h('div', { class: 'hud hud-data' }, sunInst.el, earthInst.el, h('div', { class: 'hud-row' }, h('span', { class: 'eyebrow' }, T.view), viewSeg));
 
-  // ----- close-ups and timeline
-  const sunCanvas = h('canvas', { role: 'img', 'aria-label': T.closeSun });
-  const earthCanvas = h('canvas', { role: 'img', 'aria-label': T.closeEarth });
-  const closeups = h(
-    'div',
-    { class: 'closeups' },
-    h('div', { class: 'closeup', title: T.trueScale }, h('div', { class: 'cap' }, h('span', { class: 'dot sun' }), T.closeSun), sunCanvas),
-    h('div', { class: 'closeup', title: T.trueScale }, h('div', { class: 'cap' }, h('span', { class: 'dot earth' }), T.closeEarth), earthCanvas),
-  );
-  const hudClose = h('div', { class: 'hud hud-close', hidden: true }, closeups);
+  // ----- timeline
   const timeCanvas = h('canvas', { role: 'img', 'aria-label': T.timelineTitle(EXPLORE_DAYS) });
   const eventList = h('ul', { class: 'events' });
   const dock = h(
@@ -272,7 +280,7 @@ export function createExplore(app: App): View {
     window.addEventListener('mouseup', up);
   });
 
-  const stage = h('section', { class: 'stage', 'aria-label': T.panorama }, three.el, stripWrap, h('div', { class: 'stage-scrim' }), heroNote, hudSite, hudData, hudVerdict, hudClose);
+  const stage = h('section', { class: 'stage', 'aria-label': T.panorama }, three.el, stripWrap, h('div', { class: 'stage-scrim' }), heroNote, hudSite, hudData, hudVerdict);
   const el = h('div', { class: 'explore' }, stage, dock);
 
   // ----- behaviour
@@ -427,41 +435,38 @@ export function createExplore(app: App): View {
     // Verdict
     setText(where, T.at(site.name, dayTime(state.timeMs)));
     setText(headline, m.eclipse > 0.5 ? T.headline.eclipse : sunUp && earthUp ? T.headline.both : sunUp ? T.headline.sunOnly : earthUp ? T.headline.earthOnly : T.headline.none);
-    const pill = (el: HTMLElement, kind: 'sun' | 'earth', ok: boolean, name: string, text: string) => {
-      el.className = `pill ${ok ? 'yes' : 'no'}`;
-      clear(el);
-      el.append(h('span', { class: `dot ${kind}` }), h('span', { class: `mark ${ok ? 'ok' : 'bad'}`, 'aria-hidden': 'true' }, ok ? '✓' : '✕'), h('b', null, name), h('span', null, text));
-    };
-    const share = pct(m.sunFrac);
-    pill(sunPill, 'sun', sunUp, S.sun, m.eclipse > 0.5 ? T.sunEclipsed : sunUp ? T.sunUp(share) : m.sunFrac > 0 ? T.sunPartial(share) : T.sunDown);
-    pill(earthPill, 'earth', earthUp, S.earth, earthUp ? T.earthUp(deg(m.earthClear)) : T.earthDown(deg(-m.earthClear)));
-
-    // Cards
-    const big = (node: HTMLElement, value: string, unit?: string) => {
+// Instruments
+    const big = (node: HTMLElement, value: string) => {
       // A changed number announces itself with a short rise, unless time is running.
-      if (!playing && node.textContent && node.textContent !== value + (unit ?? '')) {
+      if (!playing && node.textContent && node.textContent !== value) {
         node.classList.remove('pop');
         void node.offsetWidth;
         node.classList.add('pop');
       }
-      clear(node);
-      node.append(value);
-      if (unit) node.append(h('small', null, unit));
+      setText(node, value);
     };
-    big(stSunEl.value, deg(m.sun.el));
-    setText(stSunEl.sub, T.stat.sunElSub);
-    big(stSunVis.value, pct(m.sunFrac));
-    setText(stSunVis.sub, m.eclipse > 0 ? T.stat.sunVisibleEclipse : T.stat.sunVisibleSub);
+    const status = (inst: typeof sunInst, ok: boolean, text: string) => {
+      inst.el.classList.toggle('no', !ok);
+      clear(inst.state);
+      inst.state.append(h('span', { class: `mark ${ok ? 'ok' : 'bad'}`, 'aria-hidden': 'true' }, ok ? '✓' : '✕'), text);
+      setText(inst.lensNote, use3d() ? T.inst.lens : T.inst.lensFlat);
+    };
+    status(sunInst, sunUp, m.eclipse > 0.5 ? T.inst.sunEclipsed : sunUp ? T.inst.sunUp : m.sunFrac > 0 ? T.inst.sunPartial : T.inst.sunDown);
+    status(earthInst, earthUp, earthUp ? T.inst.earthUp : T.inst.earthDown);
+    const [sunEl, sunVis, sunNext] = sunInst.rows;
+    big(sunEl.value, deg(m.sun.el));
+    big(sunVis.value, pct(m.sunFrac));
     const sunEv = nextEvent(['sunrise', 'sunset'], state.timeMs);
-    setText(stSunNext.label, sunEv ? (sunEv.kind === 'sunset' ? T.stat.sunset : T.stat.sunrise) : T.stat.nextSun);
-    big(stSunNext.value, sunEv ? duration((sunEv.timeMs - state.timeMs) / HOUR_MS) : T.stat.never);
-    setText(stSunNext.sub, sunEv ? dayTime(sunEv.timeMs) : T.stat.noSunEvent(EXPLORE_DAYS));
-    big(stEarth.value, deg(m.earthClear));
-    setText(stEarth.sub, T.stat.earthElSub);
+    setText(sunNext.label, sunEv ? (sunEv.kind === 'sunset' ? T.stat.sunset : T.stat.sunrise) : T.stat.nextSun);
+    big(sunNext.value, sunEv ? duration((sunEv.timeMs - state.timeMs) / HOUR_MS) : T.stat.never);
+    setText(sunNext.sub, sunEv ? dayTime(sunEv.timeMs) : T.stat.noSunEvent(EXPLORE_DAYS));
+    const [earthAlt, earthSky, earthNext] = earthInst.rows;
+    big(earthAlt.value, deg(m.earth.el));
+    big(earthSky.value, deg(m.earthClear));
     const earthEv = nextEvent(['earthrise', 'earthset'], state.timeMs);
-    setText(stEarthNext.label, earthEv ? (earthEv.kind === 'earthset' ? T.stat.earthset : T.stat.earthrise) : T.stat.nextEarth);
-    big(stEarthNext.value, earthEv ? duration((earthEv.timeMs - state.timeMs) / HOUR_MS) : T.stat.never);
-    setText(stEarthNext.sub, earthEv ? dayTime(earthEv.timeMs) : T.stat.noEarthEvent(EXPLORE_DAYS));
+    setText(earthNext.label, earthEv ? (earthEv.kind === 'earthset' ? T.stat.earthset : T.stat.earthrise) : T.stat.nextEarth);
+    big(earthNext.value, earthEv ? duration((earthEv.timeMs - state.timeMs) / HOUR_MS) : T.stat.never);
+    setText(earthNext.sub, earthEv ? dayTime(earthEv.timeMs) : T.stat.noEarthEvent(EXPLORE_DAYS));
 
     // Events list
     clear(eventList);
@@ -513,8 +518,8 @@ export function createExplore(app: App): View {
       setText(noteB, stretch > 1.5 ? T.panoramaNote2 : '');
       heroNote.title = '';
     }
-    if (!use3d()) drawCloseup(sunCanvas, { horizon: loaded.horizon, mast, body: moment.sun, span: 3.2, inner: '#ffffff', outer: '#ececee', glow: 'rgba(255,255,255,0.4)', scaleLabel: T.oneDegree }, CLOSE_H);
-    if (!use3d()) drawCloseup(earthCanvas, { horizon: loaded.horizon, mast, body: moment.earth, span: 7.5, inner: '#dcecff', outer: COLORS.earthDeep, glow: 'rgba(125,184,255,0.24)', scaleLabel: T.oneDegree }, CLOSE_H);
+    if (!use3d()) drawCloseup(sunInst.canvas, { horizon: loaded.horizon, mast, body: moment.sun, span: 3.2, inner: '#ffffff', outer: '#ececee', glow: 'rgba(255,255,255,0.4)', scaleLabel: T.oneDegree }, LENS);
+    if (!use3d()) drawCloseup(earthInst.canvas, { horizon: loaded.horizon, mast, body: moment.earth, span: 7.5, inner: '#dcecff', outer: COLORS.earthDeep, glow: 'rgba(125,184,255,0.24)', scaleLabel: T.oneDegree }, LENS);
     timeGeo = drawTimeline(timeCanvas, {
       startMs: outlook.grid.startMs,
       stepMs: outlook.grid.stepMs,
