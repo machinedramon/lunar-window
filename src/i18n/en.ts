@@ -77,24 +77,11 @@ export const en = {
   guide: {
     button: 'Guide',
     buttonTip: 'The guided first landing: Mission Control talks you through the tool on a real case (with sound)',
-    /** The briefing the guide opens on, and the stages of what is made ready once it is started. */
+    /** The opening, in the dark: its one sentence, the way to skip it, and how to get the voice before any click was made. */
     brief: {
-      eyebrow: 'Incoming transmission · Mission Control',
-      title: 'The first landing',
-      code: 'Mission 01',
-      kind: 'Guided',
-      channel: 'Channel 01 · Earth to Moon',
-      ok: 'OK',
-      rows: [
-        ['Site', 'Malapert Massif · lunar south pole'],
-        ['Landing', '17 January 2027'],
-        ['Mission', '6 days on the surface, on sunlight, in contact with Earth'],
-        ['Your task', 'Find out what a late launch does to it'],
-      ] as [string, string][],
-      start: 'Start the guided mission',
-      skip: 'Skip, explore on my own',
-      note: 'Two minutes, with sound. You can take it again whenever you like: the Guide button, top right.',
-      status: ['Tuning the radio', 'Building the landing site', 'Plotting the descent', 'Link established'],
+      call: 'Someone is calling from Earth.',
+      skip: 'Skip',
+      hint: 'Click anywhere for sound',
     },
     /** The bands across the screen at the three turns of the story: a title and a line under it. */
     alerts: {

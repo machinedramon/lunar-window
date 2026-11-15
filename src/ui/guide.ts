@@ -4,20 +4,20 @@
 // thing to be done in the real interface, which is ringed on screen; the story goes on once it is done. Nothing
 // is staged: the buttons are the tool's own, and when the guide ends the tool is left where the story took it.
 //
-// It opens on a briefing: the mission in four lines, the language, one button to start. A first-time visitor
-// finds it under the opening screen (starting it is one click, which is also what lets the browser play sound);
-// afterwards the Guide button of the top bar brings it back, from the beginning, as often as wanted. Starting
-// covers the screen while everything is made ready (the voice, the terrain, the map of the Moon), and uncovers
-// it on the Moon seen from space, which turns to the south pole while the camera comes down on the site.
+// It opens by itself, in the dark, when the tool is entered through its front door (the Explore screen): a
+// black screen, a thin line across it with a pulse travelling along (a signal), one sentence, the languages and
+// a way to skip it, small, at the foot. Space is quiet, and what is out there is not known yet. While the
+// sentence is read everything is made ready (the voice, the terrain, the map of the Moon) and the line fills;
+// then the dark opens along that line, like a visor, on the Moon seen from space, which turns to the south pole
+// while the camera comes down on the site. The Guide button of the top bar brings all of it back, from the
+// beginning, as often as wanted.
 //
-// The guide is dressed as a technical display: corner marks, numbered lines, a start-up log, a band across the
-// screen when something decisive happens (the Sun is lost, the launch is late, the Earth is in view). The
+// A browser plays no sound before the visitor has clicked or pressed something. Until then the guide runs with
+// its words written out, at reading pace, and says so in a line: the first click anywhere brings the voice in.
+//
+// From there on the guide wears the marks of a display: a sight that closes on what is asked for, a band across
+// the screen when something decisive happens (the Sun is lost, the launch is late, the Earth is in view). The
 // colours keep the meaning they have everywhere in the tool: blue is the link with Earth, red is a problem.
-// At the moment the voice asks for something, the rest of the screen dims and only that control stays lit;
-// while it explains something that has to be seen (the Sun, the calendar), nothing is dimmed.
-//
-// The voice is AI-generated (OpenAI text-to-speech) reading src/ui/guide.lines.json; tools/guide_voice.py adds
-// the sound of a radio link and writes the clips to public/audio/guide. The Accuracy page says so.
 import { PROFILES } from '../core/requirements';
 import { LANGS, language, S, type Lang } from '../i18n';
 import { clear, h, reducedMotion, setText } from './dom';
@@ -28,9 +28,21 @@ import type { State, Store } from './store';
 
 type LineId = keyof typeof lines.en;
 
-const KEY = 'lunar-window-guide';
 /** The case: a lander due at Malapert Massif on 17 January 2027, and a launch that slips three weeks. */
 const SITE = 'malapert';
+/** The site of the story: the tool builds it at once when the guide is about to open it. */
+export const GUIDE_SITE = SITE;
+
+/**
+ * Whether the guide opens the tool by itself: when it is entered on the Explore screen. A link to the planner or
+ * to another screen was followed for what it shows, and a scripted browser (the recordings, the tests) is left
+ * alone unless it asks; `?guide=0` turns it off, `?guide=1` on.
+ */
+export function guideOpens(tab: string): boolean {
+  const asked = new URLSearchParams(location.search).get('guide');
+  if (asked === '0') return false;
+  return tab === 'explore' && (asked === '1' || !navigator.webdriver);
+}
 const PLANNED = Date.UTC(2027, 0, 17);
 const SLIP = 21;
 const SLIPPED = PLANNED + SLIP * DAY_MS;
@@ -42,9 +54,9 @@ const DARK_FROM = Date.UTC(2027, 1, 3, 23, 20);
 const DARK = Date.UTC(2027, 1, 4);
 /** Where the descent starts: over the first place people landed, a quarter of the Moon away from the pole. */
 const FROM = 'apollo-11';
-/** The descent over the globe, in milliseconds, and the least time the briefing stays up while things are made ready. */
+/** The descent over the globe, in milliseconds, and the least time the dark stays while things are made ready: its three words are read. */
 const DESCENT_MS = 6200;
-const BRIEF_MS = 3600;
+const BRIEF_MS = 4300;
 /** The tones at each end of a clip, in seconds: the words are between them. */
 const TONE_S = 0.36;
 
@@ -128,8 +140,8 @@ export interface Guide {
   button: HTMLElement;
   /** Rewrites the words in the language in use. */
   relabel(): void;
-  /** Shows the briefing to a first-time visitor; called as the opening screen lifts, so that it is what is found under it. */
-  invite(): void;
+  /** Starts the guide by itself, if this is how the tool was entered; called as the opening screen lifts, so that the dark is what is found under it. */
+  auto(): void;
 }
 
 /** What the guide needs from the app around it. */
@@ -296,49 +308,18 @@ export function createGuide(store: Store, host: GuideHost): Guide {
   /** Everything but the control that is asked for, darkened: a hole over the control, the dark around it. */
   const dim = h('div', { class: 'guide-dim', 'aria-hidden': 'true' });
 
-  // ----- the briefing: the mission in four lines, the language, one button to start; then what is being made ready
-  const briefEyebrow = h('span', { class: 'eyebrow' });
-  const briefTitle = h('h2', null);
-  const briefCode = h('b', null);
-  const briefKind = h('span', null);
-  const channel = h('span', null);
-  const clock = h('span', { class: 'briefing-clock' });
-  const pct = h('span', { class: 'briefing-pct' });
-  const logLines = [0, 1, 2, 3].map((i) => h('li', null, h('span', { class: 'n' }, `0${i + 1}`), h('span', { class: 't' }), h('i', { 'aria-hidden': 'true' }), h('b', null)));
-  const linked = h('div', { class: 'briefing-linked', 'aria-hidden': 'true' });
+  // ----- the opening, in the dark: a line with a pulse, one sentence; small, at the foot, the languages and the way out
+  const callWords = h('p', { class: 'call-words', 'aria-live': 'polite' });
+  const lineFill = h('i');
+  const callHint = h('p', { class: 'call-hint', hidden: true });
+  const langSeg = h('div', { class: 'call-lang', role: 'group' });
+  for (const l of LANGS) langSeg.append(h('button', { type: 'button', lang: l.tag, title: l.name, 'aria-label': l.name, dataset: { code: l.code }, onclick: () => host.setLanguage(l.code) }, l.short));
+  const skipBtn = h('button', { class: 'call-skip', type: 'button', onclick: () => finish() });
+  const brief = h('div', { class: 'briefing', hidden: true, role: 'dialog', 'aria-modal': 'true' }, callWords, h('div', { class: 'call-line', 'aria-hidden': 'true' }, lineFill), callHint, langSeg, skipBtn);
   /** A band across the screen, when something decisive happens in the story. */
   const alertTitle = h('b', null);
   const alertSub = h('span', null);
   const alertBand = h('div', { class: 'guide-alert', 'aria-hidden': 'true' }, h('div', null, alertTitle, alertSub));
-  const briefRows = h('dl', { class: 'briefing-rows' });
-  const startBtn = h('button', { class: 'btn primary briefing-start', type: 'button', onclick: () => void start() });
-  const skipBtn = h('button', { class: 'btn', type: 'button', onclick: () => dismiss() });
-  const langLabel = h('span', { class: 'eyebrow' });
-  const langSeg = h('div', { class: 'seg', role: 'group' });
-  for (const l of LANGS) langSeg.append(h('button', { type: 'button', lang: l.tag, dataset: { code: l.code }, onclick: () => host.setLanguage(l.code) }, l.name));
-  const briefNote = h('p', { class: 'briefing-note' });
-  const loadBar = h('i');
-  const cancelBtn = h('button', { class: 'briefing-cancel', type: 'button', onclick: () => finish() });
-  const signal = h('span', { class: 'guide-signal', 'aria-hidden': 'true' }, h('i'), h('i'), h('i'));
-  const brief = h(
-    'div',
-    { class: 'briefing', hidden: true, role: 'dialog', 'aria-modal': 'true' },
-    h(
-      'div',
-      { class: 'briefing-card' },
-      h('div', { class: 'briefing-strip', 'aria-hidden': 'true' }, h('span', null, h('i'), channel), clock),
-      h('div', { class: 'briefing-head' }, signal, briefEyebrow),
-      h('div', { class: 'briefing-code' }, briefCode, briefKind),
-      briefTitle,
-      briefRows,
-      h(
-        'div',
-        { class: 'briefing-foot' },
-        h('div', { class: 'briefing-go' }, h('div', { class: 'briefing-buttons' }, startBtn, skipBtn), h('div', { class: 'briefing-lang' }, langLabel, langSeg), briefNote),
-        h('div', { class: 'briefing-load' }, h('div', { class: 'briefing-meter' }, h('span', { class: 'briefing-bar' }, loadBar), pct), h('ol', { class: 'briefing-log', 'aria-live': 'polite' }, ...logLines), cancelBtn, linked),
-      ),
-    ),
-  );
 
   const buttonLabel = h('span', null);
   const button = h('button', { class: 'btn guide-btn', type: 'button', onclick: () => void start() });
@@ -364,11 +345,14 @@ export function createGuide(store: Store, host: GuideHost): Guide {
   let opening = false;
   /** True while the camera comes down over the globe. */
   let landing = false;
-  /** The stage of the making ready that is shown on the briefing. */
-  let stageNow = 0;
   let closeTimer = 0;
   let audio: HTMLAudioElement | null = null;
   let silent = 0;
+  /** A line shown without its sound, at reading pace: when it started and how long it stays. */
+  let readFrom = 0;
+  let readMs = 0;
+  /** True once a sound may play: the visitor has clicked or pressed something, or the browser let one play. */
+  let audible = false;
   let ctx: AudioContext | null = null;
   let analyser: AnalyserNode | null = null;
   let level = 0;
@@ -381,20 +365,18 @@ export function createGuide(store: Store, host: GuideHost): Guide {
   window.addEventListener('pointerup', letGo, true);
   window.addEventListener('pointercancel', letGo, true);
 
-  const seen = (): boolean => {
-    try {
-      return localStorage.getItem(KEY) === 'done';
-    } catch {
-      return true;
-    }
+  /** Whether the browser will play a sound now: it does once the visitor has clicked or pressed something. */
+  const soundFree = (): boolean => audible || !!(navigator as Navigator & { userActivation?: { hasBeenActive: boolean } }).userActivation?.hasBeenActive;
+  /** The first click or key anywhere: sound is allowed from now on, and a line that was only written out is said aloud. */
+  const gesture = (): void => {
+    if (audible) return;
+    audible = true;
+    callHint.hidden = true;
+    if (at < 0 && !opening) return;
+    unlock();
+    if (at >= 0 && !spoken && readMs) speak();
   };
-  const remember = (): void => {
-    try {
-      localStorage.setItem(KEY, 'done');
-    } catch {
-      // private mode: the call is offered again next time
-    }
-  };
+  for (const kind of ['pointerup', 'keydown', 'click']) window.addEventListener(kind, gesture, true);
 
   function clip(lang: Lang, id: LineId): HTMLAudioElement {
     const key = `${lang}/${id}`;
@@ -429,18 +411,24 @@ export function createGuide(store: Store, host: GuideHost): Guide {
     a.muted = false;
     a.currentTime = 0;
     const text = line();
-    // Without sound (a blocked or missing file) the line stays for the time it takes to read it.
+    readMs = 0;
+    // Without sound (not allowed yet, or a missing file) the line stays for the time it takes to read it.
     const read = () => {
       if (audio !== a) return;
       audio = null;
-      silent = window.setTimeout(() => (spoken = true), Math.max(3200, text.length * 62));
+      readFrom = performance.now();
+      readMs = Math.max(3200, text.length * 62);
+      silent = window.setTimeout(() => (spoken = true), readMs);
     };
     a.onended = () => {
       if (audio === a) spoken = true;
     };
     a.onerror = read;
     void ctx?.resume();
-    a.play().catch(read);
+    a.play().then(() => {
+      audible = true;
+      callHint.hidden = true;
+    }, read);
     // the lines that follow are read ahead
     for (const next of steps.slice(at + 1, at + 3)) clip(language(), next.id);
   }
@@ -515,6 +503,7 @@ export function createGuide(store: Store, host: GuideHost): Guide {
     const text = rest.textContent !== null ? said.textContent! + rest.textContent : '';
     let share = spoken ? 1 : 0;
     if (!spoken && audio && audio.duration > 0) share = Math.max(0, Math.min(1, (audio.currentTime - TONE_S) / Math.max(0.5, audio.duration - 2 * TONE_S)));
+    else if (!spoken && readMs) share = Math.max(0, Math.min(1, (now - readFrom) / (readMs * 0.9)));
     let cut = Math.round(share * text.length);
     if (cut < text.length) {
       const space = text.indexOf(' ', cut);
@@ -536,7 +525,10 @@ export function createGuide(store: Store, host: GuideHost): Guide {
     const talking = !!audio && !audio.paused && !spoken;
     panel.classList.toggle('talking', talking);
     panel.style.setProperty('--lvl', level.toFixed(3));
-    setText(state, talking ? G().onAir : step.task && !taskDone ? G().standby : '');
+    // Written out only, for want of a click: the panel says how to get the voice.
+    const mute = !audible && !talking && readMs > 0;
+    panel.classList.toggle('mute', mute);
+    setText(state, mute ? G().brief.hint : talking ? G().onAir : step.task && !taskDone ? G().standby : '');
     if (paint) {
       const w = wave.width;
       const ht = wave.height;
@@ -587,55 +579,49 @@ export function createGuide(store: Store, host: GuideHost): Guide {
   }
   let aimed: HTMLElement | null = null;
 
-  /** The briefing comes up: with its button and the languages (`invite`), or covering the screen while things are made ready. */
-  function openBrief(mode: 'invite' | 'loading'): void {
+  /** The words above the line change by fading out and in. */
+  let wordsTimer = 0;
+  function say(text: string, now = false): void {
+    window.clearTimeout(wordsTimer);
+    if (now) {
+      callWords.textContent = text;
+      callWords.classList.remove('swap');
+      return;
+    }
+    if (callWords.textContent === text) return;
+    callWords.classList.add('swap');
+    wordsTimer = window.setTimeout(() => {
+      callWords.textContent = text;
+      callWords.classList.remove('swap');
+    }, 620);
+  }
+
+  /** The dark comes up, with its sentence. */
+  function openBrief(): void {
     window.clearTimeout(closeTimer);
     brief.hidden = false;
-    brief.classList.toggle('busy', mode === 'loading');
-    brief.classList.remove('linked', 'open');
-    window.clearInterval(clockTimer);
-    tickClock();
-    clockTimer = window.setInterval(tickClock, 1000);
+    brief.classList.remove('open');
+    say(G().brief.call, true);
+    callHint.hidden = soundFree();
     void brief.offsetWidth;
     brief.classList.add('in');
-    if (mode === 'invite') startBtn.focus({ preventScroll: true });
   }
 
   function closeBrief(): void {
     if (brief.hidden) return;
-    // It opens like a visor, from the middle line outwards.
+    // It opens like a visor, along its line.
     brief.classList.add('open');
     brief.classList.remove('in');
     window.clearTimeout(closeTimer);
     closeTimer = window.setTimeout(() => {
       brief.hidden = true;
-      brief.classList.remove('busy', 'linked', 'open');
-      window.clearInterval(clockTimer);
-    }, 1100);
+      brief.classList.remove('open');
+    }, 1300);
   }
 
-  /** The start-up log of the briefing: the stages done, the one going on, the share of the way. */
+  /** How far the making ready is: the line fills from its middle outwards. */
   function stage(i: number): void {
-    stageNow = i;
-    const B = G().brief;
-    const last = B.status.length - 1;
-    loadBar.style.transform = `scaleX(${((i + 1) / B.status.length).toFixed(3)})`;
-    setText(pct, `${String(Math.round(((i + 1) / B.status.length) * 100)).padStart(3, '0')}%`);
-    logLines.forEach((line, k) => {
-      line.classList.toggle('done', k < i || i === last);
-      line.classList.toggle('now', k === i && i !== last);
-      line.classList.toggle('on', k <= i);
-      setText(line.children[1], B.status[k]);
-      setText(line.children[3], k < i || i === last ? B.ok : '');
-    });
-    setText(linked, B.status[last]);
-    brief.classList.toggle('linked', i === last);
-  }
-
-  /** The time of the visitor's own clock, in UTC, as a control room shows it. */
-  let clockTimer = 0;
-  function tickClock(): void {
-    setText(clock, `UTC ${new Date().toISOString().slice(11, 19)}`);
+    lineFill.style.transform = `scaleX(${[0.16, 0.42, 0.7, 1][i] ?? 1})`;
   }
 
   /** A band across the picture for a couple of seconds: red for a problem, blue for the link with Earth. */
@@ -672,11 +658,11 @@ export function createGuide(store: Store, host: GuideHost): Guide {
     void ctx?.resume();
     for (const step of steps) {
       const a = clip(language(), step.id);
-      if (a.dataset.primed) continue;
-      a.dataset.primed = '1';
+      if (a.dataset.primed || a === audio) continue;
       a.muted = true;
       a.play()
         .then(() => {
+          a.dataset.primed = '1';
           if (audio !== a) {
             a.pause();
             a.currentTime = 0;
@@ -700,24 +686,29 @@ export function createGuide(store: Store, host: GuideHost): Guide {
     });
 
   /**
-   * Starts the guide, from the beginning. The briefing covers the screen while the first line is read ahead, the
-   * site of the story is built behind it and the globe is put above the place the descent starts from; then the
-   * voice comes on, the screen is uncovered on the Moon seen from space and the camera comes down.
+   * Starts the guide, from the beginning. The dark covers the screen while the first line is read ahead, the site
+   * of the story is built behind it and the globe is put above the place the descent starts from; then the voice
+   * comes on, the screen is uncovered on the Moon seen from space and the camera comes down.
+   * @param grace  milliseconds before the tool is taken to where the story starts: when the guide opens by itself
+   *               over a scenario that came with the address, skipping it at once leaves that scenario as it was
    */
-  async function start(): Promise<void> {
+  async function start(grace = 0): Promise<void> {
     if (opening) return;
     if (at >= 0) finish(true);
     const mine = ++run;
     const live = () => mine === run;
     opening = true;
-    remember();
     unlock();
-    openBrief('loading');
+    openBrief();
     stage(0);
     document.body.classList.add('guide-on', 'guide-cine');
     button.setAttribute('aria-pressed', 'true');
     const began = performance.now();
-    // Behind the briefing, the tool goes where the story starts.
+    if (grace) {
+      await wait(grace);
+      if (!live()) return;
+    }
+    // Behind the dark, the tool goes where the story starts.
     steps[0].enter?.(store.state);
     preloadJourney();
     void preloadTerrain([SITE]);
@@ -744,7 +735,9 @@ export function createGuide(store: Store, host: GuideHost): Guide {
       return;
     }
     stage(3);
-    await wait(950);
+    // The last word goes; the line, whole, is all there is for a moment; then the dark opens along it.
+    say('');
+    await wait(1150);
     if (!live()) {
       descent?.cancel();
       return;
@@ -798,39 +791,17 @@ export function createGuide(store: Store, host: GuideHost): Guide {
     }
   }
 
-  /** The briefing is declined: the tool, as it is. The Guide button shows where to find it again. */
-  function dismiss(): void {
-    closeBrief();
-    remember();
-    button.classList.remove('nudge');
-    void button.offsetWidth;
-    button.classList.add('nudge');
-  }
-
   function relabel(): void {
     const B = G().brief;
     setText(buttonLabel, G().button);
     button.title = G().buttonTip;
     button.setAttribute('aria-label', G().buttonTip);
-    setText(briefEyebrow, B.eyebrow);
-    setText(briefTitle, B.title);
-    setText(briefCode, B.code);
-    setText(briefKind, B.kind);
-    setText(channel, B.channel);
-    clear(briefRows);
-    B.rows.forEach(([label, value], i) => {
-      const row = h('div', null, h('dt', null, label), h('dd', null, value));
-      row.style.setProperty('--i', String(i));
-      briefRows.append(row);
-    });
-    setText(startBtn, B.start);
     setText(skipBtn, B.skip);
-    setText(langLabel, S.lang.label);
+    setText(callHint, B.hint);
     langSeg.setAttribute('aria-label', S.lang.label);
     langSeg.querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.code === language())));
-    setText(briefNote, B.note);
-    setText(cancelBtn, G().end);
-    stage(stageNow);
+    // The sentence of the call, in the new language.
+    if (!brief.hidden && !brief.classList.contains('open') && callWords.textContent) say(B.call);
     if (at >= 0) {
       const share = said.textContent!.length;
       write();
@@ -842,14 +813,11 @@ export function createGuide(store: Store, host: GuideHost): Guide {
   relabel();
   button.setAttribute('aria-pressed', 'false');
 
-  function invite(): void {
-    const asked = new URLSearchParams(location.search).get('guide');
-    // A scripted browser (the recordings, the tests) is not shown the briefing unless it asks for it.
-    if (asked === '0' || (asked !== '1' && (seen() || navigator.webdriver))) return;
-    // A link to a planner or to another screen was followed for what it shows: the guide waits in the top bar.
-    if (store.state.tab !== 'explore' || at >= 0 || opening) return;
-    openBrief('invite');
+  function auto(): void {
+    if (!guideOpens(store.state.tab) || at >= 0 || opening) return;
+    // Over a scenario that came with the address, a moment is left to skip before the tool is taken elsewhere.
+    void start(store.state.siteId === SITE ? 0 : 1700);
   }
 
-  return { button, relabel, invite };
+  return { button, relabel, auto };
 }

@@ -10,7 +10,7 @@ import { preloadJourney, preloadTerrain } from './ui/hero3d';
 import { introLift, introStage, introTyped } from './ui/intro';
 import { preloadModels } from './viz/props';
 import { createExplore } from './ui/explore';
-import { createGuide } from './ui/guide';
+import { createGuide, GUIDE_SITE, guideOpens } from './ui/guide';
 import { createPlan, planRequest } from './ui/plan';
 import { Planner } from './ui/planner';
 import { setSound, soundEnabled, soundPreferred, tick } from './ui/sound';
@@ -31,7 +31,7 @@ const relabel: (() => void)[] = [];
 /** Set by the app once it runs: changes the language without reloading anything. */
 let changeLanguage: (code: Lang) => void = () => undefined;
 
-/** What a first-time visitor finds under the opening screen: the briefing of the guided mission. Set once the app runs. */
+/** What is found under the opening screen: the guide, which starts by itself in the dark. Set once the app runs. */
 let underIntro: () => void = () => undefined;
 
 /** Lifts the opening screen, once: from then on the bar and the view come in, one piece at a time. */
@@ -167,11 +167,15 @@ async function boot(): Promise<void> {
     return;
   }
   const known = (id: string) => id === CUSTOM_SITE || list.sites.some((s) => s.id === id);
-  const store = new Store(fromHash(location.hash, known));
+  const initial = fromHash(location.hash, known);
+  // Entered through its front door, the tool is opened by the guide: the place of its story is built at once,
+  // behind the opening screen, instead of a place that would be left a moment later.
+  if (!location.hash && guideOpens(initial.tab)) initial.siteId = GUIDE_SITE;
+  const store = new Store(initial);
   const app = new App(store, list);
   // Mission Control, on the radio: the guided first landing. Its button sits with the tools of the top bar.
   const guide = createGuide(store, { site: (id) => app.siteInfo(id), setLanguage: (code) => changeLanguage(code) });
-  underIntro = () => guide.invite();
+  underIntro = () => guide.auto();
   document.querySelector('.top-tools')?.prepend(guide.button);
   relabel.push(guide.relabel);
 
