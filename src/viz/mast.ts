@@ -1,6 +1,6 @@
 // A vertical solar array on a mast, with a dish on top: the piece of hardware that the "panel and
 // antenna height" requirement is about. The panel stands at the chosen height and turns to the
-// Sun; the dish points at the Earth and shows a symbolic radio link when the Earth is in view.
+// Sun; the dish points at the Earth, and a fine steady line marks the line of sight when the Earth is in view.
 // Original design, loosely after NASA's vertical solar array concept for the lunar south pole;
 // it is illustrative and not a model of any real hardware.
 import * as THREE from 'three';
@@ -12,11 +12,10 @@ export interface Mast {
    * @param earthDir  unit vector towards the Earth, in scene coordinates
    * @param powered   0 to 1: how much of the Sun reaches the panel
    * @param linked    true when the Earth is above the terrain: a direct radio link exists
-   * @param timeS     seconds, for the travelling pulses of the link and the beacon
    */
-  update(sunYaw: number, earthDir: THREE.Vector3, powered: number, linked: boolean, timeS: number): void;
-  /** The small animations (radio link, beacon), every frame. */
-  animate(timeS: number): void;
+  update(sunYaw: number, earthDir: THREE.Vector3, powered: number, linked: boolean): void;
+  /** Eases the line of sight in and out, every frame. Nothing here blinks or pulses. */
+  animate(): void;
   dispose(): void;
 }
 
@@ -80,27 +79,39 @@ function foilNormals(): THREE.Texture {
   return t;
 }
 
+// The line of sight from the dish to the Earth. Radio is invisible: this is a drawing aid, and it is drawn
+// like one, as a steady hairline. It is a ribbon that always faces the camera and keeps the same width on
+// screen at any distance, with a soft edge, so it neither shimmers nor breaks up far away.
 const LINK_VERT = /* glsl */ `
 #include <common>
 #include <logdepthbuf_pars_vertex>
+attribute float side;
+uniform float uHeight;
+uniform float uWidth;
 varying float vAlong;
+varying float vSide;
 void main() {
-  vAlong = position.y;
-  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+  vAlong = position.z;
+  vSide = side;
+  vec4 axis = modelViewMatrix * vec4(0.0, 0.0, position.z, 1.0);
+  vec3 along = normalize(mat3(modelViewMatrix) * vec3(0.0, 0.0, 1.0));
+  vec3 across = normalize(cross(along, axis.xyz));
+  // Half the width, in metres, that covers uWidth pixels at this distance.
+  float half_ = uWidth * max(0.05, -axis.z) / (projectionMatrix[1][1] * uHeight);
+  gl_Position = projectionMatrix * vec4(axis.xyz + across * side * half_, 1.0);
   #include <logdepthbuf_vertex>
 }`;
 const LINK_FRAG = /* glsl */ `
 #include <common>
 #include <logdepthbuf_pars_fragment>
-uniform float uTime;
 uniform float uOn;
 varying float vAlong;
+varying float vSide;
 void main() {
   #include <logdepthbuf_fragment>
-  // Short pulses running up the beam towards the Earth, fading with distance.
-  float pulse = smoothstep(0.55, 1.0, fract(vAlong * 0.09 - uTime * 0.9));
-  float fade = exp(-vAlong * 0.012);
-  gl_FragColor = vec4(vec3(0.49, 0.72, 1.0) * (0.22 + 1.1 * pulse) * fade * uOn, 1.0);
+  float edge = 1.0 - smoothstep(0.25, 1.0, abs(vSide));
+  float fade = exp(-vAlong * 0.011);
+  gl_FragColor = vec4(vec3(0.49, 0.72, 1.0) * 0.62 * edge * fade * uOn, 1.0);
   #include <tonemapping_fragment>
   #include <colorspace_fragment>
 }`;
@@ -125,7 +136,6 @@ export function createMast(mastM: number): Mast {
   const metal = keep(new THREE.MeshStandardMaterial({ color: 0x8c8c92, metalness: 0.85, roughness: 0.45 }));
   const dark = keep(new THREE.MeshStandardMaterial({ color: 0x141416, metalness: 0.5, roughness: 0.55 }));
   const cells = keep(new THREE.MeshStandardMaterial({ map: keep(cellTexture(tall ? 8 : 6, tall ? 11 : 4)), metalness: 0.55, roughness: 0.26 }));
-  const beacon = keep(new THREE.MeshBasicMaterial({ color: 0x000000 }));
 
   const add = (geo: THREE.BufferGeometry, mat: THREE.Material, x = 0, y = 0, z = 0, parent: THREE.Object3D = group): THREE.Mesh => {
     const m = new THREE.Mesh(keep(geo), mat);
@@ -175,10 +185,6 @@ export function createMast(mastM: number): Mast {
   const rows = tall ? 5 : 2;
   for (let i = 1; i <= rows; i++) add(new THREE.BoxGeometry(panelW - 0.04, 0.025, 0.022), metal, 0, -panelH / 2 + (panelH * i) / (rows + 1), -0.058, head);
   add(new THREE.BoxGeometry(0.22, 0.16, 0.07), foil, 0, -panelH / 2 + 0.14, -0.1, head); // drive and harness box
-  // Beacon on a short stalk at a top corner of the array, clear of the dish
-  add(new THREE.CylinderGeometry(0.008, 0.008, 0.1, 6), metal, panelW / 2 - 0.06, panelH / 2 + 0.07, -0.03, head);
-  add(new THREE.SphereGeometry(0.035, 12, 8), beacon, panelW / 2 - 0.06, panelH / 2 + 0.14, -0.03, head);
-
   // Dish on a post above the array, on the axis the array turns about: the two can never meet.
   const DISH_R = 0.36;
   const dishY = centre + panelH / 2 + 0.03 + DISH_R + 0.2;
@@ -203,42 +209,52 @@ export function createMast(mastM: number): Mast {
   }
   add(new THREE.SphereGeometry(0.03, 10, 8), dark, 0, 0, 0.35, dish);
 
-  // Symbolic radio link: a thin beam of pulses from the dish towards the Earth
+  // Line of sight to the Earth: a ribbon from the feed of the dish, 320 m long, fading with distance.
   const linkMat = keep(
-    new THREE.ShaderMaterial({ vertexShader: LINK_VERT, fragmentShader: LINK_FRAG, uniforms: { uTime: { value: 0 }, uOn: { value: 0 } }, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }),
+    new THREE.ShaderMaterial({
+      vertexShader: LINK_VERT,
+      fragmentShader: LINK_FRAG,
+      uniforms: { uOn: { value: 0 }, uHeight: { value: 800 }, uWidth: { value: 2.6 } },
+      transparent: true,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+    }),
   );
-  const linkGeo = keep(new THREE.CylinderGeometry(0.02, 0.02, 320, 6, 1, true));
-  linkGeo.translate(0, 160, 0);
-  linkGeo.rotateX(Math.PI / 2); // along +Z, starting at the dish
+  const linkGeo = keep(new THREE.BufferGeometry());
+  const LINK_M = 320;
+  linkGeo.setAttribute('position', new THREE.Float32BufferAttribute([0, 0, 0, 0, 0, 0, 0, 0, LINK_M, 0, 0, LINK_M], 3));
+  linkGeo.setAttribute('side', new THREE.Float32BufferAttribute([-1, 1, -1, 1], 1));
+  linkGeo.setIndex([0, 1, 2, 2, 1, 3]);
   const link = new THREE.Mesh(linkGeo, linkMat);
   link.frustumCulled = false;
   link.position.set(0, 0, 0.35);
   dish.add(link);
   link.userData.noShadow = true;
+  // The width is counted in pixels of whichever picture is being drawn: the main view or a telephoto window.
+  const viewport = new THREE.Vector4();
+  link.onBeforeRender = (renderer) => {
+    renderer.getViewport(viewport);
+    linkMat.uniforms.uHeight.value = Math.max(1, viewport.w);
+  };
 
   const up = new THREE.Vector3(0, 1, 0);
   const forward = new THREE.Vector3(0, 0, 1);
   let linkLevel = 0;
-  let hasPower = false;
   let hasLink = false;
   return {
     group,
-    update(sunYaw, earthDir, powered, linked, timeS) {
+    update(sunYaw, earthDir, _powered, linked) {
       head.rotation.y = sunYaw - group.rotation.y;
       const local = earthDir.clone().applyAxisAngle(up, -group.rotation.y).normalize();
       dish.quaternion.setFromUnitVectors(forward, local);
-      hasPower = powered > 0.5;
       hasLink = linked;
-      this.animate(timeS);
+      this.animate();
     },
-    animate(timeS) {
+    animate() {
       linkLevel += ((hasLink ? 1 : 0) - linkLevel) * 0.12;
       linkMat.uniforms.uOn.value = linkLevel;
-      linkMat.uniforms.uTime.value = timeS;
       link.visible = linkLevel > 0.01;
-      // A beacon that blinks once every two seconds while the array has power.
-      const blink = hasPower && timeS % 2 < 0.12 ? 1 : 0;
-      beacon.color.setScalar(blink * 6);
     },
     dispose() {
       for (const d of disposables) d.dispose();

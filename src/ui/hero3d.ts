@@ -110,7 +110,6 @@ export function createHero3D(): Hero3D {
   /** Value of `running` while a frame is being drawn (not a real animation-frame handle). */
   const DRAWING = -1;
   let last = 0;
-  let idleSince = 0;
   let arriving = 0;
   let slow = 0.016;
   let loweredAt = -1e9;
@@ -283,7 +282,6 @@ export function createHero3D(): Hero3D {
   }
 
   function touch(): void {
-    idleSince = performance.now();
     arriving = 0;
     wake();
   }
@@ -325,17 +323,10 @@ export function createHero3D(): Hero3D {
     const still = reducedMotion();
     const rate = arriving ? 1.15 : drag ? 18 : 5.5;
     const k = still ? 1 : 1 - Math.exp(-dt * rate);
-    let goalAz = target.az;
-    let goalPitch = target.pitch;
-    if (!still && !drag && !arriving && now - idleSince > 3500) {
-      // Never completely still: a slow drift, as a hand-held camera breathes.
-      const t = (now - idleSince - 3500) / 1000;
-      const ease = Math.min(1, t / 4);
-      goalAz += ease * 0.55 * Math.sin(t * 0.21);
-      goalPitch += ease * 0.22 * Math.sin(t * 0.33 + 1.3);
-    }
-    scene.look.az = (scene.look.az + shortest(scene.look.az, goalAz) * k + 360) % 360;
-    scene.look.pitch += (goalPitch - scene.look.pitch) * k;
+    // An instrument holds still: left alone, the camera does not move, so the picture is the same frame
+    // after frame and nothing fine in it can shimmer. It moves when the visitor moves it or time flows.
+    scene.look.az = (scene.look.az + shortest(scene.look.az, target.az) * k + 360) % 360;
+    scene.look.pitch += (target.pitch - scene.look.pitch) * k;
     scene.look.fov += (target.fov - scene.look.fov) * k;
     if (arriving && now - arriving > 5200) arriving = 0;
     // The title card plays over a clean picture; the instruments come in afterwards.
@@ -541,7 +532,6 @@ export function createHero3D(): Hero3D {
     pinch.delete(ev.pointerId);
     if (drag && drag.id === ev.pointerId) drag = null;
     if (!pinch.size) el.classList.remove('dragging');
-    idleSince = performance.now();
   };
   canvas.addEventListener('pointerup', release);
   canvas.addEventListener('pointercancel', release);
@@ -602,7 +592,6 @@ export function createHero3D(): Hero3D {
       const v = which === 'sun' ? moment.sun : moment.earth;
       Object.assign(target, { az: v.az, pitch: v.el + lift, fov });
       Object.assign(scene.look, target);
-      idleSince = performance.now() + 1e9;
       arriving = 0;
       wake();
     };
@@ -610,7 +599,6 @@ export function createHero3D(): Hero3D {
       if (!scene) return;
       Object.assign(target, { az, pitch, fov });
       Object.assign(scene.look, target);
-      idleSince = performance.now() + 1e9;
       arriving = 0;
       wake();
     };

@@ -381,7 +381,7 @@ export const en = {
       text: 'The 3D view shows the result of the same computation. It adds nothing to the numbers.',
       items: [
         'Real: the terrain (NASA LOLA, 5 m near seven of the sites) and its shadows, the skyline, the directions and sizes of the Sun and the Earth, the phase and the face of the Earth, the stars (Yale Bright Star Catalogue, shown when the Sun is hidden), the height of the solar array.',
-        "Illustrative: relief finer than the terrain model, the rocks, the clouds on the Earth, the vehicle and the solar array mast (the rover is NASA's Space Exploration Vehicle concept; the mast is our own design), the radio beam and the lens flare.",
+        "Illustrative: relief finer than the terrain model, the rocks, the clouds on the Earth, the vehicle and the solar array mast (the rover is NASA's Space Exploration Vehicle concept; the mast is our own design), and the fine line from the antenna to the Earth (it marks the line of sight, whose direction is real; radio itself is invisible). Nothing in the view blinks or pulses for effect.",
       ],
     },
     made: {

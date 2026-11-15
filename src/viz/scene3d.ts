@@ -689,7 +689,7 @@ export class LunarScene {
   private propsKey = '';
   private propsDirty = false;
   private lastSky: SceneSky | null = null;
-  /** Seconds since the scene started: drives the small animations (beacon, radio link). */
+  /** Seconds since the scene started. */
   clock = 0;
   private eye = 2;
   /** Where the camera looks: azimuth and pitch in degrees, vertical field of view in degrees. */
@@ -1107,7 +1107,7 @@ void main() {
     this.earthLight.target.position.copy(this.camera.position);
     this.earthLight.intensity = s.earthEl > -1 ? 0.035 : 0;
     this.scene.environmentIntensity = 0.03 + 0.3 * reach;
-    this.props?.mast?.update(Math.atan2(this.sunDir.x, this.sunDir.z), earthDir, reach, s.linked, this.clock);
+    this.props?.mast?.update(Math.atan2(this.sunDir.x, this.sunDir.z), earthDir, reach, s.linked);
     this.propsDirty = true;
     for (const m of this.terrainMats) {
       m.uniforms.uSunPower.value = power;
@@ -1218,7 +1218,7 @@ void main() {
     // A model or a texture may arrive late: the shadow map is also refreshed once a second.
     if (now - this.shadowMapAt > 1000) this.renderer.shadowMap.needsUpdate = true;
     if (this.renderer.shadowMap.needsUpdate) this.shadowMapAt = now;
-    this.props?.mast?.animate(this.clock);
+    this.props?.mast?.animate();
     this.camera.fov = this.look.fov;
     this.camera.rotation.set(this.look.pitch * D2R, -this.look.az * D2R, 0);
     this.camera.updateProjectionMatrix();
