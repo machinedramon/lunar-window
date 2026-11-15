@@ -127,7 +127,16 @@ export function drawCalendar(canvas: HTMLCanvasElement, m: CalendarInput): Calen
       const gap = cellW > 3.4 ? 0.6 : 0;
       for (let d = 0; d < m.days; d++) {
         const s = r.cal.status[d];
-        if (!s) continue;
+        if (!s) {
+          // Not viable, but one of the two needs is met: amber when the power is there (what is missing is the
+          // Earth), blue when the contact is there (what is missing is the Sun). Dim, so that white stays the answer.
+          const has = r.cal.has ? r.cal.has[d] : 0;
+          if (has === 1 || has === 2) {
+            ctx.fillStyle = has === 1 ? 'rgba(255,200,87,0.3)' : 'rgba(125,184,255,0.32)';
+            ctx.fillRect(xOf(d), top, cellW - gap + 0.35, rowH);
+          }
+          continue;
+        }
         viable++;
         const share = r.cal.points > 1 ? r.cal.robust[d] / r.cal.points : 1;
         ctx.fillStyle = `rgba(${OK[0]},${OK[1]},${OK[2]},${(0.34 + 0.66 * share).toFixed(3)})`;

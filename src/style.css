@@ -3248,3 +3248,47 @@ table.compare tbody tr.cmp-actions td {
     animation: none;
   }
 }
+
+/* The journey between two places: the Moon as a globe over the 3D view, under the instruments. */
+.travel {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  background: #000;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition:
+    opacity 0.6s var(--ease),
+    visibility 0s 0.6s;
+}
+.travel.on {
+  opacity: 1;
+  visibility: visible;
+  transition: opacity 0.38s var(--ease);
+}
+.travel canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.travel-caption {
+  position: absolute;
+  left: 50%;
+  bottom: 13%;
+  margin: 0;
+  transform: translateX(-50%);
+  font: 500 10.5px/1.4 var(--mono);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: var(--ink-2);
+}
+
+/* In the calendar, a day that is not viable still shows what it has: the power (amber) or the contact (blue). */
+.sw.power {
+  background: rgb(255 200 87 / 0.36);
+}
+.sw.contact {
+  background: rgb(125 184 255 / 0.38);
+}

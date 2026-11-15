@@ -6,7 +6,7 @@ import { createMissions, warmMissions } from './ui/missions';
 import { App, type View } from './ui/app';
 import { loadSiteList } from './ui/data';
 import { clear, h, reducedMotion } from './ui/dom';
-import { preloadTerrain } from './ui/hero3d';
+import { preloadJourney, preloadTerrain } from './ui/hero3d';
 import { introLift, introStage, introTyped } from './ui/intro';
 import { preloadModels } from './viz/props';
 import { createExplore } from './ui/explore';
@@ -265,6 +265,7 @@ async function boot(): Promise<void> {
     void planner.compute(...planRequest(store.state));
     warmMissions(planner);
     preloadModels();
+    preloadJourney();
     void preloadTerrain(list.sites.map((site) => site.id));
   };
   if (store.state.tab === 'explore') window.addEventListener('lw:ready', () => window.setTimeout(readAhead, 3200), { once: true });

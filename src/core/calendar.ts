@@ -20,6 +20,8 @@ export interface SiteCalendar {
   timeMask: Uint8Array;
   /** 0 when nothing fails, else 1 + index into REQUIREMENT_ORDER of the first failed requirement at the best time. */
   failed: Uint8Array;
+  /** What the day has, at the best time: bit 0 when the power requirements are met, bit 1 when the communication ones are. */
+  has: Uint8Array;
   /** How many of the points (the site and the ring around it) are viable at the best time. */
   robust: Uint8Array;
   /** Number of points tested: 9 with a terrain ring, 1 otherwise. */
@@ -37,6 +39,7 @@ export function buildCalendar(points: Prepared[], req: Requirements, first: numb
     bestTime: new Uint8Array(days),
     timeMask: new Uint8Array(days),
     failed: new Uint8Array(days),
+    has: new Uint8Array(days),
     robust: new Uint8Array(days),
     points: points.length,
   };
@@ -44,16 +47,22 @@ export function buildCalendar(points: Prepared[], req: Requirements, first: numb
   for (let d = 0; d < days; d++) {
     let best = -1;
     let bestRank = -1;
+    let bestMet = -1;
     let bestFailed = 0;
+    let bestHas = 0;
     let mask = 0;
     for (let k = 0; k < LANDING_STEPS.length; k++) {
       const r = evaluate(centre, first + d * DAY_STEPS + LANDING_STEPS[k], req);
       const rank = STATUS_RANK[r.status];
       if (rank > 0) mask |= 1 << k;
-      if (rank > bestRank) {
+      // The best time is the one with the best verdict; among times that all fail, the one that meets the most.
+      const met = (r.power ? 1 : 0) + (r.contact ? 1 : 0);
+      if (rank > bestRank || (rank === bestRank && met > bestMet)) {
         bestRank = rank;
+        bestMet = met;
         best = k;
         bestFailed = r.failed ? 1 + REQUIREMENT_ORDER.indexOf(r.failed) : 0;
+        bestHas = (r.power ? 1 : 0) | (r.contact ? 2 : 0);
       }
     }
     let robust = bestRank > 0 ? 1 : 0;
@@ -65,6 +74,7 @@ export function buildCalendar(points: Prepared[], req: Requirements, first: numb
     cal.bestTime[d] = best;
     cal.timeMask[d] = mask;
     cal.failed[d] = bestFailed;
+    cal.has[d] = bestHas;
     cal.robust[d] = robust;
   }
   return cal;

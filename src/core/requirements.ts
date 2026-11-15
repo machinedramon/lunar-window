@@ -188,6 +188,10 @@ export interface CellResult extends WindowMetrics {
   tight: RequirementKey | null;
   sunAtLanding: number;
   earthClearAtLanding: number;
+  /** Whether every power requirement in force is met (Sun at landing, uninterrupted Sun, darkness survived). */
+  power: boolean;
+  /** Whether every communication requirement in force is met (Earth at landing, loss of contact survived). */
+  contact: boolean;
 }
 
 export function durationSteps(req: Requirements): number {
@@ -225,8 +229,11 @@ export function evaluate(p: Prepared, a: number, req: Requirements): CellResult 
 
   const failed = checks.find((c) => c.active && !c.pass);
   const tight = failed ? undefined : checks.find((c) => c.active && c.tight);
+  const about = (keys: RequirementKey[]) => !checks.some((c) => c.active && !c.pass && keys.includes(c.key));
   return {
     ...m,
+    power: about(['sunAtLanding', 'continuousSun', 'maxDarkness']),
+    contact: about(['earthAtLanding', 'maxBlackout']),
     status: failed ? 'fail' : tight ? 'marginal' : 'ok',
     failed: failed ? failed.key : null,
     tight: tight ? tight.key : null,

@@ -6,6 +6,7 @@ import { S } from '../i18n';
 import { FONT, MONO } from '../viz/canvas';
 import { EYE_MIN_M } from '../viz/eye';
 import { introStage } from './intro';
+import type { Place, Travel } from '../viz/travel';
 import type { LunarScene, SceneSky } from '../viz/scene3d';
 import type { LoadedSite } from './data';
 import { h, reducedMotion, setText } from './dom';
@@ -13,6 +14,15 @@ import type { Moment } from './exploreModel';
 import { compass, latLon } from './format';
 
 const T = S.explore.three;
+
+/** The journey between two places (the Moon as a globe): its code and its map are read when first needed, or ahead. */
+let travelModule: Promise<typeof import('../viz/travel')> | null = null;
+const loadTravel = () => (travelModule ??= import('../viz/travel'));
+export function preloadJourney(): void {
+  loadTravel()
+    .then((m) => m.preloadTravel())
+    .catch(() => undefined);
+}
 
 /** The terrain files of the listed sites, kept once read: a site read ahead, or seen before, is there at once. */
 const terrainFiles = new Map<string, Promise<Int16Array>>();
@@ -150,6 +160,9 @@ export function createHero3D(): Hero3D {
   let mast = 1;
   let terrainKey = '';
   let pendingKey = '';
+  /** The journey between places, and the place on screen (where a journey starts from). */
+  let travel: Travel | null = null;
+  let shownPlace: Place | null = null;
   let moment: Moment | null = null;
   let sky: SceneSky | null = null;
   let when = '';
@@ -223,6 +236,18 @@ export function createHero3D(): Hero3D {
     void start().then(loadTerrain);
   }
 
+  /** Direction of the Sun in the frame fixed to the Moon, from where it stands in the sky of a place. */
+  const sunMoonFixed = (at: Place, m: Moment): [number, number, number] => {
+    const k = Math.PI / 180;
+    const [la, lo, az, e] = [at.lat * k, at.lon * k, m.sun.az * k, m.sun.el * k];
+    const up = [Math.cos(la) * Math.cos(lo), Math.cos(la) * Math.sin(lo), Math.sin(la)];
+    const east = [-Math.sin(lo), Math.cos(lo), 0];
+    const north = [-Math.sin(la) * Math.cos(lo), -Math.sin(la) * Math.sin(lo), Math.cos(la)];
+    const c = Math.cos(e);
+    const v = (i: number) => east[i] * Math.sin(az) * c + north[i] * Math.cos(az) * c + up[i] * Math.sin(e);
+    return [v(0), v(1), v(2)];
+  };
+
   /** A place of the 3D view: a listed site, or the visitor's own point at given coordinates. */
   const placeOf = (l: LoadedSite): string => (l.tiles ? `${l.site.id}@${l.site.lat},${l.site.lon}` : l.site.id);
 
@@ -244,7 +269,25 @@ export function createHero3D(): Hero3D {
     const target0 = site;
     const targetMast = mast;
     const newSite = framed !== place;
-    if (newSite && terrainKey) fade.classList.add('on'); // dip to black between sites
+    // Between two places the Moon turns under the camera, lit as it is at this moment, and the camera comes down
+    // on the new one. (A dip to black where motion is not wanted, or if the globe cannot be drawn.)
+    let flying = false;
+    if (newSite && terrainKey) {
+      const from = shownPlace;
+      if (from && moment && !reducedMotion()) {
+        const sun = sunMoonFixed(from, moment);
+        try {
+          const { createTravel } = await loadTravel();
+          travel ??= createTravel(el);
+          await travel.show(from, { lat: target0.site.lat, lon: target0.site.lon, name: target0.site.name }, sun);
+          flying = true;
+        } catch (err) {
+          console.warn(err);
+        }
+        if (pendingKey !== key || !scene) return;
+      }
+      if (!flying) fade.classList.add('on');
+    }
     let tiles: Int16Array | null = null;
     try {
       if (target0.tiles) tiles = target0.tiles;
@@ -291,6 +334,10 @@ export function createHero3D(): Hero3D {
       introStage(0.85);
       await scene.warm();
       if (run !== runs || !scene) return;
+      if (flying && travel) {
+        await travel.fly();
+        if (run !== runs || !scene) return;
+      }
       arrive(target0);
     }
     ready();
@@ -302,7 +349,9 @@ export function createHero3D(): Hero3D {
     if (!scene) return;
     setText(titleName, s.site.name);
     setText(titleSub, `${latLon(s.site.lat, s.site.lon)}${when ? ` · ${when}` : ''}`);
+    shownPlace = { lat: s.site.lat, lon: s.site.lon, name: s.site.name };
     fade.classList.remove('on');
+    travel?.hide();
     if (reducedMotion()) {
       Object.assign(scene.look, target);
       api.onArriving?.(false);

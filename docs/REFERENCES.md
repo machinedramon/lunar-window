@@ -14,6 +14,7 @@ Every external resource used by the project: data, 3D assets, code and reading.
 | LROC "Anthropogenic Features on the Moon" | Coordinates of real landing sites | LROC, Arizona State University — https://data.lroc.im-ldi.com/lroc/view_rdr/SHAPEFILE_ANTHROPOGENIC_OBJECTS |
 | Yale Bright Star Catalogue, 5th revised edition (Hoffleit and Warren 1991), stars to magnitude 5.6 | Stars of the 3D view, at their true positions | Yale University Observatory / NASA ADC catalogue V/50; JSON edition by Bretton Wade (MIT) — https://github.com/brettonw/YaleBrightStarCatalog |
 | Deep Star Maps 2020, Milky Way layer (built from the Hipparcos-2, Tycho-2 and Gaia DR2 catalogues) | The Milky Way of the 3D night sky, in J2000 coordinates | NASA/Goddard Space Flight Center Scientific Visualization Studio; Gaia DR2: ESA/Gaia/DPAC — https://svs.gsfc.nasa.gov/4851 |
+| CGI Moon Kit, colour map of the Moon from the Lunar Reconnaissance Orbiter Camera (`lroc_color_poles_2k`) | The globe of the journey between two sites | NASA's Scientific Visualization Studio — https://svs.gsfc.nasa.gov/4720 |
 | Blue Marble: Land Surface, Shallow Water, and Shaded Topography (2048 x 1024) | Texture of the Earth in the 3D view | NASA Goddard Space Flight Center, image by Reto Stöckli — https://visibleearth.nasa.gov/images/57730 (file obtained from the Wikimedia Commons copy, `Land_ocean_ice_2048.jpg`) |
 
 ## 3D models and textures

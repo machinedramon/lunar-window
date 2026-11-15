@@ -268,7 +268,9 @@ export function createPlan(app: App, planner: Planner): View {
     { class: 'legend' },
     h('span', null, h('i', { class: 'sw ok' }), `${S.statusMark.ok} ${T.legendOk}`),
     h('span', null, h('i', { class: 'sw warn' }), `${S.statusMark.marginal} ${T.legendMarginal}`),
-    h('span', null, h('i', { class: 'sw off' }), `${S.statusMark.fail} ${T.legendFail}`),
+    h('span', null, h('i', { class: 'sw off' }), h('b', { class: 'mark bad' }, S.statusMark.fail), ` ${T.legendFail}`),
+    h('span', { title: T.legendPowerTip }, h('i', { class: 'sw power' }), T.legendPower),
+    h('span', { title: T.legendContactTip }, h('i', { class: 'sw contact' }), T.legendContact),
     h('span', { class: 'muted', title: T.legendRobustTip }, T.legendRobust),
   );
   const csvBtn = h('button', { class: 'btn', type: 'button', title: T.csvTip }, T.csv);

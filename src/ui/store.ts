@@ -45,7 +45,7 @@ export function defaults(): State {
   const planned = Date.UTC(2027, 0, 17);
   return {
     tab: 'explore',
-    siteId: 'malapert',
+    siteId: 'haworth',
     custom: { lat: -85, lon: 0 },
     pin: false,
     timeMs: planned,
