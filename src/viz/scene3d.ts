@@ -13,6 +13,7 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { EYE_MIN_M } from './eye';
 import { triangleHeight } from './rest';
 import { createProps, PROP_LAYER, type Props } from './props';
 
@@ -645,7 +646,7 @@ function glareTexture(): THREE.Texture {
 export class LunarScene {
   readonly renderer: THREE.WebGLRenderer;
   private readonly scene = new THREE.Scene();
-  private readonly camera = new THREE.PerspectiveCamera(45, 2, 0.4, FAR_M);
+  private readonly camera = new THREE.PerspectiveCamera(45, 2, 0.12, FAR_M);
   private readonly tele = new THREE.PerspectiveCamera(5, 1, 0.4, FAR_M);
   /**
    * The telephoto windows show the scene from where the camera stands, so they only change when the sky,
@@ -706,6 +707,10 @@ export class LunarScene {
   /** Seconds since the scene started. */
   clock = 0;
   private eye = 2;
+  /** Where the eye is going: a change of antenna height is a move, not a jump. */
+  private eyeGoal = 2;
+  private mastShown = 2;
+  private mastGoal = 2;
   /** Where the camera looks: azimuth and pitch in degrees, vertical field of view in degrees. */
   look = { az: 0, pitch: 4, fov: 46 };
 
@@ -987,6 +992,19 @@ void main() {
   }
 
   /**
+   * Prepares the picture before it is shown: the programs of every material are compiled without stopping the
+   * page, and one frame is drawn so that textures and shadow maps are in place. What follows has nothing new to pay.
+   */
+  async warm(): Promise<void> {
+    try {
+      await this.renderer.compileAsync(this.scene, this.camera);
+    } catch {
+      /* compiled at the first frame instead */
+    }
+    this.render([]);
+  }
+
+  /**
    * Height of the ground as it is drawn: the finest grid is a mesh of triangles, and between samples the picture
    * follows those triangles. Things that stand on the ground are placed on this surface, so that what touches in
    * the computation touches in the picture.
@@ -1090,9 +1108,115 @@ void main() {
       }
       this.heightTex[level].needsUpdate = true;
     }
-    this.eye = Math.max(1.6, eyeM);
+    this.eye = this.eyeGoal = Math.max(EYE_MIN_M, eyeM);
+    this.mastShown = this.mastGoal = eyeM;
     this.camera.position.set(0, this.eye, 0);
+    this.buildSkyline(profile, distKm, stepDeg);
+    this.shadowsDirty = true;
+  }
 
+  /**
+   * The same place seen from another height: the far skyline of that height is drawn, and the eye and the mast
+   * travel to it over the next frames (see `step`). Nothing else is rebuilt.
+   */
+  setEye(profile: ArrayLike<number> | null, distKm: ArrayLike<number> | null, stepDeg: number, eyeM: number): void {
+    this.eyeGoal = Math.max(EYE_MIN_M, eyeM);
+    this.mastGoal = eyeM;
+    this.buildSkyline(profile, distKm, stepDeg);
+  }
+
+  /** Moves the eye and the mast towards their heights. Returns true while something is still moving. */
+  step(dt: number): boolean {
+    let moving = false;
+    const dEye = this.eyeGoal - this.eye;
+    const dMast = this.mastGoal - this.mastShown;
+    if (Math.abs(dEye) < 0.002 && Math.abs(dMast) < 0.002) {
+      if (dEye !== 0 || dMast !== 0) {
+        this.eye = this.eyeGoal;
+        this.mastShown = this.mastGoal;
+        this.placeEye();
+      }
+    } else {
+      // Quick to start, soft to arrive.
+      const k = 1 - Math.exp(-dt * 3.2);
+      this.eye += dEye * k;
+      this.mastShown += dMast * k;
+      this.placeEye();
+      moving = true;
+    }
+    // The camera adapts to the light as an eye does: over a second or so, never in one frame.
+    if (Math.abs(this.exposureGoal - this.exposureNow) > 0.004 || Math.abs(this.darkGoal - this.darkNow) > 0.004) {
+      this.adapt(1 - Math.exp(-dt * 2.6));
+      this.version++;
+      moving = true;
+    }
+    return moving;
+  }
+
+  private exposureGoal = 1;
+  private exposureNow = 1;
+  private darkGoal = 0;
+  private darkNow = 0;
+  private adapted = false;
+  /** Share of the Sun's disc the eye sees over the drawn terrain, from where it stands now. */
+  private sunVisible = 1;
+
+  /** Moves the exposure and the night sky a step towards what the light asks for (k = 1: all the way). */
+  private adapt(k: number): void {
+    this.exposureNow += (this.exposureGoal - this.exposureNow) * k;
+    this.darkNow += (this.darkGoal - this.darkNow) * k;
+    this.renderer.toneMappingExposure = this.exposureNow;
+    this.earthMat.uniforms.uGain.value = 1 / Math.sqrt(this.exposureNow);
+    // Stars and Milky Way show only when the Sun is hidden, as for a dark-adapted eye or a long exposure;
+    // their brightness does not follow the exposure, or every star would burn to the same white.
+    this.starMat.uniforms.uOpacity.value = this.darkNow;
+    this.starMat.uniforms.uGain.value = 4.0 / this.exposureNow;
+    this.galaxyMat.uniforms.uOpacity.value = this.darkNow * this.darkNow;
+    this.galaxyMat.uniforms.uGain.value = 1.5 / this.exposureNow;
+  }
+
+  /** Elevation, degrees, of the highest terrain the eye sees in a direction: the skyline of the picture itself. */
+  private skylineAt(azDeg: number): number {
+    const sin = Math.sin(azDeg * D2R);
+    const cos = Math.cos(azDeg * D2R);
+    let best = -90;
+    // 2 m steps near the eye, 2% of the distance further out, as far as the terrain goes
+    for (let d = 3; d < 300000; d += Math.max(2, d * 0.02)) {
+      const el = Math.atan2((d < 500 ? this.surfaceAt(sin * d, cos * d) : this.groundAt(sin * d, cos * d)) - this.eye, d) / D2R;
+      if (el > best) best = el;
+    }
+    return best;
+  }
+
+  /**
+   * Share of the Sun's disc that clears the terrain as it is drawn, seen from the eye. The light, the exposure and
+   * the stars of the picture follow this, so the picture always shows what a camera at that height would see;
+   * the figures beside it are the planner's, for the antenna height that was chosen.
+   */
+  private sunSeen(s: SceneSky): number {
+    const COLUMNS = 9;
+    let seen = 0;
+    let total = 0;
+    for (let c = 0; c < COLUMNS; c++) {
+      const u = ((c + 0.5) / COLUMNS) * 2 - 1;
+      const chord = Math.sqrt(1 - u * u);
+      const skyline = this.skylineAt(s.sunAz + (u * s.sunRadius) / Math.max(0.05, Math.cos(s.sunEl * D2R)));
+      const top = s.sunEl + chord * s.sunRadius;
+      seen += Math.max(0, Math.min(1, (top - skyline) / (2 * chord * s.sunRadius))) * chord;
+      total += chord;
+    }
+    return total ? seen / total : 0;
+  }
+
+  private placeEye(): void {
+    this.camera.position.set(0, this.eye, 0);
+    if (this.skyline) this.skyline.position.y = this.eye;
+    this.props?.mast?.setHeight(this.mastShown);
+    if (this.lastSky) this.setSky(this.lastSky);
+  }
+
+  /** The far skyline of the horizon profile, as a thin band; its heights are relative to the eye. */
+  private buildSkyline(profile: ArrayLike<number> | null, distKm: ArrayLike<number> | null, stepDeg: number): void {
     if (this.skyline) {
       this.scene.remove(this.skyline);
       this.skyline.geometry.dispose();
@@ -1107,7 +1231,7 @@ void main() {
         direction(i * stepDeg, profile[i], d);
         const range = dist / Math.max(0.2, Math.cos(profile[i] * D2R));
         const lower = direction(i * stepDeg, profile[i] - 0.45, new THREE.Vector3()).multiplyScalar(range);
-        verts.set([d.x * range, this.eye + d.y * range, d.z * range, lower.x, this.eye + lower.y, lower.z], i * 6);
+        verts.set([d.x * range, d.y * range, d.z * range, lower.x, lower.y, lower.z], i * 6);
       }
       const index: number[] = [];
       for (let i = 0; i < count; i++) {
@@ -1120,6 +1244,7 @@ void main() {
       geo.setIndex(index);
       this.skyline = new THREE.Mesh(geo, this.skylineMat);
       this.skyline.frustumCulled = false;
+      this.skyline.position.y = this.eye;
       this.scene.add(this.skyline);
     }
     this.shadowsDirty = true;
@@ -1131,7 +1256,8 @@ void main() {
     direction(s.sunAz, s.sunEl, this.sunDir);
     const power = 1 - s.eclipse;
     // Lander and rocks: the Sun as far as it clears the terrain, light bounced off the sunlit ground, earthshine.
-    const reach = power * s.sunFrac;
+    this.sunVisible = this.sunSeen(s);
+    const reach = power * this.sunVisible;
     this.sunLight.position.copy(this.sunDir).multiplyScalar(300).add(this.camera.position);
     this.sunLight.target.position.copy(this.camera.position);
     this.sunLight.intensity = 7.5 * reach;
@@ -1156,7 +1282,7 @@ void main() {
     this.sun.lookAt(this.camera.position);
     this.sun.visible = power > 0.001;
     this.glare.position.copy(this.sun.position);
-    const visible = s.sunFrac;
+    const visible = this.sunVisible;
     this.glare.scale.setScalar(SKY_M * 0.96 * Math.tan(4.5 * D2R) * 2 * (0.55 + 0.45 * visible));
     (this.glare.material as THREE.SpriteMaterial).userData.base = Math.min(1, visible * 1.4) * 0.8;
     this.glare.visible = visible > 0.002;
@@ -1172,15 +1298,11 @@ void main() {
     this.earth.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(x, y, z));
 
     // Exposure opens up when the Sun is hidden, as a camera (or an eye) would, so that earthshine shows.
-    this.renderer.toneMappingExposure = 1.0 + 5.0 * Math.pow(1 - Math.min(1, visible * power), 3);
-    this.earthMat.uniforms.uGain.value = 1 / Math.sqrt(this.renderer.toneMappingExposure);
-    // Stars and Milky Way show only when the Sun is hidden, as for a dark-adapted eye or a long exposure;
-    // their brightness does not follow the exposure, or every star would burn to the same white.
-    const dark = Math.max(0, 1 - visible * power * 6);
-    this.starMat.uniforms.uOpacity.value = dark;
-    this.starMat.uniforms.uGain.value = 4.0 / this.renderer.toneMappingExposure;
-    this.galaxyMat.uniforms.uOpacity.value = dark * dark;
-    this.galaxyMat.uniforms.uGain.value = 1.5 / this.renderer.toneMappingExposure;
+    this.exposureGoal = 1.0 + 5.0 * Math.pow(1 - Math.min(1, visible * power), 3);
+    this.darkGoal = Math.max(0, 1 - visible * power * 6);
+    // The first picture, and every frame of a recording, are fully adapted; otherwise the change is gradual (see `step`).
+    this.adapt(!this.adapted || (globalThis as { __lwPreserve?: boolean }).__lwPreserve ? 1 : 0);
+    this.adapted = true;
     const planets = s.starAxes.planets;
     if (planets && this.starCount) {
       const g = this.stars.geometry;
@@ -1265,7 +1387,7 @@ void main() {
     if (at && this.lastSky) {
       (fu.uSunAt.value as THREE.Vector2).set(at.x, 1 - at.y);
       const off = Math.max(Math.abs(at.x - 0.5), Math.abs(at.y - 0.5));
-      fu.uSunVis.value = this.lastSky.sunFrac * (1 - this.lastSky.eclipse) * Math.max(0, Math.min(1, (0.62 - off) / 0.14)) * (1 - long);
+      fu.uSunVis.value = this.sunVisible * (1 - this.lastSky.eclipse) * Math.max(0, Math.min(1, (0.62 - off) / 0.14)) * (1 - long);
     } else fu.uSunVis.value = 0;
     this.sunMat.uniforms.uGain.value = 60 + (2.4 - 60) * long;
     this.bloom.strength = 0.55 * (1 - 0.8 * long);

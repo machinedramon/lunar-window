@@ -223,11 +223,15 @@ export async function createProps(ground: (east: number, north: number) => numbe
     // The mast stays upright; each of its three legs reaches down to the ground under its own footpad.
     const yaw = rnd() * Math.PI * 2;
     const here = ground(me, mn);
-    mast = createMast(mastM, (x, z) => {
-      const dx = x * Math.cos(yaw) + z * Math.sin(yaw);
-      const dz = -x * Math.sin(yaw) + z * Math.cos(yaw);
-      return ground(me + dx, mn - dz) - here - SINK;
-    });
+    mast = createMast(
+      mastM,
+      (x, z) => {
+        const dx = x * Math.cos(yaw) + z * Math.sin(yaw);
+        const dz = -x * Math.sin(yaw) + z * Math.cos(yaw);
+        return ground(me + dx, mn - dz) - here - SINK;
+      },
+      tag,
+    );
     mast.group.position.set(me, here, -mn);
     mast.group.rotation.y = yaw;
     group.add(mast.group);

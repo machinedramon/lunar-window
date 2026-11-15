@@ -16,6 +16,8 @@ export interface Mast {
   update(sunYaw: number, earthDir: THREE.Vector3, powered: number, linked: boolean): void;
   /** Eases the line of sight in and out, every frame. Nothing here blinks or pulses. */
   animate(): void;
+  /** Extends or retracts the telescoping mast: the array, and the dish above it, move to the new height. */
+  setHeight(mastM: number): void;
   dispose(): void;
 }
 
@@ -121,26 +123,23 @@ void main() {
  * @param footY  height of the ground under a point of the base, relative to the ground under its centre:
  *               each leg is as long as its own footing asks
  */
-export function createMast(mastM: number, footY: (x: number, z: number) => number = () => 0): Mast {
+export function createMast(mastM: number, footY: (x: number, z: number) => number = () => 0, dress: (o: THREE.Object3D) => void = () => undefined): Mast {
   const group = new THREE.Group();
   const disposables: { dispose(): void }[] = [];
   const keep = <T extends { dispose(): void }>(x: T): T => {
     disposables.push(x);
     return x;
   };
-  const tall = mastM >= 8;
-  const panelW = tall ? 2.6 : 1.7;
-  const panelH = tall ? 3.6 : 1.05;
   // Nothing may cross anything else while the array turns: the deck is low, the array starts above
   // it, and the dish stands on the axis of rotation, above the sweep of the array.
   const DECK = 0.5;
-  const centre = Math.max(DECK + 0.14 + panelH / 2, mastM);
 
   const foil = keep(new THREE.MeshStandardMaterial({ color: 0xb9b9bd, metalness: 0.85, roughness: 0.42, normalMap: keep(foilNormals()), normalScale: new THREE.Vector2(0.32, 0.32) }));
   const white = keep(new THREE.MeshStandardMaterial({ color: 0xa2a2a6, metalness: 0.05, roughness: 0.7 }));
   const metal = keep(new THREE.MeshStandardMaterial({ color: 0x8c8c92, metalness: 0.85, roughness: 0.45 }));
   const dark = keep(new THREE.MeshStandardMaterial({ color: 0x141416, metalness: 0.5, roughness: 0.55 }));
-  const cells = keep(new THREE.MeshStandardMaterial({ map: keep(cellTexture(tall ? 8 : 6, tall ? 11 : 4)), metalness: 0.55, roughness: 0.26 }));
+  const cellsSmall = keep(new THREE.MeshStandardMaterial({ map: keep(cellTexture(6, 4)), metalness: 0.55, roughness: 0.26 }));
+  const cellsTall = keep(new THREE.MeshStandardMaterial({ map: keep(cellTexture(8, 11)), metalness: 0.55, roughness: 0.26 }));
 
   const add = (geo: THREE.BufferGeometry, mat: THREE.Material, x = 0, y = 0, z = 0, parent: THREE.Object3D = group): THREE.Mesh => {
     const m = new THREE.Mesh(keep(geo), mat);
@@ -166,41 +165,68 @@ export function createMast(mastM: number, footY: (x: number, z: number) => numbe
     beam(new THREE.Vector3(Math.cos(a) * 0.42, 0.24, Math.sin(a) * 0.42), foot, 0.018);
   }
 
-  // Telescoping mast from the deck up to the bottom of the array
-  const foot = DECK + 0.02;
-  const top = centre - panelH / 2 - 0.03;
-  const sections = Math.max(1, Math.round((top - foot) / 2.2));
-  for (let k = 0; k < sections; k++) {
-    const y0 = foot + ((top - foot) * k) / sections;
-    const y1 = foot + ((top - foot) * (k + 1)) / sections;
-    const r = 0.07 - (0.035 * k) / sections;
-    add(new THREE.CylinderGeometry(r * 0.86, r, y1 - y0, 14), k % 2 ? metal : white, 0, (y0 + y1) / 2, 0);
-    add(new THREE.CylinderGeometry(r * 1.25, r * 1.25, 0.04, 14), metal, 0, y0 + 0.02, 0);
-  }
-
-  // The array turns about the mast to face the Sun
+  // The array turns about the mast to face the Sun; the dish stands above it on the same axis.
   const head = new THREE.Group();
-  head.position.set(0, centre, 0);
   group.add(head);
-  add(new THREE.BoxGeometry(panelW, panelH, 0.035), white, 0, 0, -0.03, head);
-  add(new THREE.PlaneGeometry(panelW - 0.08, panelH - 0.08), cells, 0, 0, -0.01, head);
-  add(new THREE.BoxGeometry(panelW + 0.04, 0.05, 0.06), metal, 0, panelH / 2, -0.03, head);
-  add(new THREE.BoxGeometry(panelW + 0.04, 0.05, 0.06), metal, 0, -panelH / 2, -0.03, head);
-  // Stiffeners on the back of the array, so that it reads as a structure from behind as well
-  for (const x of [-panelW / 3, 0, panelW / 3]) add(new THREE.BoxGeometry(0.035, panelH - 0.06, 0.03), metal, x, 0, -0.062, head);
-  const rows = tall ? 5 : 2;
-  for (let i = 1; i <= rows; i++) add(new THREE.BoxGeometry(panelW - 0.04, 0.025, 0.022), metal, 0, -panelH / 2 + (panelH * i) / (rows + 1), -0.058, head);
-  add(new THREE.BoxGeometry(0.22, 0.16, 0.07), foil, 0, -panelH / 2 + 0.14, -0.1, head); // drive and harness box
-  // Dish on a post above the array, on the axis the array turns about: the two can never meet.
   const DISH_R = 0.36;
-  const dishY = centre + panelH / 2 + 0.03 + DISH_R + 0.2;
-  const postFoot = centre + panelH / 2 + 0.025;
-  add(new THREE.CylinderGeometry(0.02, 0.028, dishY - postFoot, 12), metal, 0, (dishY + postFoot) / 2, 0);
-  add(new THREE.CylinderGeometry(0.05, 0.05, 0.03, 16), metal, 0, postFoot + 0.015, 0);
-  add(new THREE.SphereGeometry(0.055, 14, 10), dark, 0, dishY, 0);
   const dish = new THREE.Group();
-  dish.position.set(0, dishY, 0);
   group.add(dish);
+
+  // Everything whose size follows the height: the telescoping sections, the array and the post of the dish.
+  // The array of the tall mast is larger; between the two heights it grows as the mast extends.
+  let shown = Number.NaN;
+  const moving: THREE.Mesh[] = [];
+  const put = (geo: THREE.BufferGeometry, mat: THREE.Material, x: number, y: number, z: number, parent: THREE.Object3D): void => {
+    const m = new THREE.Mesh(geo, mat);
+    m.position.set(x, y, z);
+    parent.add(m);
+    moving.push(m);
+  };
+  const raise = (h: number): void => {
+    if (Math.abs(h - shown) < 0.003) return;
+    shown = h;
+    for (const m of moving) {
+      m.parent?.remove(m);
+      m.geometry.dispose();
+    }
+    moving.length = 0;
+    const grow = Math.max(0, Math.min(1, (h - 2) / 8));
+    const s3 = grow * grow * (3 - 2 * grow);
+    const panelW = 1.7 + 0.9 * s3;
+    const panelH = 1.05 + 2.55 * s3;
+    const centre = Math.max(DECK + 0.14 + panelH / 2, h);
+    // Telescoping mast from the deck up to the bottom of the array
+    const foot = DECK + 0.02;
+    const top = centre - panelH / 2 - 0.03;
+    const sections = Math.max(1, Math.round((top - foot) / 2.2));
+    for (let k = 0; k < sections; k++) {
+      const y0 = foot + ((top - foot) * k) / sections;
+      const y1 = foot + ((top - foot) * (k + 1)) / sections;
+      const r = 0.07 - (0.035 * k) / sections;
+      put(new THREE.CylinderGeometry(r * 0.86, r, y1 - y0, 14), k % 2 ? metal : white, 0, (y0 + y1) / 2, 0, group);
+      put(new THREE.CylinderGeometry(r * 1.25, r * 1.25, 0.04, 14), metal, 0, y0 + 0.02, 0, group);
+    }
+    head.position.set(0, centre, 0);
+    put(new THREE.BoxGeometry(panelW, panelH, 0.035), white, 0, 0, -0.03, head);
+    put(new THREE.PlaneGeometry(panelW - 0.08, panelH - 0.08), s3 > 0.5 ? cellsTall : cellsSmall, 0, 0, -0.01, head);
+    put(new THREE.BoxGeometry(panelW + 0.04, 0.05, 0.06), metal, 0, panelH / 2, -0.03, head);
+    put(new THREE.BoxGeometry(panelW + 0.04, 0.05, 0.06), metal, 0, -panelH / 2, -0.03, head);
+    // Stiffeners on the back of the array, so that it reads as a structure from behind as well
+    for (const x of [-panelW / 3, 0, panelW / 3]) put(new THREE.BoxGeometry(0.035, panelH - 0.06, 0.03), metal, x, 0, -0.062, head);
+    const rows = s3 > 0.5 ? 5 : 2;
+    for (let n = 1; n <= rows; n++) put(new THREE.BoxGeometry(panelW - 0.04, 0.025, 0.022), metal, 0, -panelH / 2 + (panelH * n) / (rows + 1), -0.058, head);
+    put(new THREE.BoxGeometry(0.22, 0.16, 0.07), foil, 0, -panelH / 2 + 0.14, -0.1, head); // drive and harness box
+    // Dish on a post above the array, on the axis the array turns about: the two can never meet.
+    const dishY = centre + panelH / 2 + 0.03 + DISH_R + 0.2;
+    const postFoot = centre + panelH / 2 + 0.025;
+    put(new THREE.CylinderGeometry(0.02, 0.028, dishY - postFoot, 12), metal, 0, (dishY + postFoot) / 2, 0, group);
+    put(new THREE.CylinderGeometry(0.05, 0.05, 0.03, 16), metal, 0, postFoot + 0.015, 0, group);
+    put(new THREE.SphereGeometry(0.055, 14, 10), dark, 0, dishY, 0, group);
+    dish.position.set(0, dishY, 0);
+    for (const m of moving) dress(m);
+  };
+  raise(mastM);
+
   const profile: THREE.Vector2[] = [];
   for (let i = 0; i <= 12; i++) {
     const r = (DISH_R * i) / 12;
@@ -262,7 +288,11 @@ export function createMast(mastM: number, footY: (x: number, z: number) => numbe
       linkMat.uniforms.uOn.value = linkLevel;
       link.visible = linkLevel > 0.01;
     },
+    setHeight(h) {
+      raise(h);
+    },
     dispose() {
+      for (const m of moving) m.geometry.dispose();
       for (const d of disposables) d.dispose();
     },
   };

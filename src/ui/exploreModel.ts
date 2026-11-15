@@ -44,15 +44,24 @@ export interface Outlook {
   sunElMax: number;
 }
 
-let cached: Outlook | null = null;
+/** The last few outlooks, most recent last: going back to a height or a day already seen costs nothing. */
+const kept = new Map<string, Outlook>();
+/** Where the Sun and the Earth are over the period does not depend on the site: computed once per starting day. */
+let sampled: { startMs: number; samples: ReturnType<typeof sampleSky> } | null = null;
 
 /** The 30 days starting at 00:00 UTC of the day of `timeMs`. Cached: moving within the day costs nothing. */
 export function outlookFor(loaded: LoadedSite, mast: number, timeMs: number): Outlook {
   const startMs = Math.floor(timeMs / DAY_MS) * DAY_MS;
   const key = `${loaded.site.id}/${loaded.site.lat}/${loaded.site.lon}/${mast}/${startMs}`;
-  if (cached && cached.key === key) return cached;
+  const have = kept.get(key);
+  if (have) {
+    kept.delete(key);
+    kept.set(key, have);
+    return have;
+  }
   const grid: TimeGrid = { startMs, stepMs: STEP_MS, count: (EXPLORE_DAYS + 1) * DAY_STEPS };
-  const samples = sampleSky(grid);
+  if (!sampled || sampled.startMs !== startMs) sampled = { startMs, samples: sampleSky(grid) };
+  const samples = sampled.samples;
   const frame = frameOf(loaded.site, mast);
   const series = pointSeries(samples, frame, loaded.horizon, mast);
   const events = findEvents(series, grid, frame, loaded.horizon, mast, 0, 0, grid.count);
@@ -75,8 +84,23 @@ export function outlookFor(loaded: LoadedSite, mast: number, timeMs: number): Ou
     sy += Math.sin((e.az * Math.PI) / 180);
     sunElMax = Math.max(sunElMax, s.el);
   }
-  cached = { key, grid, series, events, sunPath, earthPath, earthAz: ((Math.atan2(sy, sx) * 180) / Math.PI + 360) % 360, sunElMax };
-  return cached;
+  const made = { key, grid, series, events, sunPath, earthPath, earthAz: ((Math.atan2(sy, sx) * 180) / Math.PI + 360) % 360, sunElMax };
+  kept.set(key, made);
+  if (kept.size > 9) kept.delete(kept.keys().next().value as string);
+  return made;
+}
+
+/**
+ * Prepares, while the browser has nothing else to do, the outlook of the other antenna heights: a change of
+ * height then answers at once.
+ */
+export function warmOutlooks(loaded: LoadedSite, masts: number[], timeMs: number): void {
+  const idle = (window as unknown as { requestIdleCallback?: (fn: () => void, options?: { timeout: number }) => number }).requestIdleCallback;
+  const later = (fn: () => void) => (idle ? idle(fn, { timeout: 2000 }) : window.setTimeout(fn, 300));
+  // Not while the camera is arriving at the place: a pause in the middle of that move would be seen.
+  window.setTimeout(() => {
+    for (const mast of masts) later(() => void outlookFor(loaded, mast, timeMs));
+  }, 7000);
 }
 
 /** Vertical range of the panorama, in degrees: tight around the horizon at the pole, the whole sky elsewhere. */

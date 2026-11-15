@@ -4,6 +4,8 @@
 import { MAST_HEIGHTS_M } from '../core/horizon';
 import { S } from '../i18n/en';
 import { FONT, MONO } from '../viz/canvas';
+import { EYE_MIN_M } from '../viz/eye';
+import { introStage } from './intro';
 import type { LunarScene, SceneSky } from '../viz/scene3d';
 import type { LoadedSite } from './data';
 import { h, reducedMotion, setText } from './dom';
@@ -25,6 +27,10 @@ export interface Hero3D {
    */
   lenses(sun: HTMLElement, earth: HTMLElement): void;
   onFail: (() => void) | null;
+  /** Called with true when the camera starts arriving at a place, and with false when the instruments may come in. */
+  onArriving: ((on: boolean) => void) | null;
+  /** Called once, when the first place is loaded, compiled and drawn: the picture can be uncovered. */
+  onReady: (() => void) | null;
 }
 
 interface Look {
@@ -138,6 +144,17 @@ export function createHero3D(): Hero3D {
       wake();
     },
     onFail: null,
+    onArriving: null,
+    onReady: null,
+  };
+  let runs = 0;
+  let readySaid = false;
+  let arrivingSaid = false;
+  const ready = () => {
+    if (readySaid) return;
+    readySaid = true;
+    introStage(S.stages.ready, 1);
+    api.onReady?.();
   };
 
   function fail(err: unknown): void {
@@ -146,6 +163,7 @@ export function createHero3D(): Hero3D {
     cancelAnimationFrame(running);
     running = 0;
     api.onFail?.();
+    ready();
   }
 
   function start(): Promise<void> {
@@ -171,6 +189,15 @@ export function createHero3D(): Hero3D {
     if (!scene || !site) return;
     const key = `${site.site.id}/${mast}`;
     if (key === terrainKey || key === pendingKey) return;
+    // The same place from another antenna height: the eye and the mast travel there. Nothing is loaded or built again.
+    if (!pendingKey && framed === site.site.id && terrainKey.startsWith(`${site.site.id}/`)) {
+      const d = site.data;
+      scene.setEye(d ? d.elevDeg[mast] : null, d ? d.distKm[mast] : null, d ? d.stepDeg : 1, MAST_HEIGHTS_M[mast]);
+      terrainKey = key;
+      setText(hint, T.hintEye(String(Math.max(EYE_MIN_M, MAST_HEIGHTS_M[mast]))));
+      wake();
+      return;
+    }
     pendingKey = key;
     const target0 = site;
     const targetMast = mast;
@@ -198,14 +225,14 @@ export function createHero3D(): Hero3D {
     terrainKey = key;
     pendingKey = '';
     loading.hidden = true;
-    const eye = String(Math.max(1.6, MAST_HEIGHTS_M[targetMast]));
+    const eye = String(Math.max(EYE_MIN_M, MAST_HEIGHTS_M[targetMast]));
     setText(hint, T.hintEye(eye));
     if (sky) scene.setSky(sky);
+    const run = ++runs;
     if (newSite) {
       framed = target0.site.id;
       frame();
       vehicleAz = (target.az - 15 + 360) % 360;
-      arrive(target0);
     }
     // Rocks, vehicle and mast: the same arrangement every time for a given site.
     let seed = 7;
@@ -214,7 +241,18 @@ export function createHero3D(): Hero3D {
     // sites; only the mast where a real robotic lander stood on real terrain; nothing at the other real sites.
     const s0 = target0.site;
     const kind = s0.category === 'apollo' ? 'apollo' : s0.status === 'candidate' || s0.status === 'planned' ? 'rover' : s0.horizon !== 'sphere' ? 'mast' : 'none';
-    void scene.setProps(key, seed, vehicleAz, kind, MAST_HEIGHTS_M[targetMast]);
+    // The place is shown whole: the vehicle and the rocks are in, every program is compiled and a frame is drawn
+    // before the camera arrives. Until then the picture stays covered (the opening screen, or black between sites).
+    introStage(S.stages.scene, 0.6);
+    await scene.setProps(target0.site.id, seed, vehicleAz, kind, MAST_HEIGHTS_M[targetMast]);
+    if (run !== runs || !scene) return;
+    if (newSite) {
+      introStage(S.stages.picture, 0.85);
+      await scene.warm();
+      if (run !== runs || !scene) return;
+      arrive(target0);
+    }
+    ready();
     wake();
   }
 
@@ -226,8 +264,11 @@ export function createHero3D(): Hero3D {
     fade.classList.remove('on');
     if (reducedMotion()) {
       Object.assign(scene.look, target);
+      api.onArriving?.(false);
       return;
     }
+    arrivingSaid = true;
+    api.onArriving?.(true);
     scene.look.az = (target.az - 22 + 360) % 360;
     scene.look.pitch = -24;
     scene.look.fov = Math.min(62, target.fov + 14);
@@ -337,6 +378,7 @@ export function createHero3D(): Hero3D {
     const dt = Math.min(0.1, (now - last) / 1000);
     last = now;
     scene.clock += dt;
+    scene.step(dt);
 
     // Ease the camera towards where it should look. The arrival shot is slow; a drag follows closely.
     const still = reducedMotion();
@@ -349,7 +391,12 @@ export function createHero3D(): Hero3D {
     scene.look.fov += (target.fov - scene.look.fov) * k;
     if (arriving && now - arriving > 5200) arriving = 0;
     // The title card plays over a clean picture; the instruments come in afterwards.
-    el.classList.toggle('arriving', arriving > 0 && now - arriving < 3600);
+    const coming = arriving > 0 && now - arriving < 3600;
+    el.classList.toggle('arriving', coming);
+    if (arrivingSaid && !coming) {
+      arrivingSaid = false;
+      api.onArriving?.(false);
+    }
 
     try {
       scene.render(teleWindows());
@@ -380,6 +427,8 @@ export function createHero3D(): Hero3D {
   /** Where the telephoto windows are, and where each lens points. A body well below the skyline gets no window. */
   function teleWindows(): { x: number; y: number; size: number; az: number; el: number; fov: number }[] {
     if (!moment || !site) return [];
+    // The telephoto views come in with their instruments, a moment after the arrival.
+    if (arriving && performance.now() - arriving < 4600) return [];
     const box = canvas.getBoundingClientRect();
     const out: { x: number; y: number; size: number; az: number; el: number; fov: number }[] = [];
     const m = moment;

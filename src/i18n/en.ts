@@ -8,6 +8,8 @@ export const en = {
   tabs: { explore: 'Explore', plan: 'Plan a mission', compare: 'Compare', missions: 'Missions', accuracy: 'Accuracy' },
   /** Shorter names where a phone has no room for the full ones. */
   tabsShort: { plan: 'Plan' } as Record<string, string>,
+  // the stages of the loading, named on the opening screen
+  stages: { sites: 'Reading the landing sites', terrain: 'Loading the terrain · NASA LRO LOLA', scene: 'Setting the scene', picture: 'Preparing the picture', ready: 'Ready' },
   sun: 'Sun',
   earth: 'Earth',
   both: 'Both',

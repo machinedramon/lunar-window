@@ -9,7 +9,7 @@ import { drawTimeline, timelineTime, type TimelineGeometry } from '../viz/timeli
 import type { App, View } from './app';
 import { CATEGORY_LABEL, type LoadedSite, type Site } from './data';
 import { clear, h, reducedMotion, setText } from './dom';
-import { EXPLORE_DAYS, elevationRange, momentAt, outlookFor, type Moment, type Outlook } from './exploreModel';
+import { EXPLORE_DAYS, elevationRange, momentAt, outlookFor, type Moment, type Outlook, warmOutlooks } from './exploreModel';
 import { createHero3D } from './hero3d';
 import { DAY_MS, HOUR_MS, compass, dayTime, deg, duration, isoMinute, latLon, monthShort, num, parseUtc, pct } from './format';
 import { REPLAYS } from './replays';
@@ -172,6 +172,7 @@ export function createExplore(app: App): View {
   viewSeg.append(view3dBtn, viewPanBtn);
   const stripWrap = h('div', { class: 'pano' }, stripCanvas, readout);
   three.onFail = () => {
+    settle();
     view3dBtn.disabled = true;
     view3dBtn.title = T.three.unavailable;
     showHero();
@@ -183,6 +184,11 @@ export function createExplore(app: App): View {
     three.el.hidden = !on;
     stripWrap.hidden = on;
     stage.classList.toggle('is-pano', !on);
+    // Without the 3D view there is no arrival to wait for.
+    if (!on && el.classList.contains('is-entering')) {
+      settle();
+      window.dispatchEvent(new Event('lw:ready'));
+    }
     view3dBtn.setAttribute('aria-pressed', String(on));
     viewPanBtn.setAttribute('aria-pressed', String(!on));
   }
@@ -281,7 +287,19 @@ export function createExplore(app: App): View {
   });
 
   const stage = h('section', { class: 'stage', 'aria-label': T.panorama }, three.el, stripWrap, h('div', { class: 'stage-scrim' }), heroNote, hudSite, hudData, hudVerdict);
-  const el = h('div', { class: 'explore' }, stage, dock);
+  // On the first visit nothing is on the picture yet: the place arrives, then each instrument comes in, one by one.
+  const el = h('div', { class: 'explore is-entering is-arriving' }, stage, dock);
+  const settle = () => el.classList.remove('is-entering', 'is-arriving');
+  let settleLater = 0;
+  three.onArriving = (on) => {
+    window.clearTimeout(settleLater);
+    if (on) {
+      el.classList.add('is-arriving');
+      // whatever happens to the picture, the instruments are back within a few seconds
+      settleLater = window.setTimeout(settle, 6500);
+    } else settle();
+  };
+  three.onReady = () => window.dispatchEvent(new Event('lw:ready'));
 
   // ----- behaviour
   function togglePlay(force?: boolean): void {
@@ -386,6 +404,11 @@ export function createExplore(app: App): View {
     const site = loaded.site;
     moment = momentAt(loaded, mast, state.timeMs);
     outlook = outlookFor(loaded, mast, state.timeMs);
+    warmOutlooks(
+      loaded,
+      [0, 1, 2].filter((other) => other !== mast),
+      state.timeMs,
+    );
     if (centerFor !== site.id) {
       centerFor = site.id;
       centerAz = loaded.horizon.kind === 'sphere' ? 180 : Math.round(outlook.earthAz / 10) * 10;

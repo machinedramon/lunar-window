@@ -8,7 +8,7 @@
 //
 // Every picture is the real tool running. What the film adds: the black bars, the subtitles,
 // a drawn pointer, slow zooms on the interface, the slate lines and the closing title.
-import { existsSync, mkdirSync, readFileSync } from 'node:fs';
+import { mkdirSync, readFileSync } from 'node:fs';
 import { chromium } from 'playwright-core';
 
 const FPS = 30;
@@ -22,19 +22,14 @@ const every = Number(process.env.EVERY ?? 1);
 const out = process.env.OUT ?? 'video/frames';
 mkdirSync(out, { recursive: true });
 
-// ---------- time marks, in seconds of film (tools/film_audio.py uses the same ones)
-const CUT = { ridge: 6.3, slip: 9.3, stand: 13.3, days: 16.5, proof: 20.3, eclipse: 22.1, title: 23.7, end: 30 };
+// ---------- time marks, in seconds of film: written by tools/film_audio.py from the word timings of the narration.
+// The film follows the voice: every cut falls where she starts a thought.
+const MARKS = JSON.parse(readFileSync('video/voice/marks.json', 'utf8'));
+const CUT = MARKS.cuts;
 /** Subtitles: what the narrator says, when she says it. */
-const SUBTITLES = existsSync('video/voice/marks.json')
-  ? JSON.parse(readFileSync('video/voice/marks.json', 'utf8'))
-  : [
-      [0.7, 4.55, 'At the Moon’s south pole, the Sun never climbs.'],
-      [5.0, 9.05, 'It circles the horizon, and a single ridge can hide it for days.'],
-      [9.6, 12.8, 'When a launch slips, a good landing site can go dark.'],
-      [13.55, 16.25, 'Lunar Window stands you on real NASA terrain,'],
-      [16.25, 20.0, 'and shows every site, and every day, that still works.'],
-      [20.55, 23.2, 'Verified against NASA’s JPL Horizons.'],
-    ];
+const SUBTITLES = MARKS.subtitles;
+/** When she says the name, and then the line under it. */
+const CLOSING = MARKS.closing;
 
 const browser = await chromium.launch({ channel: 'msedge', args: ['--use-angle=d3d11', '--enable-gpu', '--ignore-gpu-blocklist'] });
 // A 1536 x 864 page drawn at 1.25 gives 1920 x 1080 frames with an interface large enough to read.
@@ -57,7 +52,7 @@ await page.addStyleTag({
   #f-fade { position: fixed; inset: 0; background: #000; opacity: 0; z-index: 6000; pointer-events: none; }
   /* The title stands on the left, over a darkened side of the picture; the Earth and the vehicle keep the right. */
   #f-title { position: fixed; inset: 0; z-index: 5200; display: none; flex-direction: column; align-items: flex-start; justify-content: center; padding: 0 0 26px 118px; color: #fff; text-align: left; pointer-events: none;
-    background: linear-gradient(90deg, rgba(0,0,0,0.9), rgba(0,0,0,0.78) 34%, rgba(0,0,0,0.3) 56%, transparent 72%); }
+    background: linear-gradient(90deg, rgba(0,0,0,0.6), rgba(0,0,0,0.4) 34%, transparent 58%); }
   #f-title .f-name { font: 500 64px/1 'Jost Variable', sans-serif; letter-spacing: 0.26em; text-transform: uppercase; white-space: nowrap; }
   #f-title .f-rule { width: 0; height: 1px; background: rgba(255,255,255,0.7); margin-top: 28px; }
   #f-title .f-line { margin-top: 24px; font: 400 27px/1.2 'Jost Variable', sans-serif; letter-spacing: 0; white-space: nowrap; }
@@ -165,6 +160,9 @@ const stamp = (ms) => {
 function fadeAt(sec) {
   if (sec < 0.9) return 1 - ease(sec / 0.9);
   if (Math.abs(sec - CUT.slip) < 0.2) return 1 - Math.abs(sec - CUT.slip) / 0.2;
+  // out of the tool and into the eclipse: a breath of black, shorter going out than coming in
+  if (sec > CUT.title - 0.18 && sec < CUT.title) return (sec - (CUT.title - 0.18)) / 0.18;
+  if (sec >= CUT.title && sec < CUT.title + 0.7) return 1 - ease((sec - CUT.title) / 0.7);
   if (sec > 29.2) return ease((sec - 29.2) / 0.75);
   return 0;
 }
@@ -237,7 +235,8 @@ await shot(3, CUT.slip, CUT.stand, async () => {
 }, async (t) => {
   const k = ease(clamp((t - 0.22) / 0.5));
   await set({ slipDays: Math.round(21 * k) });
-  await dress({ zoom: [lerp(1.0, 1.1, ease(t)), 46, 22] });
+  // Close on the slider while it is dragged; then the frame opens on what the delay did to the sites.
+  await dress({ zoom: [lerp(1.36, 1.03, ease(clamp((t - 0.5) / 0.5))), 40, 8] });
   const thumb = await point('#slip', 0.012 + 0.976 * ((21 * k) / 120), 0.5);
   const rest = await point('.slip-read', 0.2, 2.6);
   if (thumb && rest) {
@@ -271,7 +270,9 @@ await shot(5, CUT.days, CUT.proof, async () => {
   await set({ tab: 'plan', plannedMs: utc(2027, 1, 17), slipDays: 21, detail: null });
   await page.waitForTimeout(4000);
 }, async (t, sec, i) => {
-  await dress({ zoom: [lerp(1.02, 1.12, ease(clamp(t / 0.6))), 62, 74] });
+  // In on the calendar while the pointer travels; after the click, across to the answer that opens on the right.
+  const over = ease(clamp((t - 0.64) / 0.36));
+  await dress({ zoom: [lerp(1.02, 1.12, ease(clamp(t / 0.6))) + 0.06 * over, lerp(62, 100, over), lerp(74, 34, over)] });
   // The pointer crosses the calendar, stops on a day of Connecting Ridge and opens it.
   const b = await cell(0, 7 + 21);
   if (!b) return;
@@ -293,38 +294,27 @@ await shot(5, CUT.days, CUT.proof, async () => {
 });
 
 // ---------- 6. Checked against NASA (20.3 to 22.1 s)
-await shot(6, CUT.proof, CUT.eclipse, async () => {
+await shot(6, CUT.proof, CUT.title, async () => {
   await page.mouse.move(2, 2);
   await set({ detail: null });
   await dress({ film: false });
   await set({ tab: 'accuracy' });
   await page.waitForTimeout(3500);
 }, async (t) => {
-  await page.evaluate((y) => (document.getElementById('main').scrollTop = y), Math.round(lerp(150, 330, ease(t))));
-  await dress({ zoom: [lerp(1.16, 1.24, t), 50, 46] });
+  await page.evaluate((y) => (document.getElementById('main').scrollTop = y), Math.round(lerp(120, 176, ease(t))));
+  await dress({ zoom: [lerp(1.2, 1.28, ease(t)), 50, 40] });
 });
 
-// ---------- 7. ... and against a real landing: the eclipse Blue Ghost saw (22.1 to 23.7 s)
-await shot(7, CUT.eclipse, CUT.title, async () => {
+// ---------- 7. The last picture: the eclipse Blue Ghost recorded, as the tool draws it, and the title over it
+// (from the end of "Horizons" to the end). One long take: the Earth in front of the Sun, seen from the Moon,
+// and the Sun coming out again as the last line is said.
+const ECLIPSE_FROM = utc(2025, 3, 14, Number(process.env.ECL_H ?? 8), Number(process.env.ECL_M ?? 20));
+const ECLIPSE_MIN = Number(process.env.ECL_SPAN ?? 50);
+await shot(7, CUT.title, CUT.end, async () => {
   await dress({ film: true, plain: true, zoom: [1, 50, 50] });
-  await set({ tab: 'explore', siteId: 'blue-ghost-1', timeMs: utc(2025, 3, 14, 5, 50), hero: '3d' });
+  await set({ tab: 'explore', siteId: 'blue-ghost-1', timeMs: ECLIPSE_FROM, hero: '3d' });
   await page.waitForTimeout(10000);
-  await face('sun', 3.2, 0);
-  await page.waitForTimeout(1500);
-}, async (t) => {
-  const ms = utc(2025, 3, 14, 5, 50) + t * 36 * 60e3;
-  await set({ timeMs: ms });
-  await face('sun', lerp(3.4, 2.9, t), 0);
-  await dress({ slate: SLATE('Blue Ghost Mission 1, Mare Crisium', `${stamp(ms)} · the eclipse the lander recorded`) });
-});
-
-// ---------- 8. The title (23.7 to 30 s)
-await shot(8, CUT.title, CUT.end, async () => {
-  await dress({ film: true, plain: true, slate: '' });
-  // A day when the Sun lights the ground from the side and the Earth stands well lit above the skyline.
-  await set({ tab: 'explore', siteId: 'malapert', timeMs: utc(2027, 1, 14, 16), hero: '3d' });
-  await page.waitForTimeout(10000);
-  await lookBy('earth', -15, -3.6, 31);
+  await lookBy('sun', -2.5, 0.42, 3.7);
   await page.waitForTimeout(1500);
   await page.evaluate((team) => {
     const title = document.getElementById('f-title');
@@ -335,11 +325,12 @@ await shot(8, CUT.title, CUT.end, async () => {
     credit.style.display = 'flex';
   }, TEAM);
 }, async (t, sec) => {
-  const ms = utc(2027, 1, 14, 16) + t * 15 * HOUR;
+  const ms = ECLIPSE_FROM + t * ECLIPSE_MIN * 60e3;
   await set({ timeMs: ms });
-  await lookBy('earth', lerp(-16, -13.5, t), lerp(-3.9, -3.3, t), lerp(31, 26.5, out3(t)));
-  // The name on the hit of the music; the line and the address as the narrator reaches them.
-  const s = sec - CUT.title;
+  // The Earth keeps the right of the frame; the lens closes on it very slowly.
+  await lookBy('sun', lerp(-2.5, -2.2, t), lerp(0.42, 0.36, t), lerp(3.7, 3.2, ease(t)));
+  await dress({ slate: `<span><b>Blue Ghost Mission 1, Mare Crisium</b> · the Earth in front of the Sun, seen from the Moon</span><span>${stamp(ms)} · the eclipse the lander recorded</span>` });
+  // The name as she says it; the line under it as she reaches it; the address once she has finished.
   await page.evaluate(([name, rule, tag, meta]) => {
     const q = (c) => document.querySelector(`#f-title .f-${c}`);
     q('name').style.opacity = String(name);
@@ -349,7 +340,7 @@ await shot(8, CUT.title, CUT.end, async () => {
     q('line').style.transform = `translateY(${(1 - tag) * 10}px)`;
     q('meta').style.opacity = String(meta);
     document.getElementById('f-credit').style.opacity = String(meta);
-  }, [out3(clamp((s - 0.05) / 0.9)), ease(clamp((s - 1.5) / 1.1)), out3(clamp((s - 2.55) / 0.8)), ease(clamp((s - 3.9) / 0.9))]);
+  }, [out3(clamp((sec - (CLOSING.name - 0.3)) / 0.9)), ease(clamp((sec - (CLOSING.name + 0.45)) / 0.9)), out3(clamp((sec - (CLOSING.line - 0.15)) / 0.8)), ease(clamp((sec - (CLOSING.end + 0.15)) / 0.9))]);
 });
 
 await browser.close();
