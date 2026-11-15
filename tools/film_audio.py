@@ -42,8 +42,9 @@ CUT_B = round(at(4) - 0.25, 2)    # the answer: the calendar of every site
 WHY = round(at(5) - 0.35, 2)      # a day that fails is opened: the reason
 CUT_C = round(at(6) - 0.30, 2)    # how: over the globe to another place, and down on its terrain
 LAND = round(at(7) + 0.05, 2)     # standing there
-CUT_D = round(at(8) - 0.30, 2)    # the proof
-TITLE = round(done(8) + 0.30, 2)  # the eclipse, and the title over it
+CUT_D = round(at(8) - 0.30, 2)    # the proof: every number, on the first screen of the tool
+CHECK = round(at(8) + 1.30, 2)    # ...and its check against JPL Horizons
+TITLE = round(done(8) + 0.30, 2)  # the Earth rises, and the title stands over it
 SECONDS = 30.0
 assert done(10) + 3.4 <= SECONDS, f'the voice ends at {done(10):.2f} s: no room for the title'
 N = int(SR * SECONDS)
@@ -51,7 +52,7 @@ t = np.arange(N) / SR
 rng = np.random.default_rng(7)
 MARKS = {
     'lang': LANG,
-    'cuts': {'ridge': RIDGE, 'slip': CUT_UI, 'days': CUT_B, 'why': WHY, 'any': CUT_C, 'land': LAND, 'proof': CUT_D, 'title': TITLE, 'end': SECONDS},
+    'cuts': {'ridge': RIDGE, 'slip': CUT_UI, 'days': CUT_B, 'why': WHY, 'any': CUT_C, 'land': LAND, 'proof': CUT_D, 'check': CHECK, 'title': TITLE, 'end': SECONDS},
     'closing': {'name': round(at(9), 2), 'line': round(at(10), 2), 'end': round(done(10), 2), 'text': said(10)},
     'subtitles': [
         [round(at(0), 2), round(at(1) - 0.08, 2), said(0)],

@@ -92,7 +92,7 @@ The film is a recording of the tool itself. Nothing in it is drawn by hand: a he
 server, drives the interface and saves every frame. It follows the order of the story: the problem (the Sun
 at the pole, the hill that hides it), what a delay does (the planner), the answer and the reason (the
 calendar, a day that fails), how (over the globe to any point of the Moon, and down on its terrain), the proof
-(the Accuracy page), the name. The script is in English; the tools take a language (`en`, `pt`, `es`) and
+(the first screen of the tool, then the Accuracy page), the name (over the Earth rising at Haworth). The script is in English; the tools take a language (`en`, `pt`, `es`) and
 need a take of the same script in it.
 
 ```bash
@@ -107,7 +107,7 @@ python -X utf8 tools/film_build.py en        # video/lunar-window-demo.en.mp4 an
   longest pauses shortened to fit the thirty seconds), with the time of its eleven segments in `segments.json`;
   the cuts, the subtitles and the title follow it.
 - `film.mjs` opens the page with `?lang=`, so the interface, the captions and the credits are in that language.
-  `SHOTS=7` records one shot again; `EVERY=30` records a sparse preview. Do not edit `src/` while it records:
+  `SHOTS=8` records one shot again; `EVERY=30` records a sparse preview. Do not edit `src/` while it records:
   the dev server would reload the page. The journey over the globe is drawn one moment at a time through a
   hook of the development build (`__lwJourney`), from further back than in the tool so that the whole Moon fits
   between the black bars. `film_look.mjs <site> <time>` saves stills around a place, to choose a camera.

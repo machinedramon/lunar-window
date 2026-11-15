@@ -10,7 +10,7 @@
 // a drawn pointer, slow zooms on the interface, the slate lines and the closing title.
 //
 // The order is the order of the story: the problem (1, 2), what a delay does (3), the answer and the reason (4),
-// how (5: any point of the Moon, on real terrain), the proof (6), the name (7).
+// how (5: any point of the Moon, on real terrain), the proof (6, 7), the name (8: the Earth rises).
 import { mkdirSync, readFileSync } from 'node:fs';
 import { chromium } from 'playwright-core';
 
@@ -37,45 +37,36 @@ const WORDS = {
     real: 'real NASA LOLA terrain',
     place: 'Malapert Massif, lunar south pole',
     lapse: 'time-lapse',
+    homePlace: 'Haworth, lunar south pole',
+    rise: 'the Earth rises · time-lapse',
     apollo: 'Apollo 17, Taurus–Littrow',
     landing: 'the hour of the landing',
     globe: 'the Moon as NASA’s LRO camera mapped it',
-    eclipsePlace: 'Blue Ghost Mission 1, Mare Crisium',
-    eclipseWhat: 'the Earth in front of the Sun, seen from the Moon',
-    eclipseNote: 'the eclipse the lander recorded',
     challenge: 'NASA Space Apps Challenge 2026 · Lunar Landing Site Navigator',
-    credit1: 'Terrain: NASA LRO LOLA · Moon map: NASA LRO camera · Sun and Earth checked against NASA JPL Horizons · Milky Way: NASA SVS Deep Star Maps',
-    credit2: 'Narration: AI-generated voice · Music: synthesised · An independent project, not endorsed by NASA',
   },
   pt: {
     months: ['JAN', 'FEV', 'MAR', 'ABR', 'MAI', 'JUN', 'JUL', 'AGO', 'SET', 'OUT', 'NOV', 'DEZ'],
     real: 'terreno real NASA LOLA',
     place: 'Malapert Massif, polo sul lunar',
     lapse: 'tempo acelerado',
+    homePlace: 'Haworth, polo sul lunar',
+    rise: 'a Terra nasce · tempo acelerado',
     apollo: 'Apollo 17, Taurus–Littrow',
     landing: 'a hora do pouso',
     globe: 'a Lua como a câmera da LRO, da NASA, a mapeou',
-    eclipsePlace: 'Blue Ghost Mission 1, Mare Crisium',
-    eclipseWhat: 'a Terra na frente do Sol, vista da Lua',
-    eclipseNote: 'o eclipse que o módulo registrou',
     challenge: 'NASA Space Apps Challenge 2026 · Lunar Landing Site Navigator',
-    credit1: 'Terreno: NASA LRO LOLA · Mapa da Lua: câmera da NASA LRO · Sol e Terra conferidos com o NASA JPL Horizons · Via Láctea: NASA SVS Deep Star Maps',
-    credit2: 'Narração: voz gerada por IA · Música: sintetizada · Projeto independente, não endossado pela NASA',
   },
   es: {
     months: ['ENE', 'FEB', 'MAR', 'ABR', 'MAY', 'JUN', 'JUL', 'AGO', 'SEP', 'OCT', 'NOV', 'DIC'],
     real: 'terreno real NASA LOLA',
     place: 'Malapert Massif, polo sur lunar',
     lapse: 'tiempo acelerado',
+    homePlace: 'Haworth, polo sur lunar',
+    rise: 'sale la Tierra · tiempo acelerado',
     apollo: 'Apollo 17, Taurus–Littrow',
     landing: 'la hora del alunizaje',
     globe: 'la Luna tal como la cartografió la cámara LRO de la NASA',
-    eclipsePlace: 'Blue Ghost Mission 1, Mare Crisium',
-    eclipseWhat: 'la Tierra delante del Sol, vista desde la Luna',
-    eclipseNote: 'el eclipse que registró el módulo',
     challenge: 'NASA Space Apps Challenge 2026 · Lunar Landing Site Navigator',
-    credit1: 'Terreno: NASA LRO LOLA · Mapa de la Luna: cámara LRO de la NASA · Sol y Tierra comprobados con NASA JPL Horizons · Vía Láctea: NASA SVS Deep Star Maps',
-    credit2: 'Narración: voz generada por IA · Música: sintetizada · Proyecto independiente, no avalado por la NASA',
   },
 }[LANG];
 const CUT = MARKS.cuts;
@@ -103,15 +94,13 @@ await page.addStyleTag({
     font: 500 10.5px/1 'B612', sans-serif; letter-spacing: 0.2em; text-transform: uppercase; color: rgba(255,255,255,0.56); font-variant-numeric: tabular-nums; }
   #f-slate b { font-weight: 500; color: #fff; }
   #f-fade { position: fixed; inset: 0; background: #000; opacity: 0; z-index: 6000; pointer-events: none; }
-  /* The title stands on the left, over a darkened side of the picture; the Earth and the vehicle keep the right. */
+  /* The title stands on the left, over a darkened side of the picture; the Earth keeps the right. */
   #f-title { position: fixed; inset: 0; z-index: 5200; display: none; flex-direction: column; align-items: flex-start; justify-content: center; padding: 0 0 26px 118px; color: #fff; text-align: left; pointer-events: none;
     background: linear-gradient(90deg, rgba(0,0,0,0.6), rgba(0,0,0,0.4) 34%, transparent 58%); }
   #f-title .f-name { font: 500 64px/1 'Jost Variable', sans-serif; letter-spacing: 0.26em; text-transform: uppercase; white-space: nowrap; }
   #f-title .f-rule { width: 0; height: 1px; background: rgba(255,255,255,0.7); margin-top: 28px; }
   #f-title .f-line { margin-top: 24px; font: 400 27px/1.2 'Jost Variable', sans-serif; letter-spacing: 0; white-space: nowrap; }
   #f-title .f-meta { margin-top: 30px; font: 500 11.5px/2 'B612', sans-serif; letter-spacing: 0.2em; text-transform: uppercase; color: rgba(255,255,255,0.74); white-space: nowrap; }
-  #f-credit { position: fixed; left: 0; right: 0; bottom: 0; height: ${BAR}px; z-index: 5200; display: none; align-items: center; justify-content: center; pointer-events: none;
-    font: 500 9.5px/1.9 'B612', sans-serif; letter-spacing: 0.18em; text-transform: uppercase; color: rgba(255,255,255,0.5); text-align: center; }
   #f-cursor { position: fixed; left: 0; top: 0; z-index: 5500; width: 26px; height: 26px; pointer-events: none; display: none; filter: drop-shadow(0 2px 5px rgba(0,0,0,0.7)); }
   #f-ring { position: fixed; left: 0; top: 0; z-index: 5490; width: 40px; height: 40px; margin: -20px 0 0 -20px; border: 1.5px solid #fff; border-radius: 50%; pointer-events: none; opacity: 0; }
   body.film .top, body.film .foot, body.film .dock, body.film .hud, body.film .stage-note, body.film .stage-scrim { display: none !important; }
@@ -122,7 +111,7 @@ await page.addStyleTag({
   `,
 });
 await page.evaluate(() => {
-  for (const id of ['f-top', 'f-bot', 'f-cap', 'f-slate', 'f-fade', 'f-title', 'f-credit', 'f-ring', 'f-cursor']) {
+  for (const id of ['f-top', 'f-bot', 'f-cap', 'f-slate', 'f-fade', 'f-title', 'f-ring', 'f-cursor']) {
     const d = document.createElement('div');
     d.id = id;
     document.documentElement.append(d);
@@ -163,6 +152,8 @@ const dress = (o) =>
       $('f-bot').style.height = `${o.film ? o.bar : o.sub}px`;
       $('f-cap').style.height = `${o.film ? o.bar : o.sub}px`;
       document.body.style.height = o.film ? '' : `${innerHeight - o.sub}px`;
+      // (The page asks for the whole window at least; under the subtitle bar it must be allowed less.)
+      document.body.style.minHeight = o.film ? '' : '0';
       $('f-slate').style.display = o.film ? 'flex' : 'none';
     }
     if (o.plain !== undefined) document.body.classList.toggle('plain', o.plain);
@@ -216,7 +207,7 @@ function fadeAt(sec) {
   if (Math.abs(sec - CUT.slip) < 0.2) return 1 - Math.abs(sec - CUT.slip) / 0.2;
   // from the tool out to the Moon: the globe comes up out of black
   if (sec >= CUT.any && sec < CUT.any + 0.3) return 1 - ease((sec - CUT.any) / 0.3);
-  // out of the tool and into the eclipse: a breath of black, shorter going out than coming in
+  // out of the tool and into the last picture: a breath of black, shorter going out than coming in
   if (sec > CUT.title - 0.18 && sec < CUT.title) return (sec - (CUT.title - 0.18)) / 0.18;
   if (sec >= CUT.title && sec < CUT.title + 0.7) return 1 - ease((sec - CUT.title) / 0.7);
   if (sec > CUT.end - 0.8) return ease((sec - (CUT.end - 0.8)) / 0.75);
@@ -233,7 +224,6 @@ async function shot(n, from, to, prepare, each) {
   await dress({ caption: '', fade: 1, cursor: null, ring: null, zoom: [1, 50, 50] });
   await page.evaluate(() => {
     document.getElementById('f-title').style.display = 'none';
-    document.getElementById('f-credit').style.display = 'none';
   });
   await prepare();
   // Full resolution, and no change of resolution while the frames are taken.
@@ -380,17 +370,35 @@ await shot(5, CUT.any, CUT.proof, async () => {
   await dress({ slate: gone < 0.5 ? `<span><b>${way}</b></span><span>${WORDS.globe}</span>` : SLATE(WORDS.apollo, `${stamp(APOLLO)} · ${WORDS.landing}`) });
 });
 
-// ---------- 6. The proof: checked against NASA's JPL Horizons
-await shot(6, CUT.proof, CUT.title, async () => {
+// ---------- 6. The proof, first half: every number. The first screen of the tool, as it opens: the place in 3D
+// and, beside it, the Sun and the Earth with their figures, which run with the clock.
+let first = null;
+await shot(6, CUT.proof, CUT.check, async () => {
   await page.evaluate(() => {
     window.__lwJourney?.hide();
     const el = document.querySelector('.travel');
     if (el) el.style.opacity = el.style.visibility = '';
   });
   await page.mouse.move(2, 2);
-  await set({ detail: null });
+  await dress({ film: false, zoom: [1, 50, 50] });
+  await page.evaluate(() => window.__lwProps?.(true));
+  await set({ detail: null, tab: 'explore', siteId: 'haworth', timeMs: utc(2027, 1, 17), hero: '3d' });
+  await page.waitForTimeout(11000);
+  first = await page.evaluate(() => {
+    const s = window.__lwScene?.();
+    return s ? { az: s.look.az, pitch: s.look.pitch, fov: s.look.fov } : null;
+  });
+}, async (t) => {
+  await set({ timeMs: utc(2027, 1, 17) + t * 5 * HOUR });
+  // The whole screen, uncut: the view drifts a little behind the instruments while their figures run.
+  if (first) await look(first.az + lerp(-1.6, 1.6, t), first.pitch, first.fov - 1.5 * ease(t));
+});
+
+// ---------- 7. The proof, second half: checked against NASA's JPL Horizons. The Accuracy page.
+await shot(7, CUT.check, CUT.title, async () => {
+  await page.mouse.move(2, 2);
   await dress({ film: false });
-  await set({ tab: 'accuracy' });
+  await set({ detail: null, tab: 'accuracy' });
   await page.waitForTimeout(3500);
 }, async (t) => {
   // The question, the three figures and the first places of the table, whole, while the frame closes slowly.
@@ -398,34 +406,38 @@ await shot(6, CUT.proof, CUT.title, async () => {
   await dress({ zoom: [lerp(1.13, 1.2, ease(t)), 50, 56] });
 });
 
-// ---------- 7. The last picture: the eclipse Blue Ghost recorded, as the tool draws it, and the title over it
-// (from the end of "Horizons" to the end). One long take: the Earth in front of the Sun, seen from the Moon,
-// and the Sun coming out again as the last line is said.
-const ECLIPSE_FROM = utc(2025, 3, 14, Number(process.env.ECL_H ?? 8), Number(process.env.ECL_M ?? 20));
-const ECLIPSE_MIN = Number(process.env.ECL_SPAN ?? 50);
-await shot(7, CUT.title, CUT.end, async () => {
+// ---------- 8. The last picture: the Earth rises over the ridge at Haworth, on the days of the slipped landing,
+// through a long lens, and the title stands beside it. The camera does not move: it waits where the Earth will be.
+const RISE_FROM = utc(2027, 2, 6, Number(process.env.RISE_H ?? 9));
+const RISE_HOURS = Number(process.env.RISE_SPAN ?? 44);
+let home = null;
+await shot(8, CUT.title, CUT.end, async () => {
   await dress({ film: true, plain: true, zoom: [1, 50, 50] });
-  await set({ tab: 'explore', siteId: 'blue-ghost-1', timeMs: ECLIPSE_FROM, hero: '3d' });
-  await page.waitForTimeout(10000);
-  await lookBy('sun', -2.5, 0.42, 3.7);
-  await page.waitForTimeout(1500);
+  await set({ tab: 'explore', siteId: 'haworth', timeMs: RISE_FROM + RISE_HOURS * HOUR, hero: '3d' });
+  // Through this lens the rocks and the vehicle next to the camera would only be in the way.
+  await page.evaluate(() => window.__lwProps?.(false));
+  await page.waitForTimeout(11000);
+  await face('earth', 8, 0);
+  await page.waitForTimeout(800);
+  home = await page.evaluate(() => {
+    const s = window.__lwScene?.();
+    return s ? { az: s.look.az, pitch: s.look.pitch } : null;
+  });
   await page.evaluate(
     ([team, line, w]) => {
       const title = document.getElementById('f-title');
       title.innerHTML = `<div class="f-name">Lunar Window</div><div class="f-rule"></div><div class="f-line">${line}</div><div class="f-meta">machinedramon.github.io/lunar-window<br>${w.challenge}${team ? ` · ${team}` : ''}</div>`;
       title.style.display = 'flex';
-      const credit = document.getElementById('f-credit');
-      credit.innerHTML = `${w.credit1}<br>${w.credit2}`;
-      credit.style.display = 'flex';
     },
     [TEAM, CLOSING.text, WORDS],
   );
 }, async (t, sec) => {
-  const ms = ECLIPSE_FROM + t * ECLIPSE_MIN * 60e3;
+  // Fast while the Earth comes up from behind the ridge, slower once it is whole.
+  const ms = RISE_FROM + (1 - Math.pow(1 - t, 1.6)) * RISE_HOURS * HOUR;
   await set({ timeMs: ms });
   // The Earth keeps the right of the frame; the lens closes on it very slowly.
-  await lookBy('sun', lerp(-2.5, -2.2, t), lerp(0.42, 0.36, t), lerp(3.7, 3.2, ease(t)));
-  await dress({ slate: `<span><b>${WORDS.eclipsePlace}</b> · ${WORDS.eclipseWhat}</span><span>${stamp(ms)} · ${WORDS.eclipseNote}</span>` });
+  if (home) await look(home.az - 2.3, home.pitch - 0.2, lerp(8.2, 6.4, ease(t)));
+  await dress({ slate: SLATE(WORDS.homePlace, `${stamp(ms)} · ${WORDS.rise}`) });
   // The name as she says it; the line under it as she reaches it; the address once she has finished.
   await page.evaluate(([name, rule, tag, meta]) => {
     const q = (c) => document.querySelector(`#f-title .f-${c}`);
@@ -435,8 +447,6 @@ await shot(7, CUT.title, CUT.end, async () => {
     q('line').style.opacity = String(tag);
     q('line').style.transform = `translateY(${(1 - tag) * 10}px)`;
     q('meta').style.opacity = String(meta);
-    // The credits (where the terrain, the checks and the AI voice are named) stand from the name to the end.
-    document.getElementById('f-credit').style.opacity = String(rule);
   }, [out3(clamp((sec - (CLOSING.name - 0.3)) / 0.9)), ease(clamp((sec - (CLOSING.name + 0.45)) / 0.9)), out3(clamp((sec - (CLOSING.line - 0.15)) / 0.8)), ease(clamp((sec - (CLOSING.end + 0.15)) / 0.9))]);
 });
 
