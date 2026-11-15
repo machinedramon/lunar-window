@@ -40,7 +40,9 @@ export function computeOwnPoint(lat: number, lon: number, ring: { radiusM: numbe
   }
   const id = nextId++;
   busy++;
-  const request: OwnRequest = { id, base: import.meta.env.BASE_URL, lat, lon, mastsM: [...MAST_HEIGHTS_M], ring };
+  // An absolute address: inside the worker a relative one would be resolved against the worker's own file.
+  const base = new URL(import.meta.env.BASE_URL, document.baseURI).href;
+  const request: OwnRequest = { id, base, lat, lon, mastsM: [...MAST_HEIGHTS_M], ring };
   return new Promise<OwnPoint>((resolve, reject) => {
     waiting.set(id, { resolve, reject });
     worker!.postMessage(request);
