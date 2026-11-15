@@ -117,7 +117,7 @@ export const en = {
       caption: (eye: string) => `Real NASA LOLA terrain (80 m model) and shadows · camera ${eye} m above the ground`,
       captionFine: (eye: string) => `Real NASA LOLA terrain (5 m site model) and shadows · camera ${eye} m above the ground`,
       captionSphere: 'Smooth sphere: no terrain model for this site · Sun and Earth at their true positions and sizes',
-      note: 'Terrain, shadows, Sun, Earth, planets and stars are real; the Milky Way is NASA’s Deep Star Map. Stars show when the Sun is hidden, as for a camera exposed for the dark. Relief finer than the terrain model, the rocks, the vehicles and the clouds on the Earth are illustrative.',
+      note: 'Terrain, shadows, Sun, Earth, planets and stars are real; the Milky Way is NASA’s Deep Star Map. Stars show when the Sun is hidden, as for a camera exposed for the dark. Relief finer than the terrain model, the rocks and the vehicles are illustrative. The face of the Earth is one real day as NASA’s satellites saw it (7 Feb 2026): its clouds are not those of the date shown.',
       // Two lines that are never broken inside: what is real, and what is set dressing.
       realFine: 'Real: NASA LOLA terrain, 5 m site model · shadows · Sun · Earth · planets · stars',
       realCoarse: 'Real: NASA LOLA terrain, 80 m model · shadows · Sun · Earth · planets · stars',
@@ -125,7 +125,7 @@ export const en = {
       realSphere: 'Real: Sun · Earth · planets · stars, at their true positions and sizes',
       illustrative: 'Illustrative: fine relief · rocks · vehicles · clouds',
       illustrativeSphere: 'Illustrative: the ground, no terrain model here · rocks · vehicles · clouds',
-      noteSphere: 'Sun, Earth, planets and stars are real; the Milky Way is NASA’s Deep Star Map. There is no terrain model for this place: the ground, the rocks, the vehicles and the clouds on the Earth are illustrative.',
+      noteSphere: 'Sun, Earth, planets and stars are real; the Milky Way is NASA’s Deep Star Map. There is no terrain model for this place: the ground, the rocks and the vehicles are illustrative. The face of the Earth is one real day as NASA’s satellites saw it (7 Feb 2026): its clouds are not those of the date shown.',
       faceSun: 'Face the Sun',
       faceSunTip: 'Turn the camera to the Sun (key S)',
       faceEarth: 'Face the Earth',
@@ -472,7 +472,7 @@ export const en = {
       text: 'The 3D view shows the result of the same computation. It adds nothing to the numbers.',
       items: [
         'Real: the terrain (NASA LOLA, 5 m near seven of the sites) and its shadows, the skyline, the directions and sizes of the Sun and the Earth, the phase and the face of the Earth, the stars (Yale Bright Star Catalogue, shown when the Sun is hidden), the height of the solar array.',
-        "Illustrative: relief finer than the terrain model, the rocks, the clouds on the Earth, the vehicle and the solar array mast (the rover is NASA's Space Exploration Vehicle concept; the mast is our own design), and the fine line from the antenna to the Earth (it marks the line of sight, whose direction is real; radio itself is invisible). Nothing in the view blinks or pulses for effect.",
+        "Illustrative: relief finer than the terrain model, the rocks, the vehicle and the solar array mast (the rover is NASA's Space Exploration Vehicle concept; the mast is our own design), and the fine line from the antenna to the Earth (it marks the line of sight, whose direction is real; radio itself is invisible). The face of the Earth is one real day as NASA's VIIRS instruments saw it (7 February 2026, through NASA GIBS), lit by the Sun of the moment: the continents are where they would be; the clouds are those of that day, not of the date shown. Nothing in the view blinks or pulses for effect.",
       ],
     },
     made: {

@@ -6,7 +6,7 @@
 // (marched through the elevation data towards the Sun, with the penumbra of a 0.53 degree disc).
 // The stars are the Yale Bright Star Catalogue at their true positions.
 // What is illustrative: surface relief finer than the terrain model, the rocks, the vehicles and
-// the clouds on the Earth.
+// the clouds on the Earth (those of a real day, not of the moment shown).
 import * as THREE from 'three';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
@@ -612,6 +612,25 @@ void main() {
 }
 `;
 
+// The Earth is a picture of one real day (NASA VIIRS, see tools/build_earth.py), with its clouds, lit by the Sun
+// of the moment through an atmosphere. The picture comes with the air already removed (corrected reflectance),
+// so the air is put back as it is seen from outside: the light of the ground is dimmed and reddened along the
+// two paths (Sun to ground, ground to eye) and the air itself shines pale blue, more so towards the limb.
+// Single scattering in a flat layer, with Rayleigh's optical depths for red, green and blue.
+const EARTH_AIR = /* glsl */ `
+const vec3 AIR_TAU = vec3(0.045, 0.105, 0.245);
+// Cosine given to a ray that grazes the limb: the air is a shell, not a flat layer, and the limb is not infinitely deep.
+const float AIR_EDGE = 0.11;
+// Share of the single-scattering light that is drawn, and the exposure of the whole disc: set for the clouds,
+// which stay just under white.
+const float AIR_GAIN = 0.95;
+const float EARTH_GAIN = 1.6;
+// Light of the air itself for a ray that ends on the ground: mu0 and mu are the cosines of the Sun and of the eye.
+vec3 airlight(float mu0, float mu, float phase) {
+  return phase * 0.25 * mu0 / (mu0 + mu) * (1.0 - exp(-AIR_TAU * (1.0 / mu0 + 1.0 / mu)));
+}
+`;
+
 const EARTH_FRAG = /* glsl */ `
 #include <common>
 #include <logdepthbuf_pars_fragment>
@@ -622,48 +641,30 @@ varying vec2 vUv;
 varying vec3 vNormalW;
 varying vec3 vNormalO;
 varying vec3 vPosW;
-float hash13(vec3 p) {
-  p = fract(p * 0.1031);
-  p += dot(p, p.zyx + 31.32);
-  return fract((p.x + p.y) * p.z);
-}
-float noise3(vec3 x) {
-  vec3 i = floor(x);
-  vec3 f = fract(x);
-  f = f * f * (3.0 - 2.0 * f);
-  return mix(mix(mix(hash13(i), hash13(i + vec3(1, 0, 0)), f.x), mix(hash13(i + vec3(0, 1, 0)), hash13(i + vec3(1, 1, 0)), f.x), f.y),
-             mix(mix(hash13(i + vec3(0, 0, 1)), hash13(i + vec3(1, 0, 1)), f.x), mix(hash13(i + vec3(0, 1, 1)), hash13(i + vec3(1, 1, 1)), f.x), f.y), f.z);
-}
-float fbm(vec3 p) {
-  float s = 0.0;
-  float a = 0.5;
-  for (int i = 0; i < 6; i++) {
-    s += a * noise3(p);
-    p = p * 2.03 + 7.1;
-    a *= 0.5;
-  }
-  return s;
-}
+${EARTH_AIR}
 void main() {
   #include <logdepthbuf_fragment>
   vec3 n = normalize(vNormalW);
   vec3 v = normalize(cameraPosition - vPosW);
   float ndl = dot(n, uSun);
-  float day = smoothstep(-0.10, 0.22, ndl);
-  vec3 base = texture2D(map, vUv).rgb;
-  // Clouds are procedural (illustrative): swirls stretched along latitude.
-  vec3 q = normalize(vNormalO);
-  float swirl = fbm(vec3(q.x * 3.2, q.y * 5.5, q.z * 3.2) + fbm(q * 2.1) * 1.6);
-  float cloud = smoothstep(0.50, 0.74, swirl) * 0.92;
-  vec3 col = mix(base, vec3(0.95), cloud);
-  vec3 lit = col * (0.06 + 0.94 * max(ndl, 0.0)) * day * 1.9;
-  // Sunlight glinting off open water.
-  float water = smoothstep(0.02, 0.10, base.b - max(base.r, base.g) * 0.92) * (1.0 - cloud);
-  float glint = pow(max(dot(n, normalize(uSun + v)), 0.0), 70.0);
-  lit += vec3(1.0, 0.97, 0.90) * glint * water * day * 2.6;
-  float rim = pow(1.0 - max(dot(n, v), 0.0), 2.6);
-  lit += vec3(0.20, 0.46, 1.0) * rim * day * 1.25;
-  lit += col * 0.0012;
+  vec3 face = texture2D(map, vUv).rgb;
+  float lum = dot(face, vec3(0.2126, 0.7152, 0.0722));
+  float mu = max(dot(n, v), 0.0) + AIR_EDGE;
+  float mu0 = max(ndl, 0.0) + 0.04;
+  // Day ends over a few degrees: the Sun is a disc and the air bends and scatters its light past the terminator.
+  float day = smoothstep(-0.07, 0.07, ndl);
+  vec3 through = exp(-AIR_TAU * (1.0 / mu0 + 1.0 / mu));
+  // Half of what the air takes out of the beam still reaches the ground as skylight; clouds stand above most
+  // of the air and keep more of their white.
+  float high = smoothstep(0.30, 0.80, lum);
+  vec3 ground = face * max(ndl, 0.0) * mix(sqrt(through), pow(through, vec3(0.3)), high);
+  // The Sun mirrored on open water: a wide soft patch, as the sea is never flat.
+  float sea = 1.0 - smoothstep(0.006, 0.06, lum);
+  float mirror = pow(max(dot(n, normalize(uSun + v)), 0.0), 150.0);
+  ground += vec3(1.0, 0.96, 0.88) * mirror * sea * 0.10 * through;
+  float cosS = dot(uSun, v);
+  vec3 air = airlight(mu0, mu, 0.75 * (1.0 + cosS * cosS)) * day;
+  vec3 lit = (ground + air * AIR_GAIN) * EARTH_GAIN;
   gl_FragColor = vec4(lit * uGain, 1.0);
   #include <tonemapping_fragment>
   #include <colorspace_fragment>
@@ -901,35 +902,46 @@ void main() {
     this.glare.renderOrder = 10;
     this.scene.add(this.glare);
 
-    const earthMap = new THREE.TextureLoader().load(`${import.meta.env.BASE_URL}textures/earth.jpg`, () => this.onChange?.());
+    const earthMap = new THREE.TextureLoader().load(`${import.meta.env.BASE_URL}textures/earth.webp`, () => this.onChange?.());
     earthMap.colorSpace = THREE.SRGBColorSpace;
-    earthMap.anisotropy = 4;
+    earthMap.anisotropy = 8;
     this.earthMat = new THREE.ShaderMaterial({ vertexShader: EARTH_VERT, fragmentShader: EARTH_FRAG, uniforms: { map: { value: earthMap }, uSun: light.uSun, uGain: { value: 1 } } });
-    this.earth = new THREE.Mesh(new THREE.SphereGeometry(1, 96, 48), this.earthMat);
+    this.earth = new THREE.Mesh(new THREE.SphereGeometry(1, 128, 64), this.earthMat);
     this.earth.frustumCulled = false;
     this.scene.add(this.earth);
-    // The atmosphere seen edge-on: a thin blue line just outside the limb, on the sunlit side.
+    // The atmosphere seen edge-on, outside the limb: the same light of the air, thinning out with height.
+    // The shell is 90 km high; what a ray crosses falls by e every 0.004 of the Earth's radius (about 25 km:
+    // the air thins faster, the long slanted path through it makes up for part of that).
+    const AIR_TOP = 1.014;
     const air = new THREE.Mesh(
-      new THREE.SphereGeometry(1.022, 96, 48),
+      new THREE.SphereGeometry(AIR_TOP, 128, 64),
       new THREE.ShaderMaterial({
         vertexShader: EARTH_VERT,
         fragmentShader: `
 #include <common>
 #include <logdepthbuf_pars_fragment>
 uniform vec3 uSun;
+uniform float uGain;
 varying vec3 vNormalW;
 varying vec3 vPosW;
+${EARTH_AIR}
 void main() {
   #include <logdepthbuf_fragment>
   vec3 n = normalize(vNormalW);
   vec3 v = normalize(cameraPosition - vPosW);
-  float edge = pow(1.0 - abs(dot(n, v)), 5.0);
-  float day = smoothstep(-0.25, 0.35, dot(n, uSun));
-  gl_FragColor = vec4(vec3(0.30, 0.56, 1.0) * edge * day * 2.2, 1.0);
+  float c = dot(n, v);
+  // How close to the centre of the Earth the ray passes, in Earth radii; under 1 it ends on the ground.
+  float pass = ${AIR_TOP.toFixed(3)} * sqrt(max(1.0 - c * c, 0.0));
+  float thin = exp(-max(pass - 1.0, 0.0) / 0.004) * step(1.0, pass);
+  float ndl = dot(n, uSun);
+  float day = smoothstep(-0.07, 0.07, ndl);
+  float cosS = dot(uSun, v);
+  vec3 glow = airlight(max(ndl, 0.0) + 0.04, AIR_EDGE, 0.75 * (1.0 + cosS * cosS)) * day * thin;
+  gl_FragColor = vec4(glow * AIR_GAIN * EARTH_GAIN * uGain, 1.0);
   #include <tonemapping_fragment>
   #include <colorspace_fragment>
 }`,
-        uniforms: { uSun: light.uSun },
+        uniforms: { uSun: light.uSun, uGain: this.earthMat.uniforms.uGain },
         blending: THREE.AdditiveBlending,
         transparent: true,
         depthWrite: false,
@@ -1316,7 +1328,9 @@ void main() {
     this.exposureNow += (this.exposureGoal - this.exposureNow) * k;
     this.darkNow += (this.darkGoal - this.darkNow) * k;
     this.renderer.toneMappingExposure = this.exposureNow;
-    this.earthMat.uniforms.uGain.value = 1 / Math.sqrt(this.exposureNow);
+    // The Earth keeps its detail when the exposure opens for the dark: it is a sunlit landscape, far brighter than
+    // earthlit ground, and a picture that shows its clouds is exposed for it.
+    this.earthMat.uniforms.uGain.value = Math.pow(this.exposureNow, -0.9);
     // Stars and Milky Way show only when the Sun is hidden, as for a dark-adapted eye or a long exposure;
     // their brightness does not follow the exposure, or every star would burn to the same white.
     this.starMat.uniforms.uOpacity.value = this.darkNow;

@@ -406,10 +406,12 @@ await shot(7, CUT.check, CUT.title, async () => {
   await dress({ zoom: [lerp(1.13, 1.2, ease(t)), 50, 56] });
 });
 
-// ---------- 8. The last picture: the Earth rises over the ridge at Haworth, on the days of the slipped landing,
+// ---------- 8. The last picture: the Earth clears the ridge at Haworth, on the days of the slipped landing,
 // through a long lens, and the title stands beside it. The camera does not move: it waits where the Earth will be.
-const RISE_FROM = utc(2027, 2, 6, Number(process.env.RISE_H ?? 9));
-const RISE_HOURS = Number(process.env.RISE_SPAN ?? 44);
+// Six and a half hours pass: slow enough for the Earth to turn like a planet, not like a toy, from Africa to
+// South America, while it lifts off the ridge by a fifth of its width.
+const RISE_FROM = utc(2027, 2, 7) + Number(process.env.RISE_H ?? 9.5) * HOUR;
+const RISE_HOURS = Number(process.env.RISE_SPAN ?? 6.5);
 let home = null;
 await shot(8, CUT.title, CUT.end, async () => {
   await dress({ film: true, plain: true, zoom: [1, 50, 50] });
@@ -417,6 +419,8 @@ await shot(8, CUT.title, CUT.end, async () => {
   // Through this lens the rocks and the vehicle next to the camera would only be in the way.
   await page.evaluate(() => window.__lwProps?.(false));
   await page.waitForTimeout(11000);
+  // Again once the place has loaded: when this shot is recorded alone, the place is built after the first call.
+  await page.evaluate(() => window.__lwProps?.(false));
   await face('earth', 8, 0);
   await page.waitForTimeout(800);
   home = await page.evaluate(() => {
@@ -432,11 +436,11 @@ await shot(8, CUT.title, CUT.end, async () => {
     [TEAM, CLOSING.text, WORDS],
   );
 }, async (t, sec) => {
-  // Fast while the Earth comes up from behind the ridge, slower once it is whole.
-  const ms = RISE_FROM + (1 - Math.pow(1 - t, 1.6)) * RISE_HOURS * HOUR;
+  // Almost steady, a little slower as the Earth comes free of the ridge.
+  const ms = RISE_FROM + (1 - Math.pow(1 - t, 1.25)) * RISE_HOURS * HOUR;
   await set({ timeMs: ms });
   // The Earth keeps the right of the frame; the lens closes on it very slowly.
-  if (home) await look(home.az - 2.3, home.pitch - 0.2, lerp(8.2, 6.4, ease(t)));
+  if (home) await look(home.az - 1.3, home.pitch - 0.15, lerp(4.2, 3.7, ease(t)));
   await dress({ slate: SLATE(WORDS.homePlace, `${stamp(ms)} · ${WORDS.rise}`) });
   // The name as she says it; the line under it as she reaches it; the address once she has finished.
   await page.evaluate(([name, rule, tag, meta]) => {

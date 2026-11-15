@@ -9,6 +9,7 @@ Python 3.12 with numpy. Run everything from the repository root, with `python -X
 | `validate_horizon.py` | Compares our horizon with NASA's LOLA average-illumination maps on a mesh of points; writes `public/data/validation.json`. About two minutes; the first run also downloads Sun and Earth tables from JPL Horizons. |
 | `fetch_golden.py` | Downloads the JPL Horizons tables used by the ephemeris tests (`tests/golden`). |
 | `build_assets.py` | Prepares the third-party 3D assets (rocks, textures) for the web. |
+| `build_earth.py` | Writes `public/textures/earth.webp`, the face of the Earth in the 3D view: the true-colour picture of one real day (7 February 2026) from NASA GIBS, VIIRS on Suomi NPP and NOAA-20 joined so that the stripes of Sun glint of one are covered by the other, the polar night filled. Needs `numpy` and `Pillow`. |
 | `build_polar.py` | Writes `public/data/polar/`: the elevation model the browser uses for any point of the visitor's own, from the pole to 84°S (80 m tiles and a 480 m grid, 28 MB in all). |
 | `build_global.py` | Writes `public/data/global/`: NASA's global model `ldem_64` cut in 4050 tiles of 4 x 4 degrees and a coarse grid of the whole Moon (226 MB), for any point outside the polar model. |
 | `check_global.py` | Measures the global pieces against the whole model and against the finer polar models; writes the reference of `tests/core/global.test.ts` and the `anyPoint.global` block of `public/data/validation.json`. |
