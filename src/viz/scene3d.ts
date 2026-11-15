@@ -1029,7 +1029,8 @@ void main() {
 
     // Lights for the lander and the rocks (the terrain has its own shading).
     this.camera.layers.enable(PROP_LAYER);
-    this.tele.layers.enable(PROP_LAYER);
+    // The telephoto views show what the planner computes with: the terrain, the Sun and the Earth. The vehicle, the
+    // mast and the rocks are set dressing; standing in front of the lens they would hide what the view is for.
     this.propCam.layers.set(PROP_LAYER);
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFShadowMap;
@@ -1163,12 +1164,29 @@ void main() {
     this.scene.overrideMaterial = this.propDepth;
     r.render(this.scene, this.propCam);
     this.scene.overrideMaterial = null;
+    // Is the eye itself in the shadow of an object? This map is the view from the Sun: where the eye is on it, an
+    // object nearer the Sun than the eye means the Sun is behind that object. Then there is no glare to draw.
+    const at = new THREE.Vector3().copy(this.camera.position).project(this.propCam);
+    const px = Math.round((at.x * 0.5 + 0.5) * 2048) - 2;
+    const py = Math.round((at.y * 0.5 + 0.5) * 512) - 2;
+    let block = 0;
+    if (this.props && px >= 0 && py >= 0 && px <= 2043 && py <= 507) {
+      r.readRenderTargetPixels(this.propTarget, px, py, 5, 5, this.eyeTexels);
+      const eye = at.z * 0.5 + 0.5 - 0.0008;
+      let hidden = 0;
+      for (let k = 0; k < 25; k++) if (this.eyeTexels[k * 4] / 256 + this.eyeTexels[k * 4 + 1] / 65536 < eye) hidden++;
+      block = hidden / 25;
+    }
+    const changed = Math.abs(block - this.propBlock) > 0.01;
+    this.propBlock = block;
     r.setRenderTarget(null);
     r.setClearColor(clear, alpha);
     this.propUniforms.uPropOn.value = this.props ? 1 : 0;
     this.propsDirty = false;
     r.shadowMap.needsUpdate = true;
     this.version++;
+    // The glare and the exposure follow what the eye sees of the Sun: set them again when that changed.
+    if (changed && this.lastSky) this.setSky(this.lastSky);
   }
 
   /** Called when something loaded asynchronously and the picture should be redrawn. */
@@ -1253,6 +1271,9 @@ void main() {
   private adapted = false;
   /** Share of the Sun's disc the eye sees over the drawn terrain, from where it stands now. */
   private sunVisible = 1;
+  /** Share of the Sun that an object (vehicle, mast, rock) hides from the eye: 1 when the eye is in its shadow. */
+  private propBlock = 0;
+  private readonly eyeTexels = new Uint8Array(5 * 5 * 4);
 
   /** Moves the exposure and the night sky a step towards what the light asks for (k = 1: all the way). */
   private adapt(k: number): void {
@@ -1378,7 +1399,8 @@ void main() {
     this.sun.lookAt(this.camera.position);
     this.sun.visible = power > 0.001;
     this.glare.position.copy(this.sun.position);
-    const visible = this.sunVisible;
+    // What the camera sees of the Sun: the terrain may cover it, and so may an object standing in the way.
+    const visible = this.sunVisible * (1 - this.propBlock);
     this.glare.scale.setScalar(SKY_M * 0.96 * Math.tan(4.5 * D2R) * 2 * (0.55 + 0.45 * visible));
     (this.glare.material as THREE.SpriteMaterial).userData.base = Math.min(1, visible * 1.4) * 0.8;
     this.glare.visible = visible > 0.002;
@@ -1483,7 +1505,7 @@ void main() {
     if (at && this.lastSky) {
       (fu.uSunAt.value as THREE.Vector2).set(at.x, 1 - at.y);
       const off = Math.max(Math.abs(at.x - 0.5), Math.abs(at.y - 0.5));
-      fu.uSunVis.value = this.sunVisible * (1 - this.lastSky.eclipse) * Math.max(0, Math.min(1, (0.62 - off) / 0.14)) * (1 - long);
+      fu.uSunVis.value = this.sunVisible * (1 - this.propBlock) * (1 - this.lastSky.eclipse) * Math.max(0, Math.min(1, (0.62 - off) / 0.14)) * (1 - long);
     } else fu.uSunVis.value = 0;
     this.sunMat.uniforms.uGain.value = 60 + (2.4 - 60) * long;
     this.bloom.strength = 0.55 * (1 - 0.8 * long);

@@ -1,6 +1,9 @@
-// Text formatting. Everything is UTC and every number carries its unit.
+// Text formatting. Everything is UTC and every number carries its unit. The names of the months, the letters of
+// the compass and the decimal mark are those of the language in use.
+import { S } from '../i18n';
 
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+/** A number as written in the language in use: with a decimal comma in Portuguese and Spanish. */
+export const local = (text: string): string => (S.fmt.decimal === '.' ? text : text.replace('.', S.fmt.decimal));
 const pad = (n: number): string => String(n).padStart(2, '0');
 
 export const HOUR_MS = 3600000;
@@ -27,7 +30,7 @@ export function parseUtc(text: string): number {
 /** 10 Jan 2027 */
 export function day(ms: number): string {
   const d = new Date(ms);
-  return `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
+  return S.fmt.dayOfMonth(d.getUTCDate(), S.fmt.months[d.getUTCMonth()], d.getUTCFullYear());
 }
 
 /** 10 Jan 2027, 12:00 UTC */
@@ -37,7 +40,7 @@ export function dayTime(ms: number): string {
 }
 
 export function monthShort(ms: number): string {
-  return MONTHS[new Date(ms).getUTCMonth()];
+  return S.fmt.months[new Date(ms).getUTCMonth()];
 }
 
 /** 4 d 3 h, 5 h 20 min, 12 min */
@@ -54,7 +57,7 @@ export function duration(hours: number): string {
 /** Signed number with a real minus sign. */
 export function num(value: number, digits = 1): string {
   const s = Math.abs(value).toFixed(digits);
-  return (value < 0 && Number(s) !== 0 ? '−' : '') + s;
+  return (value < 0 && Number(s) !== 0 ? '−' : '') + local(s);
 }
 
 export function deg(value: number, digits = 2): string {
@@ -62,14 +65,15 @@ export function deg(value: number, digits = 2): string {
 }
 
 export function pct(share: number, digits = 0): string {
-  return `${(share * 100).toFixed(digits)}%`;
+  return `${local((share * 100).toFixed(digits))}%`;
 }
 
 export function latLon(lat: number, lon: number): string {
-  return `${Math.abs(lat).toFixed(2)}°${lat < 0 ? 'S' : 'N'}, ${Math.abs(lon).toFixed(2)}°${lon < 0 ? 'W' : 'E'}`;
+  // a semicolon between the two where the decimal mark is a comma
+  const between = S.fmt.decimal === ',' ? '; ' : ', ';
+  return `${local(Math.abs(lat).toFixed(2))}°${lat < 0 ? S.fmt.south : S.fmt.north}${between}${local(Math.abs(lon).toFixed(2))}°${lon < 0 ? S.fmt.west : S.fmt.east}`;
 }
 
-const COMPASS = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
 export function compass(az: number): string {
-  return COMPASS[Math.round((((az % 360) + 360) % 360) / 22.5) % 16];
+  return S.fmt.compass[Math.round((((az % 360) + 360) % 360) / 22.5) % 16];
 }

@@ -2,7 +2,7 @@
 // Camera work is deliberate: every move eases in and out, a site opens with an arrival shot and
 // a title card, and the view never sits completely still.
 import { MAST_HEIGHTS_M } from '../core/horizon';
-import { S } from '../i18n/en';
+import { S } from '../i18n';
 import { FONT, MONO } from '../viz/canvas';
 import { EYE_MIN_M } from '../viz/eye';
 import { introStage } from './intro';
@@ -31,6 +31,8 @@ export interface Hero3D {
   onArriving: ((on: boolean) => void) | null;
   /** Called once, when the first place is loaded, compiled and drawn: the picture can be uncovered. */
   onReady: (() => void) | null;
+  /** True when a place is on screen and the camera is not arriving: the instruments can be shown at once. */
+  settled(): boolean;
 }
 
 interface Look {
@@ -73,31 +75,40 @@ const NAMED_DIRS: [string, number[]][] = NAMED_SKY.map(([name, ra, dec]) => {
   return [name, [Math.cos(d) * Math.cos(a), Math.cos(d) * Math.sin(a), Math.sin(d)]];
 });
 
+let shared: { api: Hero3D; relabel: () => void } | null = null;
+
+/**
+ * The 3D view. There is one for the life of the page: when the screens are rebuilt in another language, the same
+ * view, with the same picture, is handed over with its words changed.
+ */
 export function createHero3D(): Hero3D {
+  if (shared) {
+    shared.relabel();
+    return shared.api;
+  }
   const canvas = h('canvas', { class: 'three-canvas', tabindex: '0', role: 'img', 'aria-label': T.aria });
   const tape = h('canvas', { class: 'three-tape', 'aria-hidden': 'true' });
   const skyNames = h('canvas', { class: 'three-sky', 'aria-hidden': 'true' });
   const sunLabel = h('div', { class: 'three-label sun', hidden: true });
   const earthLabel = h('div', { class: 'three-label earth', hidden: true });
   const hint = h('div', { class: 'three-hint' }, T.hint);
-  const loading = h('div', { class: 'three-loading' }, h('div', { class: 'spinner' }), h('span', null, T.loading));
+  const loadingText = h('span', null, T.loading);
+  const loading = h('div', { class: 'three-loading' }, h('div', { class: 'spinner' }), loadingText);
   const fade = h('div', { class: 'three-fade' });
   const titleName = h('div', { class: 'three-title-name' });
   const titleSub = h('div', { class: 'three-title-sub' });
   const title = h('div', { class: 'three-title', 'aria-hidden': 'true' }, titleName, titleSub);
   const btn = (text: string, tip: string, fn: () => void) => h('button', { class: 'btn ghost three-btn', type: 'button', title: tip, onclick: fn }, text);
-  const controls = h(
-    'div',
-    { class: 'three-controls' },
-    btn(T.faceSun, T.faceSunTip, () => face('sun')),
-    btn(T.faceEarth, T.faceEarthTip, () => face('earth')),
-    btn('−', T.zoomOut, () => zoom(1.25)),
-    btn('+', T.zoomIn, () => zoom(0.8)),
-  );
+  const faceSunBtn = btn(T.faceSun, T.faceSunTip, () => face('sun'));
+  const faceEarthBtn = btn(T.faceEarth, T.faceEarthTip, () => face('earth'));
+  const zoomOutBtn = btn('−', T.zoomOut, () => zoom(1.25));
+  const zoomInBtn = btn('+', T.zoomIn, () => zoom(0.8));
+  const controls = h('div', { class: 'three-controls' }, faceSunBtn, faceEarthBtn, zoomOutBtn, zoomInBtn);
   const inset = (cls: string, text: string) => {
     const note = h('span', { class: 'three-inset-note' });
-    const frame = h('div', { class: `three-inset ${cls}` }, h('span', { class: 'three-inset-title' }, h('span', { class: `dot ${cls}` }), text), note);
-    return { frame, note };
+    const name = h('span', null, text);
+    const frame = h('div', { class: `three-inset ${cls}` }, h('span', { class: 'three-inset-title' }, h('span', { class: `dot ${cls}` }), name), note);
+    return { frame, note, name };
   };
   const sunInset = inset('sun', T.teleSun);
   const earthInset = inset('earth', T.teleEarth);
@@ -146,6 +157,7 @@ export function createHero3D(): Hero3D {
     onFail: null,
     onArriving: null,
     onReady: null,
+    settled: () => Boolean(terrainKey) && !arriving,
   };
   let runs = 0;
   let readySaid = false;
@@ -516,7 +528,7 @@ export function createHero3D(): Hero3D {
       ctx.fillStyle = `rgba(255,255,255,${a.toFixed(3)})`;
       ctx.fillText(name.toUpperCase().split('').join('\u200a'), x + 24, y - 14);
     };
-    for (const [name, d] of NAMED_DIRS) one(name, d, false);
+    for (const [name, d] of NAMED_DIRS) one(name === 'Large Magellanic Cloud' ? S.sky.lmc : name === 'Small Magellanic Cloud' ? S.sky.smc : name, d, false);
     for (const p of ax.planets ?? []) one(p.name, p.dir, true);
   }
 
@@ -682,5 +694,25 @@ export function createHero3D(): Hero3D {
     };
   }
 
+  shared = {
+    api,
+    // The words that were written once: the per-frame ones (labels, names in the sky) follow by themselves.
+    relabel() {
+      // the title card of the arrival has played; moved to a new page it must not play again
+      title.classList.remove('show');
+      canvas.setAttribute('aria-label', T.aria);
+      setText(loadingText, T.loading);
+      setText(faceSunBtn, T.faceSun);
+      faceSunBtn.title = T.faceSunTip;
+      setText(faceEarthBtn, T.faceEarth);
+      faceEarthBtn.title = T.faceEarthTip;
+      zoomOutBtn.title = T.zoomOut;
+      zoomInBtn.title = T.zoomIn;
+      setText(sunInset.name, T.teleSun);
+      setText(earthInset.name, T.teleEarth);
+      setText(hint, terrainKey ? T.hintEye(String(Math.max(EYE_MIN_M, MAST_HEIGHTS_M[mast]))) : T.hint);
+      wake();
+    },
+  };
   return api;
 }

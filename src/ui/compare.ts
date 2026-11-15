@@ -2,13 +2,13 @@
 import { LANDING_STEPS } from '../core/calendar';
 import { durationSteps, PROFILES, STATUS_RANK, type CellResult } from '../core/requirements';
 import { DAY_STEPS, STEP_MS } from '../core/series';
-import { S } from '../i18n/en';
+import { S } from '../i18n';
 import { onResize } from '../viz/canvas';
 import { drawTimeline } from '../viz/timeline';
 import type { WindowResult } from '../worker/protocol';
 import type { App, View } from './app';
 import { clear, h } from './dom';
-import { DAY_MS, HOUR_MS, day as fmtDay, deg, duration, isoDate, monthShort, parseUtc, pct } from './format';
+import { DAY_MS, HOUR_MS, day as fmtDay, deg, duration, isoDate, local, monthShort, parseUtc, pct } from './format';
 import type { Planner } from './planner';
 import { CUSTOM_SITE, type CompareItem, type State } from './store';
 
@@ -93,7 +93,7 @@ export function createCompare(app: App, planner: Planner): View {
   function render(): void {
     const s = store.state;
     const profile = PROFILES.find((p) => p.id === s.profileId);
-    reqLine.textContent = T.under(profile ? profile.label : S.plan.custom, s.req.durationDays);
+    reqLine.textContent = T.under(profile ? S.profiles[profile.id].label : S.plan.custom, s.req.durationDays);
     example.hidden = s.compare.length > 0;
     clear(body);
     canvases = [];
@@ -156,7 +156,7 @@ export function createCompare(app: App, planner: Planner): View {
     row(T.rows.contSun, S.plan.minSunTip, (c) => ({ node: meter(duration(c.result!.continuousSunH), c.result!.continuousSunH / missionH), value: c.result!.continuousSunH }), 'high');
     row(T.rows.dark, S.plan.maxDarkTip, (c) => ({ node: meter(c.result!.longestDarkH ? duration(c.result!.longestDarkH) : S.plan.detail.none, c.result!.longestDarkH / missionH, 'loss'), value: c.result!.longestDarkH }), 'low');
     row(T.rows.blackout, S.plan.maxBlackoutTip, (c) => ({ node: meter(c.result!.longestBlackoutH ? duration(c.result!.longestBlackoutH) : S.plan.detail.none, c.result!.longestBlackoutH / missionH, 'loss'), value: c.result!.longestBlackoutH }), 'low');
-    row(T.rows.power, S.plan.detail.powerTip, (c) => ({ node: meter(c.result!.powerIndex.toFixed(2), c.result!.powerIndex), value: c.result!.powerIndex }), 'high');
+    row(T.rows.power, S.plan.detail.powerTip, (c) => ({ node: meter(local(c.result!.powerIndex.toFixed(2)), c.result!.powerIndex), value: c.result!.powerIndex }), 'high');
     group(T.groups.miss);
     row(T.rows.robust, S.plan.table.nearbyTip, (c) => (c.points > 1 ? { node: pips(c.robust, c.points), value: c.robust } : { node: '—' }), 'high');
 

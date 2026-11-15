@@ -5,7 +5,7 @@ import { REQUIREMENT_ORDER } from '../core/requirements';
 import { durationSteps, PROFILES, STATUS_RANK, type Requirements } from '../core/requirements';
 import { DAY_STEPS, STEP_MS } from '../core/series';
 import { LANDING_STEPS, STATUS_CODES, type SiteCalendar } from '../core/calendar';
-import { S } from '../i18n/en';
+import { S } from '../i18n';
 import { calendarCell, drawCalendar, rowHeightToFill, type CalendarGeometry, type CalendarRow } from '../viz/calendar';
 import { COLORS, FONT, onResize, surface } from '../viz/canvas';
 import { drawPoleMap } from '../viz/polemap';
@@ -480,7 +480,7 @@ export function createMissions(app: App, planner: Planner): View {
     const board = h(
       'section',
       { class: 'panel mission-board-panel', 'aria-label': S.plan.calendarTitle },
-      h('div', { class: 'cap' }, T.board(PROFILES.find((p) => p.id === m.profileId)!.label), h('span', { class: 'muted small' }, PROFILES.find((p) => p.id === m.profileId)!.blurb)),
+      h('div', { class: 'cap' }, T.board(S.profiles[m.profileId].label), h('span', { class: 'muted small' }, S.profiles[m.profileId].blurb)),
       h('div', { class: 'cal-wrap' }, canvas),
       h('div', { class: 'cal-foot' }, h('span', { class: 'small muted' }, result ? S.plan.legendRobust : S.plan.computing)),
       h(

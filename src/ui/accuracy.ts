@@ -1,10 +1,10 @@
 // "How accurate is this?" — the measured errors, the method and the limits, whatever they are.
 import { lookAt, siteFrame, sky } from '../core/ephemeris';
-import { S } from '../i18n/en';
+import { S } from '../i18n';
 import { COLORS, FONT, onResize, surface } from '../viz/canvas';
 import type { App, View } from './app';
 import { clear, h } from './dom';
-import { pct } from './format';
+import { pct, local } from './format';
 
 const T = S.accuracy;
 
@@ -30,7 +30,7 @@ interface Golden {
   earth: Row[];
 }
 
-const pp = (v: number) => `${(v * 100).toFixed(1)}`;
+const pp = (v: number) => local((v * 100).toFixed(1));
 
 function scatter(canvas: HTMLCanvasElement, sun: [number, number][], earth: [number, number][]): void {
   const size = Math.min(420, canvas.parentElement?.clientWidth ?? 420);
@@ -113,7 +113,7 @@ export function createAccuracy(app: App): View {
       worstAz = Math.max(worstAz, maxAz);
       const name = path.split('/').pop()!.replace('.json', '');
       ephRows.append(
-        h('tr', null, h('th', { scope: 'row' }, T.cases[name] ?? name), h('td', null, `${g.sun[0][0].slice(0, 10)} → ${g.sun[g.sun.length - 1][0].slice(0, 10)}`), h('td', { class: 'num' }, String(g.sun.length * 2)), h('td', { class: 'num' }, `${maxEl.toFixed(4)}°`), h('td', { class: 'num' }, `${maxAz.toFixed(4)}°`)),
+        h('tr', null, h('th', { scope: 'row' }, T.cases[name] ?? name), h('td', null, `${g.sun[0][0].slice(0, 10)} → ${g.sun[g.sun.length - 1][0].slice(0, 10)}`), h('td', { class: 'num' }, String(g.sun.length * 2)), h('td', { class: 'num' }, `${local(maxEl.toFixed(4))}°`), h('td', { class: 'num' }, `${local(maxAz.toFixed(4))}°`)),
       );
     }
 
@@ -149,7 +149,7 @@ export function createAccuracy(app: App): View {
         { class: 'panel doc-section' },
         h('h2', null, T.eph.title),
         h('p', null, T.eph.text),
-        h('div', { class: 'stats cols-3' }, stat(worstEl.toFixed(4), '°', T.eph.worstEl), stat(worstAz.toFixed(4), '°', T.eph.worstAz), stat(String(total), '', T.eph.count)),
+        h('div', { class: 'stats cols-3' }, stat(local(worstEl.toFixed(4)), '°', T.eph.worstEl), stat(local(worstAz.toFixed(4)), '°', T.eph.worstAz), stat(String(total), '', T.eph.count)),
         h('p', { class: 'small muted' }, T.eph.live),
         h(
           'div',
@@ -175,7 +175,7 @@ export function createAccuracy(app: App): View {
           h('figure', { class: 'scatter' }, canvas, h('figcaption', { class: 'small muted' }, T.scatterCaption)),
         ),
         h('h3', null, T.terrain.fineTitle),
-        h('p', null, T.terrain.fineText(v.fine.sunPixel.correlation.toFixed(2), v.fine.sunArea.correlation.toFixed(2), pp(v.fine.sunArea.rms))),
+        h('p', null, T.terrain.fineText(local(v.fine.sunPixel.correlation.toFixed(2)), local(v.fine.sunArea.correlation.toFixed(2)), pp(v.fine.sunArea.rms))),
         h('h3', null, T.terrain.sitesTitle),
         h('p', { class: 'small muted' }, T.terrain.sitesNote),
         h(

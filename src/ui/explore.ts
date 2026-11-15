@@ -2,7 +2,7 @@
 import { earthAxes, localAxesJ2000, siteFrame } from '../core/ephemeris';
 import { MAST_HEIGHTS_M } from '../core/horizon';
 import { SUN_PRESENT } from '../core/requirements';
-import { S } from '../i18n/en';
+import { S } from '../i18n';
 import { COLORS, onResize } from '../viz/canvas';
 import { drawCloseup, drawStrip, stripPoint, type StripGeometry } from '../viz/strip';
 import { drawTimeline, timelineTime, type TimelineGeometry } from '../viz/timeline';
@@ -11,7 +11,7 @@ import { CATEGORY_LABEL, type LoadedSite, type Site } from './data';
 import { clear, h, reducedMotion, setText } from './dom';
 import { EXPLORE_DAYS, elevationRange, momentAt, outlookFor, type Moment, type Outlook, warmOutlooks } from './exploreModel';
 import { createHero3D } from './hero3d';
-import { DAY_MS, HOUR_MS, compass, dayTime, deg, duration, isoMinute, latLon, monthShort, num, parseUtc, pct } from './format';
+import { DAY_MS, HOUR_MS, compass, dayTime, deg, duration, isoMinute, latLon, monthShort, num, parseUtc, pct, local } from './format';
 import { REPLAYS } from './replays';
 import { linkTone, sunTone } from './sound';
 import { CUSTOM_SITE, MAX_MS, MIN_MS, type State } from './store';
@@ -145,9 +145,11 @@ export function createExplore(app: App): View {
     replaySheet,
   );
   document.addEventListener('pointerdown', (ev) => {
+    if (!el.isConnected) return;
     if ((!factsSheet.hidden || !replaySheet.hidden) && ev.target instanceof Node && !hudSite.contains(ev.target)) openSheet(null);
   });
   window.addEventListener('keydown', (ev) => {
+    if (!el.isConnected) return;
     if (ev.key === 'Escape') openSheet(null);
   });
 
@@ -207,7 +209,7 @@ export function createExplore(app: App): View {
     if (loaded.data) {
       const i = Math.round(p.az / loaded.data.stepDeg) % loaded.horizon.count;
       const km = loaded.data.distKm[mast][i];
-      readout.append(h('br'), T.readoutDist(km < 10 ? `${km.toFixed(1)} km` : `${km.toFixed(0)} km`));
+      readout.append(h('br'), T.readoutDist(km < 10 ? `${local(km.toFixed(1))} km` : `${km.toFixed(0)} km`));
     }
     readout.style.left = `${ev.clientX - box.left}px`;
     readout.style.top = `${ev.clientY - box.top}px`;
@@ -300,6 +302,8 @@ export function createExplore(app: App): View {
     } else settle();
   };
   three.onReady = () => window.dispatchEvent(new Event('lw:ready'));
+  // Rebuilt in another language over a picture that is already there: nothing to wait for.
+  if (three.settled()) settle();
 
   // ----- behaviour
   function togglePlay(force?: boolean): void {
@@ -580,6 +584,9 @@ export function createExplore(app: App): View {
       if (changed.has('timeMs') || changed.has('req') || changed.has('tab') || changed.has('hero')) render();
     },
     hide() {
+      if (playing) togglePlay(false);
+    },
+    dispose() {
       if (playing) togglePlay(false);
     },
   };

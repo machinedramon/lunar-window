@@ -4,7 +4,7 @@ import { LANDING_STEPS, nextViableDay, STATUS_CODES, type SiteCalendar } from '.
 import { MAST_HEIGHTS_M } from '../core/horizon';
 import { durationSteps, PROFILES, REQUIREMENT_ORDER, type CellResult, type Requirements, type RequirementKey } from '../core/requirements';
 import { DAY_STEPS, STEP_MS } from '../core/series';
-import { S } from '../i18n/en';
+import { S } from '../i18n';
 import { onResize } from '../viz/canvas';
 import { calendarCell, drawCalendar, type CalendarGeometry, type CalendarRow } from '../viz/calendar';
 import { drawPoleMap, mapHit, type MapGeometry } from '../viz/polemap';
@@ -12,7 +12,7 @@ import { drawTimeline } from '../viz/timeline';
 import type { ComputeResult, WindowResult } from '../worker/protocol';
 import type { App, View } from './app';
 import { clear, h, setText } from './dom';
-import { DAY_MS, HOUR_MS, day as fmtDay, dayTime, deg, duration, isoDate, monthShort, parseUtc, pct } from './format';
+import { DAY_MS, HOUR_MS, day as fmtDay, dayTime, deg, duration, isoDate, monthShort, parseUtc, pct, local } from './format';
 import type { Planner } from './planner';
 import { MAX_SLIP, type State } from './store';
 
@@ -47,7 +47,7 @@ export function createPlan(app: App, planner: Planner): View {
     store.set({ req, profileId: same ? same.id : 'custom' });
   };
   const profileButtons = PROFILES.map((p) =>
-    h('button', { class: 'profile', type: 'button', onclick: () => store.set({ req: { ...p.req, mast: store.state.req.mast }, profileId: p.id }) }, h('b', null, p.label), h('span', null, p.blurb)),
+    h('button', { class: 'profile', type: 'button', onclick: () => store.set({ req: { ...p.req, mast: store.state.req.mast }, profileId: p.id }) }, h('b', null, S.profiles[p.id].label), h('span', null, S.profiles[p.id].blurb)),
   );
   const number = (min: number, max: number, onValue: (v: number) => void, label: string) => {
     const input = h('input', { type: 'number', min: String(min), max: String(max), step: '1', 'aria-label': label });
@@ -346,6 +346,7 @@ export function createPlan(app: App, planner: Planner): View {
   drawer.append(h('div', { class: 'drawer-head' }, h('div', null, drawerTitle, drawerSub), closeBtn), drawerBody);
   const drawerCanvas = h('canvas', { role: 'img', 'aria-label': T.detail.mission });
   window.addEventListener('keydown', (ev) => {
+    if (!el.isConnected) return;
     if (ev.key === 'Escape' && store.state.detail && store.state.tab === 'plan') store.set({ detail: null });
   });
 
@@ -629,7 +630,7 @@ export function createPlan(app: App, planner: Planner): View {
     renderTable();
     draw();
     renderDetail();
-    if (result) setText(stamp, T.computed((result.elapsedMs / 1000).toFixed(1), sites.length, sites.reduce((n, s) => n + ((calOf(s.id)?.points ?? 1) - 1), 0)));
+    if (result) setText(stamp, T.computed(local((result.elapsedMs / 1000).toFixed(1)), sites.length, sites.reduce((n, s) => n + ((calOf(s.id)?.points ?? 1) - 1), 0)));
   }
 
   function ensure(): void {

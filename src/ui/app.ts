@@ -1,4 +1,5 @@
 // Shared context of the screens.
+import { S } from '../i18n';
 import { loadSite, type LoadedSite, type Site, type SiteList } from './data';
 import { CUSTOM_SITE, type State, type Store } from './store';
 
@@ -8,6 +9,8 @@ export interface View {
   update(state: State, changed: Set<keyof State> | null): void;
   /** Called when the view is hidden, to stop animations. */
   hide?(): void;
+  /** Called when the view is thrown away (a change of language rebuilds every view): stops what would keep running. */
+  dispose?(): void;
 }
 
 export class App {
@@ -20,6 +23,13 @@ export class App {
     readonly list: SiteList,
   ) {
     this.sites = list.sites;
+    // The name of a site, and the note about it, are read in the language in use; English is what the data file holds.
+    for (const site of this.sites) {
+      const name = site.name;
+      const note = site.note;
+      Object.defineProperty(site, 'name', { get: () => S.siteNames[site.id] ?? name, enumerable: true });
+      Object.defineProperty(site, 'note', { get: () => (note ? (S.siteNotes[site.id] ?? note) : note), enumerable: true });
+    }
   }
 
   siteInfo(id: string): Site {
@@ -30,7 +40,7 @@ export class App {
   /** The visitor's own point: no terrain model, so the horizon is that of a smooth sphere. */
   private customSite(): Site {
     const { lat, lon } = this.store.state.custom;
-    return { id: CUSTOM_SITE, name: 'Custom point', category: 'international', mission: 'Coordinates entered by you', status: 'candidate', lat, lon, elevationM: 0, horizon: 'sphere', source: 'https://github.com/machinedramon/lunar-window' };
+    return { id: CUSTOM_SITE, name: S.explore.custom.group, category: 'international', mission: S.explore.custom.group, status: 'candidate', lat, lon, elevationM: 0, horizon: 'sphere', source: 'https://github.com/machinedramon/lunar-window' };
   }
 
   /** Horizon profile of a site and of the ring around it, loaded once. */

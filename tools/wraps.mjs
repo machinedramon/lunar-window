@@ -10,6 +10,8 @@ const SIZES = [
   [820, 1180],
   [390, 844],
 ];
+// SIZES=1440x900,390x844 node tools/wraps.mjs checks only those windows
+if (process.env.SIZES) SIZES.splice(0, SIZES.length, ...process.env.SIZES.split(',').map((t) => t.split('x').map(Number)));
 const VIEWS = [
   ['explore', '#explore?site=malapert&t=2027-01-17T00:00'],
   ['explore, replay', '#explore?site=blue-ghost-1&t=2025-03-14T08:30'],
@@ -31,6 +33,8 @@ const browser = await chromium.launch({ channel: 'msedge', args: ['--use-angle=d
 let total = 0;
 for (const [w, h] of SIZES) {
   const page = await browser.newPage({ viewport: { width: w, height: h }, deviceScaleFactor: 1 });
+  // LANGUAGE=pt node tools/wraps.mjs checks the screens in another language
+  if (process.env.LANGUAGE) await page.addInitScript((code) => localStorage.setItem('lunar-window-lang', code), process.env.LANGUAGE);
   for (const [name, hash] of VIEWS) {
     await page.goto(`http://localhost:5700/${hash}`, { waitUntil: 'networkidle' });
     await page.reload({ waitUntil: 'networkidle' });

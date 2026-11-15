@@ -224,43 +224,135 @@ a:hover {
   padding-left: 20px;
   border-left: 1px solid var(--rule);
 }
+/* the sound: one small button; four bars when it is on, four dots when it is off */
 .sound-btn {
-  min-width: 108px;
+  width: 32px;
+  height: 32px;
+  padding: 0;
   color: var(--ink-3);
   border-color: var(--rule);
 }
 .sound-btn[aria-pressed='true'] {
   color: var(--ink);
-  border-color: var(--ink);
+  border-color: var(--rule-2);
 }
 .sound-btn i {
   display: inline-flex;
-  align-items: flex-end;
+  align-items: center;
   gap: 2px;
-  height: 10px;
+  height: 12px;
 }
 .sound-btn i b {
   width: 2px;
-  height: 3px;
+  height: 2px;
   background: currentColor;
+  transition: height 0.25s var(--ease);
 }
-.sound-btn[aria-pressed='true'] i b {
-  animation: level 0.9s ease-in-out infinite alternate;
+.sound-btn[aria-pressed='true'] i b:nth-child(1) {
+  height: 5px;
 }
 .sound-btn[aria-pressed='true'] i b:nth-child(2) {
-  animation-delay: -0.3s;
+  height: 12px;
 }
 .sound-btn[aria-pressed='true'] i b:nth-child(3) {
-  animation-delay: -0.6s;
+  height: 8px;
 }
-@keyframes level {
-  to {
-    height: 10px;
-  }
+.sound-btn[aria-pressed='true'] i b:nth-child(4) {
+  height: 4px;
 }
 main {
   padding: 16px var(--gut) 40px;
   min-width: 0;
+}
+
+/* the language: the flag of the one in use; a click opens the three */
+.top-tools {
+  gap: 8px;
+}
+.lang {
+  position: relative;
+}
+.flag {
+  display: block;
+  width: 21px;
+  height: 15px;
+  border-radius: 1.5px;
+  overflow: hidden;
+  box-shadow: 0 0 0 1px rgb(255 255 255 / 0.22);
+}
+.flag svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.lang-btn {
+  height: 32px;
+  padding: 0 10px 0 9px;
+  gap: 8px;
+  border-color: var(--rule);
+}
+.lang-btn:hover .flag,
+.lang-menu button:hover .flag {
+  box-shadow: 0 0 0 1px rgb(0 0 0 / 0.35);
+}
+.lang-code {
+  font-size: 10.5px;
+  letter-spacing: 0.12em;
+}
+.lang-caret {
+  width: 6px;
+  height: 6px;
+  margin: -3px 1px 0 0;
+  border-right: 1px solid currentColor;
+  border-bottom: 1px solid currentColor;
+  transform: rotate(45deg);
+  transition: transform 0.2s var(--ease);
+}
+.lang-btn[aria-expanded='true'] .lang-caret {
+  margin-top: 3px;
+  transform: rotate(225deg);
+}
+.lang-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 60;
+  display: grid;
+  min-width: 172px;
+  padding: 4px;
+  background: #000;
+  border: 1px solid var(--rule-2);
+  border-radius: var(--r);
+  animation: rise 0.2s var(--ease);
+}
+.lang-menu button {
+  appearance: none;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  height: 36px;
+  padding: 0 10px;
+  font: 400 13px/1 var(--sans);
+  color: var(--ink-2);
+  text-align: left;
+  background: none;
+  border: 0;
+  border-radius: 1px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.lang-menu button:hover,
+.lang-menu button:focus-visible {
+  background: #fff;
+  color: #000;
+}
+.lang-menu button[aria-selected='true'] {
+  color: var(--ink);
+}
+.lang-menu button[aria-selected='true']::after {
+  content: '✓';
+  margin-left: auto;
+  font-size: 11px;
 }
 
 /* ---------- motion: everything arrives, one thing at a time; nothing jumps ---------- */
@@ -1982,6 +2074,13 @@ table.reqtable {
   width: 100%;
   border-collapse: collapse;
   font-size: 13px;
+  table-layout: fixed;
+}
+/* In the drawer a label that is too long for a narrow screen is cut, it never widens the drawer. */
+.drawer .eyebrow {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 table.reqtable th,
 table.reqtable td {
@@ -2675,6 +2774,8 @@ table.compare tbody tr.cmp-actions td {
   body {
     display: grid;
     grid-template-rows: var(--bar) minmax(0, 1fr);
+    /* the bar never makes the page wider than the window */
+    grid-template-columns: minmax(0, 1fr);
   }
   main {
     min-height: 0;
@@ -2962,7 +3063,8 @@ table.compare tbody tr.cmp-actions td {
     min-width: 0;
   }
 }
-@media (max-width: 1320px) {
+/* The line under the name needs a wide bar: with the tabs and the language beside it, only a large monitor has the room. */
+@media (max-width: 1679px) {
   .brand-tag {
     display: none;
   }

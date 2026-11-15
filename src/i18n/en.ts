@@ -1,6 +1,68 @@
-// Every sentence the interface shows. English is the language of the submission.
+// Every sentence the interface shows, in English: the language of the submission and the default.
+// The other languages (pt.ts, es.ts) have exactly this shape; the compiler checks that nothing is missing.
 export const en = {
   appName: 'Lunar Window',
+  lang: { label: 'Language' },
+  docTitle: 'Lunar Window — landing-window planner for the lunar south pole',
+  // How dates, directions and numbers are written.
+  fmt: {
+    months: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
+    compass: ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'],
+    north: 'N',
+    south: 'S',
+    east: 'E',
+    west: 'W',
+    decimal: '.',
+    dayOfMonth: (day: number, month: string, year: number) => `${day} ${month} ${year}`,
+  },
+  // The example mission profiles (their numbers are in core/requirements.ts).
+  profiles: {
+    short: { label: 'Short surface mission', blurb: '6 days. Sunlight and Earth contact the whole time.' },
+    'lunar-day': { label: 'Full lunar day lander', blurb: '14 days. Survives 6 h of darkness and 24 h without Earth contact.' },
+    rover: { label: 'Polar rover', blurb: '100 days. Survives 50 h of darkness and 14 days without Earth contact.' },
+  } as Record<string, { label: string; blurb: string }>,
+  // Names of sites and notes about them that are written differently in another language (English: as in the data).
+  siteNames: {} as Record<string, string>,
+  siteNotes: {} as Record<string, string>,
+  sky: { lmc: 'Large Magellanic Cloud', smc: 'Small Magellanic Cloud' },
+  // Real landings to replay. Every statement in `happened` was checked against the source given with it (ui/replays.ts).
+  replays: {
+    'apollo-11': {
+      when: '20 July 1969, 20:17 UTC',
+      happened: 'Eagle landed in Mare Tranquillitatis at 20:17 UTC.',
+      look: 'The Sun is low in the east: Apollo landings were timed for a low morning Sun, so that shadows would show the relief. The Earth is high in the sky, as it always is from the near side.',
+    },
+    'chandrayaan-3': {
+      when: '23 August 2023, 12:33 UTC',
+      happened: 'Vikram landed at 12:33 UTC. The lander was put to sleep on 4 September, shortly before sunset, and did not wake after the lunar night.',
+      look: 'The tool puts sunset at this site on 4 September 2023, the day the lander was put to sleep.',
+    },
+    slim: {
+      when: '19 January 2024, 15:20 UTC',
+      happened: 'SLIM landed at 15:20 UTC, nose down.',
+      look: 'The Sun is up and was still climbing in the east: it had risen about three days earlier and would set on 31 January.',
+    },
+    'im-1': {
+      when: '22 February 2024, 23:23 UTC',
+      happened: 'Odysseus touched down at 23:23 UTC and tipped over. Contact ended on 29 February with the onset of lunar night.',
+      look: 'Real terrain here. The tool puts sunset at this point on 2 March, for a panel 2 m above level ground; contact ended two days earlier. The lander lay tipped over on sloping ground, which an 80 m terrain model and an upright mast do not represent.',
+    },
+    'change-6': {
+      when: '1 June 2024, 22:23 UTC',
+      happened: "Chang'e 6 landed at 22:23 UTC in the Apollo basin, on the far side of the Moon.",
+      look: 'The Earth is never in the sky here: no direct link is possible at any date, which is why the mission talked to Earth through a relay satellite.',
+    },
+    'blue-ghost': {
+      when: '2 March 2025, 08:34 UTC',
+      happened: 'Blue Ghost landed at 08:34 UTC and worked for a full lunar day. It imaged the total eclipse of 14 March from the surface and the lunar sunset on 16 March; contact was lost about five hours after sunset.',
+      look: 'The list of events below should show an eclipse beginning on 14 March and the sunset on 16 March.',
+    },
+    'im-2': {
+      when: '6 March 2025, about 17:30 UTC',
+      happened: 'Athena landed about 250 m from its target, inside a crater and on its side. Its batteries ran out about 12 hours later.',
+      look: 'Real terrain here. At the published landing point, 2 m up, the tool finds full Sun and the Earth 12° above the skyline. A lander on its side at the bottom of a small crater sees far less sky than that: the limit of any model at 80 m.',
+    },
+  } as Record<string, { when: string; happened: string; look: string }>,
   tagline: 'When the launch slips, see what still works.',
   skip: 'Skip to content',
   loading: 'Reading NASA terrain…',
@@ -436,7 +498,7 @@ export const en = {
     honest: 'The mission profiles are examples; the sites, the dates, the terrain and the geometry are real.',
     go: 'Play',
     // the card of a mission: its real board, and what is asked
-    boardCap: (sites: number, days: number, from: string) => `The board · ${sites} sites × ${days} days from ${from}`,
+    boardCap: (sites: number, days: number, from: string) => `${sites} sites × ${days} days from ${from}`,
     boardAria: (title: string) => `Landing calendar of the mission "${title}": one row per site, one column per day; white where a landing meets the requirements.`,
     spec: { mission: 'Mission', needs: 'Must have', choose: 'You choose' },
     choose: (from: string, to: string) => `a site and a day · ${from} to ${to}`,
@@ -522,4 +584,3 @@ export const en = {
 };
 
 export type Strings = typeof en;
-export const S: Strings = en;
