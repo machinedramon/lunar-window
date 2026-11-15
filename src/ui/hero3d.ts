@@ -269,6 +269,8 @@ export function createHero3D(): Hero3D {
     }
     arrivingSaid = true;
     api.onArriving?.(true);
+    slow = 0.016;
+    frames = 0;
     scene.look.az = (target.az - 22 + 360) % 360;
     scene.look.pitch = -24;
     scene.look.fov = Math.min(62, target.fov + 14);
@@ -407,7 +409,9 @@ export function createHero3D(): Hero3D {
     // Keep it fluid on slower graphics: lower the resolution a step at a time, and raise it again when there is room.
     // A single long frame (a model arriving, a shader compiling) is not a slow machine.
     slow += (Math.min(dt, 0.066) - slow) * 0.08;
-    if (++frames % 40 === 0 && !lockedQuality) {
+    // Not while the camera arrives: the long frames of the loading say nothing about the speed of the machine,
+    // and a change of resolution in the middle of that move would be seen.
+    if (++frames % 40 === 0 && !lockedQuality && !(arriving && now - arriving < 4200)) {
       if (slow > 0.03 && scene.quality > 0.6) {
         // If raising the resolution is what made it slow again, wait longer before the next try.
         if (now - raisedAt < 5000) holdMs = Math.min(120000, holdMs * 2);

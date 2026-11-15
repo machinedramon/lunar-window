@@ -967,11 +967,15 @@ void main() {
     const roomy = this.renderer.capabilities.maxTextureSize >= 8192 && window.innerWidth >= 1100 && ((navigator as { deviceMemory?: number }).deviceMemory ?? 8) >= 4;
     if (roomy)
       window.setTimeout(() => {
-        new THREE.TextureLoader().load(`${import.meta.env.BASE_URL}textures/milkyway-8k.webp`, (fine) => {
+        // Decoded off the main thread (as a bitmap): what is left for the page to do is hand it to the graphics card.
+        new THREE.ImageBitmapLoader().setOptions({ imageOrientation: 'flipY' }).load(`${import.meta.env.BASE_URL}textures/milkyway-8k.webp`, (bitmap) => {
+          const fine = new THREE.Texture(bitmap as unknown as HTMLImageElement);
+          fine.flipY = false;
           fine.format = THREE.RedFormat;
           fine.colorSpace = THREE.NoColorSpace;
           fine.wrapS = THREE.RepeatWrapping;
           fine.anisotropy = 4;
+          fine.needsUpdate = true;
           this.renderer.initTexture(fine);
           this.galaxyMat.uniforms.uFine.value = fine;
           this.galaxyMat.uniforms.uFineOn.value = 1;
