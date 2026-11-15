@@ -137,6 +137,10 @@ export function createHero3D(): Hero3D {
   const btn = (text: string, tip: string, fn: () => void) => h('button', { class: 'btn ghost three-btn', type: 'button', title: tip, onclick: fn }, text);
   const faceSunBtn = btn(T.faceSun, T.faceSunTip, () => face('sun'));
   const faceEarthBtn = btn(T.faceEarth, T.faceEarthTip, () => face('earth'));
+  faceSunBtn.setAttribute('aria-pressed', 'false');
+  faceEarthBtn.setAttribute('aria-pressed', 'false');
+  faceSunBtn.dataset.guide = 'follow-sun';
+  faceEarthBtn.dataset.guide = 'follow-earth';
   const zoomOutBtn = btn('−', T.zoomOut, () => zoom(1.25));
   const zoomInBtn = btn('+', T.zoomIn, () => zoom(0.8));
   const controls = h('div', { class: 'three-controls' }, faceSunBtn, faceEarthBtn, zoomOutBtn, zoomInBtn);
@@ -174,6 +178,13 @@ export function createHero3D(): Hero3D {
   const DRAWING = -1;
   let last = 0;
   let arriving = 0;
+  /**
+   * The body the camera keeps in the middle of the picture while time flows, or null. `swing` is the turn towards
+   * it, from where the camera was when it was asked for: once the turn is over the camera is on the body exactly.
+   */
+  let following: 'sun' | 'earth' | null = null;
+  let swing = { at: 0, az: 0, pitch: 0 };
+  const SWING_MS = 1100;
   let slow = 0.016;
   let loweredAt = -1e9;
   let raisedAt = -1e9;
@@ -388,6 +399,7 @@ export function createHero3D(): Hero3D {
       starAxes: stars,
     };
     if (scene && terrainKey) scene.setSky(sky);
+    if (following) aim(following);
     wake();
   }
 
@@ -399,6 +411,7 @@ export function createHero3D(): Hero3D {
   /** Default framing: the Earth in frame over lit ground, leaning towards the Sun as far as the frame allows. */
   function frame(): void {
     if (!moment) return;
+    follow(null);
     const m = moment;
     const dAz = shortest(m.sun.az, m.earth.az);
     const sunUp = m.sun.el > -3;
@@ -420,11 +433,34 @@ export function createHero3D(): Hero3D {
     touch();
   }
 
-  function face(which: 'sun' | 'earth'): void {
+  /** Where the camera looks to have the body in the middle of the picture. */
+  function aim(which: 'sun' | 'earth'): void {
     if (!moment) return;
     const v = which === 'sun' ? moment.sun : moment.earth;
     target.az = v.az;
     target.pitch = Math.max(-20, Math.min(70, v.el + (which === 'sun' ? 1.5 : 0)));
+  }
+
+  /** Starts or stops following a body; the two buttons say which one is followed. */
+  function follow(which: 'sun' | 'earth' | null): void {
+    following = which;
+    faceSunBtn.setAttribute('aria-pressed', String(which === 'sun'));
+    faceEarthBtn.setAttribute('aria-pressed', String(which === 'earth'));
+  }
+
+  /**
+   * Turns the camera to the Sun or to the Earth and keeps it there while time flows. Asked again for the body
+   * already followed, it lets go; so does moving the camera by hand.
+   */
+  function face(which: 'sun' | 'earth'): void {
+    if (!moment) return;
+    if (following === which) {
+      follow(null);
+      return;
+    }
+    follow(which);
+    aim(which);
+    swing = { at: performance.now(), az: scene ? scene.look.az : target.az, pitch: scene ? scene.look.pitch : target.pitch };
     touch();
   }
 
@@ -478,8 +514,17 @@ export function createHero3D(): Hero3D {
     const k = still ? 1 : 1 - Math.exp(-dt * rate);
     // An instrument holds still: left alone, the camera does not move, so the picture is the same frame
     // after frame and nothing fine in it can shimmer. It moves when the visitor moves it or time flows.
-    scene.look.az = (scene.look.az + shortest(scene.look.az, target.az) * k + 360) % 360;
-    scene.look.pitch += (target.pitch - scene.look.pitch) * k;
+    if (following) {
+      // A body that is followed is held exactly: an eased camera would trail behind it by a few degrees when
+      // the clock runs fast. The turn towards it is one smooth move, which ends on the body wherever it then is.
+      const u = still ? 1 : Math.min(1, (now - swing.at) / SWING_MS);
+      const e = u * u * (3 - 2 * u);
+      scene.look.az = (swing.az + shortest(swing.az, target.az) * e + 360) % 360;
+      scene.look.pitch = swing.pitch + (target.pitch - swing.pitch) * e;
+    } else {
+      scene.look.az = (scene.look.az + shortest(scene.look.az, target.az) * k + 360) % 360;
+      scene.look.pitch += (target.pitch - scene.look.pitch) * k;
+    }
     scene.look.fov += (target.fov - scene.look.fov) * k;
     if (arriving && now - arriving > 5200) arriving = 0;
     // The title card plays over a clean picture; the instruments come in afterwards.
@@ -523,6 +568,8 @@ export function createHero3D(): Hero3D {
     if (!moment || !site) return [];
     // The telephoto views come in with their instruments, a moment after the arrival.
     if (arriving && performance.now() - arriving < 4600) return [];
+    // Nor while the guide has the instruments step back: a window without its instrument would hang in the sky.
+    if (document.body.classList.contains('guide-cine')) return [];
     const box = canvas.getBoundingClientRect();
     const out: { x: number; y: number; size: number; az: number; el: number; fov: number }[] = [];
     const m = moment;
@@ -669,8 +716,15 @@ export function createHero3D(): Hero3D {
   canvas.addEventListener('pointerdown', (ev) => {
     canvas.setPointerCapture(ev.pointerId);
     pinch.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
-    if (pinch.size === 1) drag = { x: ev.clientX, y: ev.clientY, id: ev.pointerId };
-    else {
+    if (pinch.size === 1) {
+      drag = { x: ev.clientX, y: ev.clientY, id: ev.pointerId };
+      // The hand takes the camera from where it is, not from where the followed body will be.
+      if (following && scene) {
+        follow(null);
+        target.az = scene.look.az;
+        target.pitch = scene.look.pitch;
+      }
+    } else {
       drag = null;
       const [a, b] = [...pinch.values()];
       pinchDist = Math.hypot(a.x - b.x, a.y - b.y);
@@ -713,6 +767,11 @@ export function createHero3D(): Hero3D {
   );
   canvas.addEventListener('keydown', (ev) => {
     const stepDeg = target.fov / 10;
+    if (following && scene && ev.key.startsWith('Arrow')) {
+      follow(null);
+      target.az = scene.look.az;
+      target.pitch = scene.look.pitch;
+    }
     if (ev.key === 'ArrowLeft') target.az = (target.az - stepDeg + 360) % 360;
     else if (ev.key === 'ArrowRight') target.az = (target.az + stepDeg) % 360;
     else if (ev.key === 'ArrowUp') target.pitch = Math.min(80, target.pitch + stepDeg);
@@ -724,6 +783,13 @@ export function createHero3D(): Hero3D {
     else return;
     ev.preventDefault();
     touch();
+  });
+  // The guide sets the lens for its opening and its closing pictures.
+  window.addEventListener('lw:lens', (ev) => {
+    const fov = (ev as CustomEvent<number>).detail;
+    if (!Number.isFinite(fov)) return;
+    target.fov = Math.max(8, Math.min(75, fov));
+    wake();
   });
   canvas.addEventListener('webglcontextlost', (ev) => {
     ev.preventDefault();
@@ -774,6 +840,7 @@ export function createHero3D(): Hero3D {
     };
     (window as unknown as Record<string, unknown>).__lwFace = (which: 'sun' | 'earth', fov: number, lift = 0) => {
       if (!scene || !moment) return;
+      follow(null);
       const v = which === 'sun' ? moment.sun : moment.earth;
       Object.assign(target, { az: v.az, pitch: v.el + lift, fov });
       Object.assign(scene.look, target);
@@ -782,6 +849,7 @@ export function createHero3D(): Hero3D {
     };
     (window as unknown as Record<string, unknown>).__lwLook = (az: number, pitch: number, fov: number) => {
       if (!scene) return;
+      follow(null);
       Object.assign(target, { az, pitch, fov });
       Object.assign(scene.look, target);
       arriving = 0;

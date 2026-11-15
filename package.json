@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "description": "Landing-window planner for the lunar south pole (NASA Space Apps Challenge 2026)",
-  "aiDisclosure": "Most of the code, tests and documentation of this project were generated with an AI coding assistant (a large language model), under the direction of the team member, who chose among the options proposed, set the direction and reviewed the work. Numerical results were validated against NASA data. Nothing in the tool is an AI-generated image, video or sound; the narration of the demo video is an AI-generated voice.",
+  "aiDisclosure": "Most of the code, tests and documentation of this project were generated with an AI coding assistant (a large language model), under the direction of the team member, who chose among the options proposed, set the direction and reviewed the work. Numerical results were validated against NASA data. Nothing in the tool is an AI-generated image or video; the voice of the guided first landing and the narration of the demo video are AI-generated voices (OpenAI text-to-speech).",
   "type": "module",
   "license": "MIT",
   "scripts": {

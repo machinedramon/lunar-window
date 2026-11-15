@@ -10,6 +10,7 @@ import { preloadJourney, preloadTerrain } from './ui/hero3d';
 import { introLift, introStage, introTyped } from './ui/intro';
 import { preloadModels } from './viz/props';
 import { createExplore } from './ui/explore';
+import { createGuide } from './ui/guide';
 import { createPlan, planRequest } from './ui/plan';
 import { Planner } from './ui/planner';
 import { setSound, soundEnabled, soundPreferred, tick } from './ui/sound';
@@ -162,6 +163,10 @@ async function boot(): Promise<void> {
   const known = (id: string) => id === CUSTOM_SITE || list.sites.some((s) => s.id === id);
   const store = new Store(fromHash(location.hash, known));
   const app = new App(store, list);
+  // Mission Control, on the radio: the guided first landing. Its button sits with the tools of the top bar.
+  const guide = createGuide(store);
+  document.querySelector('.top-tools')?.prepend(guide.button);
+  relabel.push(guide.relabel);
 
   const planner = new Planner(app);
   const factories: Partial<Record<Tab, () => View>> = {
@@ -254,6 +259,7 @@ async function boot(): Promise<void> {
       requestAnimationFrame(uncover);
     });
   window.setTimeout(uncover, 12000);
+  guide.offerWhenReady();
 
   // Behind the first screen, everything that takes time is done ahead: the year of every site for the planner and
   // for the missions (in the worker), the terrain of the other sites and the other vehicle. After that, changing

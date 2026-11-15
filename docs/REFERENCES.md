@@ -41,6 +41,8 @@ Other candidate sites come from Wueller et al. 2026 (see Reading).
 | [Vite](https://vitejs.dev), [TypeScript](https://www.typescriptlang.org), [Vitest](https://vitest.dev), [Playwright](https://playwright.dev) | MIT / Apache-2.0 | Build, tests and development screenshots |
 | [NumPy](https://numpy.org), [tifffile](https://github.com/cgohlke/tifffile), [Pillow](https://python-pillow.org) | BSD / BSD / MIT-CMU | Offline tools: horizons, terrain tiles, textures |
 | [glTF-Transform](https://gltf-transform.dev) | MIT | Re-encoding the NASA models for the web |
+| [OpenAI text-to-speech](https://platform.openai.com/docs/guides/text-to-speech) (`gpt-4o-mini-tts`) | Service; the audio it returns belongs to who asked for it | The AI-generated voice of the guided first landing (`public/audio/guide`) and of the demo film, reading scripts written for the project. Its radio effect and the two tones around each line (the Quindar tones of the Apollo voice links, 2525 Hz and 2475 Hz) are made by code (`tools/guide_voice.py`) |
+| [FFmpeg](https://ffmpeg.org) | LGPL / GPL | Offline tools: filtering and encoding of the guide's voice and of the demo film |
 
 ## Reading
 

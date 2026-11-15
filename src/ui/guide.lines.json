@@ -1,0 +1,38 @@
+{
+  "en": {
+    "hail": "Lunar Window, this is Mission Control. Radio check. Good signal. I'm bringing you down at Malapert Massif, near the Moon's south pole. Our lander is due here on January 17.",
+    "sun": "First, the light. Down here, the Sun never climbs. Press Follow the Sun.",
+    "play": "There it is, two degrees above the horizon. Now run the clock: press Play.",
+    "circle": "Every second is a day and a half. The Sun doesn't rise or set here: it circles the horizon. Until a ridge gets in the way, and the lights go out.",
+    "question": "No Sun, no power. And rockets slip. If we launch late, does this site still work? Let's find out: open Plan a mission.",
+    "slip": "Each row is a landing site; each column, a landing day. White means the mission works. On our date, seven sites are good. Now make us three weeks late: drag Launch slip to 21 days.",
+    "why": "Twenty-one days late, and only two sites still work. Ours is gone. Click Malapert Massif to see why.",
+    "reason": "No Sun at landing. The lander would come down in the dark and wait more than five days for sunrise. Every answer comes with its reason, and every number is checked against NASA's JPL Horizons. Now press See this moment in Explore.",
+    "earth": "February 7, at Malapert. Dark ground, no power. But look up: press Follow the Earth.",
+    "out": "Home is still in view. So when a launch slips, Lunar Window shows which sites still work, on which days, and why. The console is yours. Mission Control, out."
+  },
+  "pt": {
+    "hail": "Lunar Window, aqui é o Controle da Missão. Teste de rádio. Sinal bom. Vou levar você até Malapert Massif, perto do polo sul da Lua. Nosso módulo pousa aqui em 17 de janeiro.",
+    "sun": "Primeiro, a luz. Aqui embaixo, o Sol nunca fica alto. Aperte Seguir o Sol.",
+    "play": "Aí está ele, dois graus acima do horizonte. Agora faça o tempo correr: aperte Play.",
+    "circle": "Cada segundo é um dia e meio. Aqui o Sol não nasce nem se põe: ele dá a volta no horizonte. Até que uma crista entra na frente, e as luzes se apagam.",
+    "question": "Sem Sol, sem energia. E foguetes atrasam. Se lançarmos tarde, este local ainda funciona? Vamos descobrir: abra Planejar missão.",
+    "slip": "Cada linha é um local de pouso; cada coluna, um dia de pouso. Branco quer dizer que a missão funciona. Na nossa data, sete locais servem. Agora atrase o lançamento em três semanas: arraste Atraso do lançamento até 21 dias.",
+    "why": "Vinte e um dias de atraso, e só dois locais ainda funcionam. O nosso caiu. Clique em Malapert Massif para ver por quê.",
+    "reason": "Sem Sol no pouso. O módulo desceria no escuro e esperaria mais de cinco dias pelo nascer do Sol. Toda resposta vem com o motivo, e cada número é conferido com o JPL Horizons, da NASA. Agora aperte Ver este momento em Explorar.",
+    "earth": "Sete de fevereiro, em Malapert. Chão escuro, sem energia. Mas olhe para cima: aperte Seguir a Terra.",
+    "out": "A nossa casa continua à vista. Então, quando um lançamento atrasa, a Lunar Window mostra quais locais ainda funcionam, em quais dias, e por quê. O console é seu. Controle da Missão, desligando."
+  },
+  "es": {
+    "hail": "Lunar Window, aquí Control de Misión. Prueba de radio. Buena señal. Te llevo a Malapert Massif, cerca del polo sur de la Luna. Nuestro módulo aterriza aquí el 17 de enero.",
+    "sun": "Primero, la luz. Aquí abajo, el Sol nunca sube. Pulsa Seguir el Sol.",
+    "play": "Ahí está, dos grados sobre el horizonte. Ahora haz correr el tiempo: pulsa Play.",
+    "circle": "Cada segundo es un día y medio. Aquí el Sol no sale ni se pone: rodea el horizonte. Hasta que una cresta se interpone, y las luces se apagan.",
+    "question": "Sin Sol, sin energía. Y los cohetes se retrasan. Si lanzamos tarde, ¿este sitio sigue sirviendo? Vamos a verlo: abre Planificar misión.",
+    "slip": "Cada fila es un sitio de aterrizaje; cada columna, un día de aterrizaje. Blanco significa que la misión funciona. En nuestra fecha, siete sitios sirven. Ahora retrasa el lanzamiento tres semanas: arrastra Retraso del lanzamiento hasta 21 días.",
+    "why": "Veintiún días de retraso, y solo dos sitios siguen funcionando. El nuestro ya no. Haz clic en Malapert Massif para ver por qué.",
+    "reason": "Sin Sol al aterrizar. El módulo bajaría a oscuras y esperaría más de cinco días al amanecer. Cada respuesta viene con su motivo, y cada número se comprueba con JPL Horizons, de la NASA. Ahora pulsa Ver este momento en Explorar.",
+    "earth": "Siete de febrero, en Malapert. Suelo oscuro, sin energía. Pero mira arriba: pulsa Seguir la Tierra.",
+    "out": "Nuestro hogar sigue a la vista. Así que, cuando un lanzamiento se retrasa, Lunar Window muestra qué sitios siguen funcionando, en qué días, y por qué. La consola es tuya. Control de Misión, fuera."
+  }
+}

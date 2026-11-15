@@ -27,6 +27,7 @@ it shows which sites survive, which fail, and why.
 
 ## What is in it
 
+- **A guided first landing** — on the first visit Mission Control calls on the radio and, in two minutes, talks you through one real case while you fly the tool yourself: a lander due at Malapert Massif on 17 January 2027, a launch that slips three weeks, the site that goes dark and the two that still work. Every step asks for one thing in the real interface, which is ringed while the rest of the screen dims; it can be skipped, done for you, or taken again from the Guide button. Spoken and written in the three languages.
 - **Explore** — pick a site and a moment; stand there in 3D, or read the 360° panorama and the 30-day timeline. Seven real landings can be replayed.
 - **Any point of the Moon** — type a latitude and longitude, or click the map of the south pole: the point gets its real terrain, computed in your browser from NASA's LOLA elevation models in a few seconds — its horizon, its 3D view, its row in the landing-window calendar. The model is 80 m per pixel from the south pole to 82°S and 474 m everywhere else. No site and no point uses a smooth Moon.
 - **Check with NASA** — the site file gives the azimuth and elevation of the Sun and the Earth to a thousandth of a degree, with a link that asks NASA's JPL Horizons System the same question for that place and moment.
@@ -86,8 +87,12 @@ proposed and set the direction, reviewed the work on screen at every step and de
 All numerical results were validated against NASA data (JPL Horizons tables and LOLA illumination maps);
 the measured errors are published on the Accuracy page of the tool.
 
-In the tool itself nothing is an AI-generated image, video or sound: the visuals are rendered in real
-time from NASA data and open-licensed 3D assets, and the sounds are synthesised by code. The demo video
+In the tool itself nothing is an AI-generated image or video: the visuals are rendered in real time from
+NASA data and open-licensed 3D assets. The voice of the guided first landing (Mission Control) is an
+AI-generated voice (OpenAI text-to-speech) reading a script written for the project
+(`src/ui/guide.lines.json`); its radio effect and tones are added by code (`tools/guide_voice.py`), every
+clip says so in its metadata, and the Accuracy page of the tool says so too. Every other sound is
+synthesised by code. The demo video
 (30 seconds, in English) is a recording of the tool; its narration is an AI-generated voice (OpenAI
 text-to-speech) reading a script, as the file metadata and the video description state, and its music is
 synthesised by code (`tools/film_audio.py`). The tool itself runs no AI model: every figure is computed by

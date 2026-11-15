@@ -224,7 +224,7 @@ export function createPlan(app: App, planner: Planner): View {
     for (const t of terrain) {
       let chip = chipOf.get(t.id);
       if (!chip) {
-        chip = h('button', { class: 'site-chip', type: 'button' }, h('i', { 'aria-hidden': 'true' }), h('span', null, t.name.replace(/ \(.*\)$/, '')));
+        chip = h('button', { class: 'site-chip', type: 'button', dataset: { site: t.id } }, h('i', { 'aria-hidden': 'true' }), h('span', null, t.name.replace(/ \(.*\)$/, '')));
         chip.addEventListener('click', () => store.set({ detail: { siteId: t.id, dayMs: startMs() + slippedDay() * DAY_MS } }));
         chip.addEventListener('mouseenter', () => setMapHover(t.id));
         chip.addEventListener('mouseleave', () => setMapHover(null));
@@ -629,7 +629,7 @@ export function createPlan(app: App, planner: Planner): View {
     const actions = h(
       'div',
       { class: 'row' },
-      h('button', { class: 'btn primary', type: 'button', onclick: () => store.set({ tab: 'explore', siteId: d.siteId, timeMs: landingMs }) }, D.openExplore),
+      h('button', { class: 'btn primary', type: 'button', dataset: { guide: 'open-explore' }, onclick: () => store.set({ tab: 'explore', siteId: d.siteId, timeMs: landingMs }) }, D.openExplore),
       h(
         'button',
         {

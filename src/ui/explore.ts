@@ -86,7 +86,7 @@ export function createExplore(app: App): View {
   const setTime = (t: number) => store.set({ timeMs: Math.max(MIN_MS, Math.min(MAX_MS, t)) });
   const step = (label: string, delta: number, tip: string) =>
     h('button', { class: 'btn icon', type: 'button', title: tip, onclick: () => setTime(store.state.timeMs + delta) }, label);
-  const playBtn = h('button', { class: 'btn primary', type: 'button', title: T.playTip, onclick: () => togglePlay() }, T.play);
+  const playBtn = h('button', { class: 'btn primary', type: 'button', title: T.playTip, 'aria-pressed': 'false', dataset: { guide: 'play' }, onclick: () => togglePlay() }, T.play);
   const heightSeg = h('div', { class: 'seg units', role: 'group', 'aria-label': T.height, title: T.heightTip });
   MAST_HEIGHTS_M.forEach((m, i) => {
     heightSeg.appendChild(
