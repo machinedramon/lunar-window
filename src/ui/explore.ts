@@ -12,7 +12,7 @@ import { clear, h, reducedMotion, setText } from './dom';
 import { EXPLORE_DAYS, elevationRange, momentAt, outlookFor, type Moment, type Outlook, warmOutlooks } from './exploreModel';
 import { createHero3D } from './hero3d';
 import { onOwnStage } from './ownPoint';
-import { DAY_MS, HOUR_MS, compass, dayTime, deg, duration, isoMinute, latLon, monthShort, num, parseUtc, pct, local } from './format';
+import { DAY_MS, HOUR_MS, compass, dayTime, deg, duration, horizonsUrl, isoMinute, latLon, monthShort, num, parseUtc, pct, local } from './format';
 import { REPLAYS } from './replays';
 import { linkTone, sunTone } from './sound';
 import { CUSTOM_SITE, MAX_MS, MIN_MS, type State } from './store';
@@ -119,6 +119,11 @@ export function createExplore(app: App): View {
 
   // ----- the site block: where we are, and two sheets that open beside it
   const facts = h('dl', { class: 'facts' });
+  /** In the site file: our numbers for this moment, and the same question at NASA's JPL Horizons, one click away. */
+  const checkText = h('span');
+  const checkSun = h('a', { target: '_blank', rel: 'noopener', title: T.facts.checkTip }, `${S.sun} ↗`);
+  const checkEarth = h('a', { target: '_blank', rel: 'noopener', title: T.facts.checkTip }, `${S.earth} ↗`);
+  const checkRow = h('div', { class: 'check-nasa' }, h('dt', null, T.facts.check), h('dd', null, checkText, ' ', checkSun, ' · ', checkEarth));
   const siteMeta = h('div', { class: 'site-meta' });
   const sheet = (title: string, body: HTMLElement) =>
     h(
@@ -349,6 +354,7 @@ export function createExplore(app: App): View {
         h('dd', null, h('span', { class: `tag ${terrain ? 'terrain' : 'sphere'}` }, terrain ? T.facts.terrain : T.facts.sphere), ' ', site.horizon === 'lola-5m-80m-240m' ? T.facts.terrainFineText : site.horizon === 'lola-80m-480m' ? T.facts.terrainOwnText : terrain ? T.facts.terrainText : T.facts.sphereText),
       ),
       h('div', null, h('dt', null, T.facts.about), h('dd', null, ...about, ...(own ? [] : [' ', h('a', { href: site.source, target: '_blank', rel: 'noopener' }, T.facts.source)]))),
+      checkRow,
       h('div', null, h('dt', null, T.facts.real), h('dd', null, terrain ? T.three.note : T.three.noteSphere)),
     );
   }
@@ -412,6 +418,10 @@ export function createExplore(app: App): View {
     const site = loaded.site;
     moment = momentAt(loaded, mast, state.timeMs);
     outlook = outlookFor(loaded, mast, state.timeMs);
+    const eyeM = site.elevationM + MAST_HEIGHTS_M[mast];
+    setText(checkText, T.facts.checkText(deg(moment.sun.az, 3), deg(moment.sun.el, 3), deg(moment.earth.az, 3), deg(moment.earth.el, 3)));
+    checkSun.href = horizonsUrl('sun', site.lat, site.lon, eyeM, state.timeMs);
+    checkEarth.href = horizonsUrl('earth', site.lat, site.lon, eyeM, state.timeMs);
     warmOutlooks(
       loaded,
       [0, 1, 2].filter((other) => other !== mast),

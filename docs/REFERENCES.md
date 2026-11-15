@@ -6,7 +6,7 @@ Every external resource used by the project: data, 3D assets, code and reading.
 
 | Resource | Used for | Source |
 |---|---|---|
-| LRO LOLA Gridded Data Records, south polar elevation models `LDEM_80S_80M` and `LDEM_60S_240M` | Terrain horizon of each site; terrain of the 3D view | NASA PDS Geosciences Node, `LRO-L-LOLA-4-GDR-V1.0` — https://pds-geosciences.wustl.edu/lro/lro-l-lola-3-rdr-v1/lrolol_1xxx/data/lola_gdr/polar/img/ |
+| LRO LOLA Gridded Data Records, south polar elevation models `LDEM_80S_80M`, `LDEM_75S_240M` and `LDEM_60S_240M` | Terrain horizon of each site and of any point of the visitor's own (`public/data/polar`); terrain of the 3D view | NASA PDS Geosciences Node, `LRO-L-LOLA-4-GDR-V1.0` — https://pds-geosciences.wustl.edu/lro/lro-l-lola-3-rdr-v1/lrolol_1xxx/data/lola_gdr/polar/img/ |
 | LOLA 5 m/pixel site elevation models (Site01, Site04, Site06, Site20, Site23, SL2, Haworth) | Terrain near seven of the sites: horizon and 3D view | NASA GSFC Planetary Geodesy Data Archive, product 78 — https://pgda.gsfc.nasa.gov/products/78 (Barker et al. 2021) |
 | LOLA average illumination maps `AVGVISIB_85S_060M_201608` (Sun) and `AVGVISIB_85S_060M_201608_EARTH` (Earth) | Validation of the terrain horizon; choice of the site point at two published high-illumination locations | LOLA team, NASA GSFC — https://imbrium.mit.edu/EXTRAS/ILLUMINATION/ |
 | JPL Horizons System | Reference positions of the Sun and the Earth seen from the lunar surface (validation tables in `tests/golden`) | NASA JPL Solar System Dynamics — https://ssd.jpl.nasa.gov/horizons/ |

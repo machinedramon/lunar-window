@@ -9,6 +9,8 @@ Python 3.12 with numpy. Run everything from the repository root, with `python -X
 | `validate_horizon.py` | Compares our horizon with NASA's LOLA average-illumination maps on a mesh of points; writes `public/data/validation.json`. About two minutes; the first run also downloads Sun and Earth tables from JPL Horizons. |
 | `fetch_golden.py` | Downloads the JPL Horizons tables used by the ephemeris tests (`tests/golden`). |
 | `build_assets.py` | Prepares the third-party 3D assets (rocks, textures) for the web. |
+| `build_polar.py` | Writes `public/data/polar/`: the elevation model the browser uses for any point of the visitor's own, from the pole to 84°S (80 m tiles and a 480 m grid, 28 MB in all). |
+| `check_polar.py` | Measures that model against the full NASA models and against the listed sites; writes the reference of `tests/core/polar.test.ts` and the `anyPoint` block of `public/data/validation.json`. |
 | `selftest.py` | Checks the geometry: smooth-sphere horizon, projection, distances, elevation at two real landing sites. |
 | `lunar.py` | Shared code: polar rasters, 5 m site models, great-circle horizon, JPL Horizons tables. |
 | `shot.mjs`, `shot3d.mjs` | Development only: screenshots of the running app. |
@@ -23,6 +25,7 @@ From the NASA PDS Geosciences Node, `https://pds-geosciences.wustl.edu/lro/lro-l
 
 - `ldem_80s_80m.img` and `.lbl` — elevation, 80 m/pixel, pole to 80°S
 - `ldem_60s_240m.img` and `.lbl` — elevation, 240 m/pixel, pole to 60°S
+- `ldem_75s_240m.img` and `.lbl` — elevation, 240 m/pixel, pole to 75°S (for `build_polar.py`)
 
 From the LOLA team at `https://imbrium.mit.edu/EXTRAS/ILLUMINATION/IMG/` (save the labels with a lower-case `.lbl` and the images with `.img`):
 
@@ -50,6 +53,23 @@ the maximum. Three observer heights are stored: 0, 2 and 10 m above the ground.
 Two published high-illumination points (Connecting Ridge and Shackleton rim) are given in the literature with
 two decimals and came from a 240 m model. For those, the site point is the best-lit spot within 1.5 km in
 NASA's 60 m illumination map; the published coordinates are kept in `sites.json`.
+
+## Any point
+
+The listed sites have horizons computed offline. A point of the visitor's own, from the pole to 84°S, is computed
+in the browser by `src/core/polar.ts` (a port of `lunar.horizon`, in a web worker) from `public/data/polar`:
+the nine 20.5 km tiles of `ldem_80s_80m` around the point, and `ldem_75s_240m` averaged to 480 m for the rest.
+
+```bash
+python -X utf8 tools/build_polar.py     # public/data/polar (18 s)
+python -X utf8 tools/check_polar.py     # the measurements below, and the reference of the TypeScript test
+npm test                                # src/core/polar.ts against that reference, within 0.001 degrees
+```
+
+Measured: against the full models (80 m to 80°S, 240 m beyond) on 40 random points, the horizon differs by 0.002°
+on average, 0.014° at the 95th percentile, 0.11° at most. Against the listed sites that have a 5 m model, the
+horizon seen from 2 m above the ground differs by 0.03° to 1.3° on average: on a sharp crest the last metres
+decide, and the 80 m model does not see them. The Accuracy page says so.
 
 ## The demo film
 

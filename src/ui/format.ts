@@ -77,3 +77,30 @@ export function latLon(lat: number, lon: number): string {
 export function compass(az: number): string {
   return S.fmt.compass[Math.round((((az % 360) + 360) % 360) / 22.5) % 16];
 }
+
+/**
+ * The same question put to NASA's JPL Horizons System: where the Sun or the Earth is in the sky of a point of the
+ * Moon at a moment (apparent azimuth and elevation, airless, on the 1737.4 km sphere plus the height given).
+ * The address opens the answer as plain text; its first row is the moment asked.
+ */
+export function horizonsUrl(body: 'sun' | 'earth', latDeg: number, lonEastDeg: number, heightM: number, timeMs: number): string {
+  const two = (v: number) => String(v).padStart(2, '0');
+  const stamp = (ms: number) => {
+    const d = new Date(ms);
+    return `${d.getUTCFullYear()}-${two(d.getUTCMonth() + 1)}-${two(d.getUTCDate())} ${two(d.getUTCHours())}:${two(d.getUTCMinutes())}`;
+  };
+  const fields: [string, string][] = [
+    ['COMMAND', body === 'sun' ? '10' : '399'],
+    ['OBJ_DATA', 'NO'],
+    ['MAKE_EPHEM', 'YES'],
+    ['EPHEM_TYPE', 'OBSERVER'],
+    ['CENTER', 'coord@301'],
+    ['COORD_TYPE', 'GEODETIC'],
+    ['SITE_COORD', `${lonEastDeg},${latDeg},${(heightM / 1000).toFixed(4)}`],
+    ['START_TIME', stamp(timeMs)],
+    ['STOP_TIME', stamp(timeMs + 3600e3)],
+    ['STEP_SIZE', '1 h'],
+    ['QUANTITIES', '4'],
+  ];
+  return `https://ssd.jpl.nasa.gov/api/horizons.api?format=text&${fields.map(([k, v]) => `${k}=${encodeURIComponent(`'${v}'`)}`).join('&')}`;
+}

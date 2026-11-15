@@ -22,7 +22,9 @@ it shows which sites survive, which fail, and why.
 
 ## What is in it
 
-- **Explore** — pick a site and a moment; stand there in 3D, or read the 360° panorama and the 30-day timeline. Seven real landings can be replayed, and any latitude and longitude can be entered (without terrain: a smooth Moon).
+- **Explore** — pick a site and a moment; stand there in 3D, or read the 360° panorama and the 30-day timeline. Seven real landings can be replayed.
+- **Any point of your own** — type a latitude and longitude, or click the map of the south pole: from the pole to 84°S the point gets its real terrain, computed in your browser from NASA's LOLA elevation models in a few seconds — its horizon, its 3D view, its row in the landing-window calendar. Elsewhere on the Moon the answer is that of a smooth sphere, and says so.
+- **Check with NASA** — the site file gives the azimuth and elevation of the Sun and the Earth to a thousandth of a degree, with a link that asks NASA's JPL Horizons System the same question for that place and moment.
 - **Plan a mission** — requirements in, landing windows out, for 15 sites over a year; slip the launch and see what survives, and why. A map of the south pole shows the sites on NASA's relief, with the permanently shadowed ground in black.
 - **Compare** — up to four options side by side.
 - **Missions** — three planning problems to play, scored on real quantities.
@@ -39,6 +41,10 @@ Built during the hackathon weekend (14–15 November 2026).
 - **Sun and Earth.** The browser computes where the Sun and the Earth are, as seen from the site,
   with [astronomy-engine](https://github.com/cosinekitty/astronomy). No server is involved.
 - **Planner.** Mission requirements are checked against the horizon for every landing day.
+- **Any point.** For a point of the visitor's own the same horizon method runs in a web worker
+  (`src/core/polar.ts`), on a lighter copy of NASA's polar models: 80 m per pixel in the 20 km around the
+  point, 480 m beyond (`tools/build_polar.py`). On 40 random points it differs from the full models by
+  0.002° on average; where a 5 m site model exists the listed site is the better answer (Accuracy page).
 - **Stand there.** A first-person 3D view from the site: the real LOLA terrain (5 m near seven of the
   sites) with shadows marched through the elevation data, and the Sun and the Earth at their true
   positions, sizes, phase and rotation.
