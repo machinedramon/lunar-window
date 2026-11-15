@@ -24,6 +24,9 @@ const LEAD = 7;
 
 const mark = (status: string) => h('span', { class: `mark ${status === 'ok' ? 'ok' : status === 'marginal' ? 'warn' : 'bad'}`, 'aria-hidden': 'true' }, S.statusMark[status]);
 
+/** What the planner asks the worker for in a given state: the same request can be made ahead of time. */
+export const planRequest = (s: State): [number, number, Requirements] => [s.plannedMs - LEAD * DAY_MS, DAYS, s.req];
+
 export function createPlan(app: App, planner: Planner): View {
   const { store } = app;
   const listed = [...app.sites].sort((a, b) => Number(!isPolar(a)) - Number(!isPolar(b)));
@@ -415,11 +418,14 @@ export function createPlan(app: App, planner: Planner): View {
     setText(slipDate, T.landing(fmtDay(s.plannedMs + s.slipDays * DAY_MS)));
   }
 
+  /** Under the answer: how it is known, and the way to the measurements. */
+  const howLine = () => h('p', { class: 'small muted how-line' }, T.how, ' ', h('button', { class: 'how-link', type: 'button', onclick: () => store.set({ tab: 'accuracy' }) }, T.howLink, ' →'));
+
   function renderSummary(): void {
     clear(summary);
     const s = store.state;
     if (!result) {
-      summary.append(h('p', { class: 'summary-main muted' }, T.computing));
+      summary.append(h('p', { class: 'summary-main muted' }, T.computing), h('span', { class: 'wait-line', 'aria-hidden': 'true' }));
       return;
     }
     const d0 = LEAD;
@@ -429,7 +435,7 @@ export function createPlan(app: App, planner: Planner): View {
     const after = terrain.filter((t) => ok(t.id, d1));
     const names = (list: typeof terrain) => (list.length <= 3 ? list.map((t) => t.name).join(', ') : `${list.slice(0, 3).map((t) => t.name).join(', ')} ${T.andMore(list.length - 3)}`);
     if (!s.slipDays) {
-      summary.append(h('p', { class: 'summary-main' }, T.summaryOnTime(fmtDay(s.plannedMs), before.length, terrain.length)), h('p', { class: 'muted' }, T.summaryOnTimeHint));
+      summary.append(h('p', { class: 'summary-main' }, T.summaryOnTime(fmtDay(s.plannedMs), before.length, terrain.length)), h('p', { class: 'muted' }, T.summaryOnTimeHint), howLine());
       return;
     }
     const lost = before.filter((t) => !after.includes(t)).length;
@@ -448,6 +454,7 @@ export function createPlan(app: App, planner: Planner): View {
       if (best) more.push(T.summaryNext(fmtDay(startMs() + best.day * DAY_MS), best.name));
     }
     if (more.length) summary.append(h('p', { class: 'muted' }, more.join(' ')));
+    summary.append(howLine());
   }
 
   function renderTable(): void {
@@ -679,12 +686,24 @@ export function createPlan(app: App, planner: Planner): View {
     key = k;
     // A calendar computed for another start date cannot be shown against the new dates.
     if (result && result.startMs !== s.plannedMs - LEAD * DAY_MS) result = null;
+    // Data on its way: a soft light sweeps where it will land (over the old calendar, dimmed, when there is one).
+    el.classList.toggle('is-computing', !result);
+    el.classList.toggle('is-updating', !!result);
+    el.classList.remove('is-arrived');
     window.clearTimeout(timer);
     timer = window.setTimeout(() => {
-      void planner.compute(s.plannedMs - LEAD * DAY_MS, DAYS, s.req).then((res) => {
+      void planner.compute(...planRequest(s)).then((res) => {
         if (key !== k) return;
+        const fresh = !result;
         result = res;
+        el.classList.remove('is-computing', 'is-updating');
+        if (!el.isConnected) return;
         renderAll();
+        // What was awaited is drawn in, once.
+        if (fresh) {
+          el.classList.add('is-arrived');
+          window.setTimeout(() => el.classList.remove('is-arrived'), 900);
+        }
       });
     }, 40);
   }

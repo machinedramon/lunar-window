@@ -17,11 +17,20 @@ interface Point {
 }
 
 let sites: { id: string; points: Point[] }[] = [];
-let skyKey = '';
+/** The series of a period, a mast height and an Earth margin. A few are kept: the planner and each mission have their own. */
+interface Kept {
+  sky: string;
+  mast: string;
+  key: string;
+  samples: SkySamples;
+  series: PointSeries[][];
+  prepared: Prepared[][];
+  mastInUse: number;
+  marginInUse: number;
+}
+let kept: Kept[] = [];
 let samples: SkySamples | null = null;
-let seriesKey = '';
 let series: PointSeries[][] = [];
-let preparedKey = '';
 let prepared: Prepared[][] = [];
 let mastInUse = 1;
 let marginInUse = 0;
@@ -36,34 +45,37 @@ function setSites(list: WorkerSite[]): void {
       horizon: p.elevDeg ? Horizon.fromDegrees(p.stepDeg, p.elevDeg) : p.elevCdeg ? Horizon.fromCentidegrees(p.stepDeg, p.elevCdeg) : Horizon.sphere(),
     })),
   }));
-  skyKey = seriesKey = preparedKey = '';
+  kept = [];
+  samples = null;
+  series = [];
+  prepared = [];
 }
 
 const frameOf = (p: Point, mast: number): SiteFrame => siteFrame(p.lat, p.lon, p.elevationM + MAST_HEIGHTS_M[mast]);
 
-/** Makes sure the series in memory are those of this period, mast height and Earth margin. Cached. */
+/** Makes sure the series in memory are those of this period, mast height and Earth margin. The last few are kept. */
 function ready(startMs: number, days: number, req: Requirements): void {
   const count = (days + Math.ceil(req.durationDays) + 2) * DAY_STEPS;
-  const sk = `${startMs}/${count}`;
-  if (sk !== skyKey || !samples) {
-    samples = sampleSky({ startMs, stepMs: STEP_MS, count });
-    skyKey = sk;
-    seriesKey = '';
+  const sky = `${startMs}/${count}`;
+  const mast = `${sky}/${req.mast}`;
+  const key = `${mast}/${req.earthMarginDeg}`;
+  let k = kept.find((x) => x.key === key);
+  if (!k) {
+    const sameMast = kept.find((x) => x.mast === mast);
+    const s = (sameMast ?? kept.find((x) => x.sky === sky))?.samples ?? sampleSky({ startMs, stepMs: STEP_MS, count });
+    const ser = sameMast ? sameMast.series : sites.map((site) => site.points.map((p) => pointSeries(s, frameOf(p, req.mast), p.horizon, req.mast)));
+    k = { sky, mast, key, samples: s, series: ser, prepared: ser.map((points) => points.map((ps) => prepare(ps, req.earthMarginDeg))), mastInUse: req.mast, marginInUse: req.earthMarginDeg };
+    kept.unshift(k);
+    if (kept.length > 5) kept.pop();
+  } else if (kept[0] !== k) {
+    kept.splice(kept.indexOf(k), 1);
+    kept.unshift(k);
   }
-  const se = `${sk}/${req.mast}`;
-  if (se !== seriesKey) {
-    const s = samples;
-    series = sites.map((site) => site.points.map((p) => pointSeries(s, frameOf(p, req.mast), p.horizon, req.mast)));
-    seriesKey = se;
-    preparedKey = '';
-    mastInUse = req.mast;
-  }
-  const pk = `${se}/${req.earthMarginDeg}`;
-  if (pk !== preparedKey) {
-    prepared = series.map((points) => points.map((ps) => prepare(ps, req.earthMarginDeg)));
-    preparedKey = pk;
-    marginInUse = req.earthMarginDeg;
-  }
+  samples = k.samples;
+  series = k.series;
+  prepared = k.prepared;
+  mastInUse = k.mastInUse;
+  marginInUse = k.marginInUse;
 }
 
 function compute(msg: ComputeRequest): Response {

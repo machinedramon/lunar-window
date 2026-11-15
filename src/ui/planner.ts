@@ -22,6 +22,8 @@ export class Planner {
   private base: WorkerSite[] = [];
   private wanted = '';
   private ownListeners: (() => void)[] = [];
+  private results = new Map<string, Promise<ComputeResult>>();
+  private start: () => void = () => undefined;
   /** The visitor's own point, once its terrain is computed: it takes part in every calendar, under the id "custom". */
   own: LoadedSite | null = null;
   private nextId = 1;
@@ -34,10 +36,14 @@ export class Planner {
       this.waiting.delete(ev.data.id);
       done?.(ev.data);
     };
-    this.ready = app.all().then((all) => {
-      this.base = all.map(toWorker);
-      this.post({ type: 'sites', sites: this.base });
-    });
+    // The horizons of every site are read when the planner is first needed (or read ahead, behind the first
+    // screen), not at the start: the first picture does not wait for them.
+    this.ready = new Promise<void>((resolve) => (this.start = resolve))
+      .then(() => app.all())
+      .then((all) => {
+        this.base = all.map(toWorker);
+        this.post({ type: 'sites', sites: this.base });
+      });
     // A failed download is reported where the result is awaited, not as an unhandled error.
     this.ready.catch(() => undefined);
     // The visitor's own point joins the sites when it is in use.
@@ -85,6 +91,7 @@ export class Planner {
   }
 
   private ask<T extends Response>(build: (id: number) => Request): Promise<T> {
+    this.start();
     return this.ready.then(
       () =>
         new Promise<T>((resolve) => {
@@ -97,7 +104,18 @@ export class Planner {
 
   /** Calendar of every site for `days` days from `startMs` (00:00 UTC). */
   compute(startMs: number, days: number, req: Requirements, detailDays: number[] = []): Promise<ComputeResult> {
-    return this.ask<ComputeResult>((id) => ({ type: 'compute', id, startMs, days, req, detailDays }));
+    // What was computed is kept (a few periods): a screen that asks again, or one that was read ahead, has it at once.
+    const key = JSON.stringify([startMs, days, req, detailDays, this.own ? [this.own.site.lat, this.own.site.lon] : 0]);
+    const have = this.results.get(key);
+    if (have) {
+      this.results.delete(key);
+      this.results.set(key, have);
+      return have;
+    }
+    const p = this.ask<ComputeResult>((id) => ({ type: 'compute', id, startMs, days, req, detailDays }));
+    this.results.set(key, p);
+    if (this.results.size > 8) this.results.delete(this.results.keys().next().value as string);
+    return p;
   }
 
   /** Series of one site inside a period, and optionally the verdict of one day of it. */

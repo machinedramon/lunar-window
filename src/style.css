@@ -3109,3 +3109,137 @@ table.compare tbody tr.cmp-actions td {
   text-underline-offset: 3px;
   cursor: pointer;
 }
+
+/* Every answer with its proof: a quiet line under the verdict of Explore and under the answer of the planner. */
+.proof {
+  appearance: none;
+  justify-self: start;
+  margin-top: 7px;
+  padding: 0;
+  background: none;
+  border: 0;
+  font: 500 10px/1.4 var(--mono);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  text-align: left;
+  white-space: nowrap;
+  color: var(--ink-3);
+  cursor: pointer;
+  transition: color 0.15s var(--ease);
+}
+.proof:hover,
+.proof:focus-visible {
+  color: var(--ink);
+}
+.how-line {
+  margin-top: 6px;
+}
+.how-link {
+  appearance: none;
+  padding: 0;
+  background: none;
+  border: 0;
+  font: inherit;
+  color: var(--ink-2);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.how-link:hover,
+.how-link:focus-visible {
+  color: var(--ink);
+}
+
+/* Data on its way. A soft light sweeps the place where it will land; when it lands, it is drawn in from the left.
+   The same two gestures everywhere something is awaited. */
+.wait-line {
+  display: block;
+  position: relative;
+  width: 168px;
+  height: 1px;
+  margin-top: 14px;
+  background: rgb(255 255 255 / 0.16);
+  overflow: hidden;
+}
+.wait-line::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: #fff;
+  transform-origin: 0 50%;
+  animation: wait-line 1.6s var(--ease) infinite;
+}
+@keyframes wait-line {
+  0% {
+    transform: translateX(-100%) scaleX(0.4);
+  }
+  100% {
+    transform: translateX(100%) scaleX(0.4);
+  }
+}
+.plan.is-computing .cal-wrap,
+.plan.is-updating .cal-wrap {
+  position: relative;
+}
+.plan.is-computing .cal-wrap::after,
+.plan.is-updating .cal-wrap::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(100deg, transparent 0%, rgb(255 255 255 / 0.05) 42%, rgb(255 255 255 / 0.1) 50%, rgb(255 255 255 / 0.05) 58%, transparent 100%) no-repeat;
+  background-size: 55% 100%;
+  animation: sweep 1.5s var(--ease) infinite;
+}
+@keyframes sweep {
+  from {
+    background-position: -120% 0;
+  }
+  to {
+    background-position: 220% 0;
+  }
+}
+.plan .cal-canvas {
+  transition: opacity 0.3s var(--ease);
+}
+.plan.is-updating .cal-canvas {
+  opacity: 0.5;
+}
+.plan.is-arrived .cal-canvas {
+  animation: draw-in 0.75s var(--ease) both;
+}
+.plan.is-arrived .summary > *,
+.plan.is-arrived .site-chips {
+  animation: rise 0.45s var(--ease) both;
+}
+@keyframes draw-in {
+  from {
+    clip-path: inset(0 100% 0 0);
+    opacity: 0.3;
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+    opacity: 1;
+  }
+}
+.own-status.busy {
+  color: var(--ink);
+  animation: breathe 1.4s var(--ease) infinite alternate;
+}
+@keyframes breathe {
+  from {
+    opacity: 0.45;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .wait-line::after,
+  .plan.is-computing .cal-wrap::after,
+  .plan.is-updating .cal-wrap::after,
+  .plan.is-arrived .cal-canvas,
+  .own-status.busy {
+    animation: none;
+  }
+}

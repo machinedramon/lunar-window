@@ -68,7 +68,10 @@ export function createExplore(app: App): View {
   const lonIn = coord(T.custom.lon, -180, 180, 'lon');
   /** Under the coordinates: how far the terrain model reaches, or what is being done to bring the terrain of the point. */
   const ownStatus = h('span', { class: 'small muted own-status', 'aria-live': 'polite' }, T.custom.reach);
-  const offStage = onOwnStage((stage) => setText(ownStatus, stage === 'model' ? T.custom.stageModel : stage === 'horizon' ? T.custom.stageHorizon : T.custom.reach));
+  const offStage = onOwnStage((stage) => {
+    setText(ownStatus, stage === 'model' ? T.custom.stageModel : stage === 'horizon' ? T.custom.stageHorizon : T.custom.reach);
+    ownStatus.classList.toggle('busy', stage !== null);
+  });
   const customField = h('div', { class: 'field custom-ll', hidden: true }, h('span', null, T.custom.label), h('div', { class: 'row' }, latIn, lonIn), ownStatus);
   const timeInput = h('input', {
     id: 'time',
@@ -167,7 +170,9 @@ export function createExplore(app: App): View {
   const headline = h('h1', { 'aria-live': 'polite' });
   // The next step of the story, for a first visit: from one moment at one site to every landing day of the year.
   const nextStep = h('button', { class: 'next-step', type: 'button', onclick: () => store.set({ tab: 'plan' }) }, T.nextStep, h('span', { 'aria-hidden': 'true' }, ' →'));
-  const hudVerdict = h('div', { class: 'hud hud-verdict' }, replayNote, where, headline, nextStep);
+  // Every answer with its proof: the numbers of this moment and the same question at NASA's JPL Horizons are one click away.
+  const proof = h('button', { class: 'proof', type: 'button', onclick: () => openSheet('facts') }, T.proof);
+  const hudVerdict = h('div', { class: 'hud hud-verdict' }, replayNote, where, headline, nextStep, proof);
 
   // ----- hero: panorama
   const stripCanvas = h('canvas', { role: 'img', 'aria-label': T.panorama });

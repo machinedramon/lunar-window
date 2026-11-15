@@ -87,6 +87,13 @@ function loadRocks(): Promise<RockModel[]> {
 }
 
 const models = new Map<string, Promise<THREE.Group>>();
+
+/** Reads ahead the vehicles a change of site can ask for: the Apollo Lunar Module and NASA's rover. */
+export function preloadModels(): void {
+  const roomy = window.innerWidth >= 1100 && ((navigator as { deviceMemory?: number }).deviceMemory ?? 8) >= 4;
+  for (const file of ['apollo-lm.glb', roomy ? 'sev-4k.glb' : 'sev.glb']) loadModel(file).catch(() => models.delete(file));
+}
+
 function loadModel(file: string): Promise<THREE.Group> {
   let p = models.get(file);
   if (!p) {

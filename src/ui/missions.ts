@@ -57,6 +57,11 @@ interface Score {
   points: number;
 }
 
+/** Computes the year of every mission ahead of time: the boards and the play are there when the screen opens. */
+export function warmMissions(planner: Planner): void {
+  for (const m of MISSIONS) void planner.compute(m.startMs, m.days, m.req).catch(() => undefined);
+}
+
 const STORE = 'lunar-window-missions';
 function stars(): Record<string, number> {
   try {

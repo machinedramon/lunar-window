@@ -14,6 +14,32 @@ import { compass, latLon } from './format';
 
 const T = S.explore.three;
 
+/** The terrain files of the listed sites, kept once read: a site read ahead, or seen before, is there at once. */
+const terrainFiles = new Map<string, Promise<Int16Array>>();
+function terrainFile(id: string): Promise<Int16Array> {
+  let p = terrainFiles.get(id);
+  if (!p) {
+    p = fetch(`${import.meta.env.BASE_URL}data/terrain/${id}.bin`).then(async (res) => {
+      if (!res.ok) throw new Error(`terrain: HTTP ${res.status}`);
+      return new Int16Array(await res.arrayBuffer());
+    });
+    p.catch(() => terrainFiles.delete(id));
+    terrainFiles.set(id, p);
+  }
+  return p;
+}
+
+/** Reads ahead the terrain of the listed sites, one after the other, while nothing else is going on. */
+export async function preloadTerrain(ids: string[]): Promise<void> {
+  for (const id of ids) {
+    try {
+      await terrainFile(id);
+    } catch {
+      // read again when the site is asked for
+    }
+  }
+}
+
 export interface Hero3D {
   el: HTMLElement;
   /** False once WebGL turned out to be unavailable. */
@@ -165,7 +191,7 @@ export function createHero3D(): Hero3D {
   const ready = () => {
     if (readySaid) return;
     readySaid = true;
-    introStage(S.stages.ready, 1);
+    introStage(1);
     api.onReady?.();
   };
 
@@ -224,9 +250,7 @@ export function createHero3D(): Hero3D {
       if (target0.tiles) tiles = target0.tiles;
       else if (target0.data) {
         if (!terrainKey) loading.hidden = false;
-        const res = await fetch(`${import.meta.env.BASE_URL}data/terrain/${target0.site.id}.bin`);
-        if (!res.ok) throw new Error(`terrain: HTTP ${res.status}`);
-        tiles = new Int16Array(await res.arrayBuffer());
+        tiles = await terrainFile(target0.site.id);
       }
     } catch (err) {
       console.warn(err);
@@ -260,11 +284,11 @@ export function createHero3D(): Hero3D {
     const kind = s0.category === 'apollo' ? 'apollo' : s0.status === 'candidate' || s0.status === 'planned' ? 'rover' : s0.horizon !== 'sphere' ? 'mast' : 'none';
     // The place is shown whole: the vehicle and the rocks are in, every program is compiled and a frame is drawn
     // before the camera arrives. Until then the picture stays covered (the opening screen, or black between sites).
-    introStage(S.stages.scene, 0.6);
+    introStage(0.6);
     await scene.setProps(place, seed, vehicleAz, kind, MAST_HEIGHTS_M[targetMast]);
     if (run !== runs || !scene) return;
     if (newSite) {
-      introStage(S.stages.picture, 0.85);
+      introStage(0.85);
       await scene.warm();
       if (run !== runs || !scene) return;
       arrive(target0);

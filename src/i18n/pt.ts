@@ -81,7 +81,8 @@ export const pt: Strings = {
   loadError: 'Não foi possível carregar os dados dos locais. Verifique a conexão e recarregue a página.',
   tabs: { explore: 'Explorar', plan: 'Planejar missão', compare: 'Comparar', missions: 'Missões', accuracy: 'Precisão' },
   tabsShort: { plan: 'Planejar' },
-  stages: { sites: 'Lendo os locais de pouso', terrain: 'Carregando o terreno · NASA LRO LOLA', scene: 'Montando a cena', picture: 'Preparando a imagem', ready: 'Pronto' },
+  /** What the opening screen says while the app loads: the problem, in four short lines; the last is the question. */
+  opening: ['No polo sul da Lua, o Sol nunca fica alto.', 'Ele anda rente ao horizonte. Um morro basta para escondê-lo.', 'O lançamento atrasa. As sombras mudam de lugar.', 'Onde ainda dá para pousar?'],
   sun: 'Sol',
   earth: 'Terra',
   both: 'Ambos',
@@ -162,6 +163,7 @@ export const pt: Strings = {
     view: 'Vista',
     nextEvents: 'Próximos eventos',
     nextStep: 'Se o lançamento atrasar: planeje a missão',
+    proof: 'A menos de 0,01° do JPL Horizons, da NASA · confira',
     custom: {
       group: 'Seu próprio ponto',
       option: 'Coordenadas próprias…',
@@ -314,6 +316,8 @@ export const pt: Strings = {
     daysShort: (n: number) => `${n} d`,
     summaryOnTime: (date: string, n: number, total: number) => (n === 1 ? `Em ${date}, 1 de ${total} locais do polo sul atende aos requisitos.` : `Em ${date}, ${n} de ${total} locais do polo sul atendem aos requisitos.`),
     summaryOnTimeHint: 'Arraste o atraso do lançamento para ver o que um adiamento faz.',
+    how: 'Como sabemos: relevo da NASA, e o Sol e a Terra a menos de 0,01° do JPL Horizons, da NASA.',
+    howLink: 'Veja as medições',
     summarySlip: (days: number, date: string) => (days === 1 ? `Um atraso de 1 dia leva o pouso para ${date}.` : `Um atraso de ${days} dias leva o pouso para ${date}.`),
     summaryStill: (n: number, total: number, names: string) =>
       n === 0 ? `Nenhum dos ${total} locais do polo sul funciona nesse dia.` : n === 1 ? `1 de ${total} locais do polo sul ainda funciona: ${names}.` : `${n} de ${total} locais do polo sul ainda funcionam: ${names}.`,

@@ -2,13 +2,15 @@ import './style.css';
 import { initialLanguage, language, LANGS, S, setLanguage, type Lang } from './i18n';
 import { createAccuracy } from './ui/accuracy';
 import { createCompare } from './ui/compare';
-import { createMissions } from './ui/missions';
+import { createMissions, warmMissions } from './ui/missions';
 import { App, type View } from './ui/app';
 import { loadSiteList } from './ui/data';
 import { clear, h, reducedMotion } from './ui/dom';
+import { preloadTerrain } from './ui/hero3d';
 import { introLift, introStage, introTyped } from './ui/intro';
+import { preloadModels } from './viz/props';
 import { createExplore } from './ui/explore';
-import { createPlan } from './ui/plan';
+import { createPlan, planRequest } from './ui/plan';
 import { Planner } from './ui/planner';
 import { setSound, soundEnabled, soundPreferred, tick } from './ui/sound';
 import { CUSTOM_SITE, fromHash, Store, toHash, type State, type Tab } from './ui/store';
@@ -148,9 +150,9 @@ async function boot(): Promise<void> {
   shell();
   let list;
   try {
-    introStage(S.stages.sites, 0.12);
+    introStage(0.12);
     list = await loadSiteList();
-    introStage(S.stages.terrain, 0.3);
+    introStage(0.3);
   } catch (err) {
     console.error(err);
     clear(main);
@@ -248,10 +250,26 @@ async function boot(): Promise<void> {
   if (store.state.tab === 'explore') window.addEventListener('lw:ready', () => void typeIn.then(uncover), { once: true });
   else
     void typeIn.then(() => {
-      introStage(S.stages.ready, 1);
+      introStage(1);
       requestAnimationFrame(uncover);
     });
   window.setTimeout(uncover, 12000);
+
+  // Behind the first screen, everything that takes time is done ahead: the year of every site for the planner and
+  // for the missions (in the worker), the terrain of the other sites and the other vehicle. After that, changing
+  // screen or site waits for nothing.
+  let ahead = false;
+  const readAhead = () => {
+    if (ahead) return;
+    ahead = true;
+    void planner.compute(...planRequest(store.state));
+    warmMissions(planner);
+    preloadModels();
+    void preloadTerrain(list.sites.map((site) => site.id));
+  };
+  if (store.state.tab === 'explore') window.addEventListener('lw:ready', () => window.setTimeout(readAhead, 3200), { once: true });
+  else window.setTimeout(readAhead, 1800);
+  window.setTimeout(readAhead, 16000);
 
   window.addEventListener('hashchange', () => {
     if (location.hash === toHash(store.state)) return;

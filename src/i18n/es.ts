@@ -81,7 +81,8 @@ export const es: Strings = {
   loadError: 'No se pudieron cargar los datos de los sitios. Comprueba la conexión y recarga la página.',
   tabs: { explore: 'Explorar', plan: 'Planificar misión', compare: 'Comparar', missions: 'Misiones', accuracy: 'Precisión' },
   tabsShort: { plan: 'Planificar' },
-  stages: { sites: 'Leyendo los sitios de alunizaje', terrain: 'Cargando el terreno · NASA LRO LOLA', scene: 'Montando la escena', picture: 'Preparando la imagen', ready: 'Listo' },
+  /** What the opening screen says while the app loads: the problem, in four short lines; the last is the question. */
+  opening: ['En el polo sur de la Luna, el Sol nunca sube.', 'Roza el horizonte. Una colina basta para ocultarlo.', 'El lanzamiento se retrasa. Las sombras cambian de sitio.', '¿Dónde se puede aterrizar todavía?'],
   sun: 'Sol',
   earth: 'Tierra',
   both: 'Ambos',
@@ -162,6 +163,7 @@ export const es: Strings = {
     view: 'Vista',
     nextEvents: 'Próximos eventos',
     nextStep: 'Si el lanzamiento se retrasa: planifica la misión',
+    proof: 'A menos de 0,01° de JPL Horizons, de la NASA · compruébalo',
     custom: {
       group: 'Tu propio punto',
       option: 'Coordenadas propias…',
@@ -314,6 +316,8 @@ export const es: Strings = {
     daysShort: (n: number) => `${n} d`,
     summaryOnTime: (date: string, n: number, total: number) => (n === 1 ? `El ${date}, 1 de ${total} sitios del polo sur cumple los requisitos.` : `El ${date}, ${n} de ${total} sitios del polo sur cumplen los requisitos.`),
     summaryOnTimeHint: 'Arrastra el retraso del lanzamiento para ver qué hace una demora.',
+    how: 'Cómo lo sabemos: relieve de la NASA, y el Sol y la Tierra a menos de 0,01° de JPL Horizons, de la NASA.',
+    howLink: 'Mira las mediciones',
     summarySlip: (days: number, date: string) => (days === 1 ? `Un retraso de 1 día lleva el alunizaje al ${date}.` : `Un retraso de ${days} días lleva el alunizaje al ${date}.`),
     summaryStill: (n: number, total: number, names: string) =>
       n === 0 ? `Ninguno de los ${total} sitios del polo sur funciona ese día.` : n === 1 ? `1 de ${total} sitios del polo sur sigue funcionando: ${names}.` : `${n} de ${total} sitios del polo sur siguen funcionando: ${names}.`,

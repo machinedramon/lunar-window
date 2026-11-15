@@ -71,7 +71,8 @@ export const en = {
   /** Shorter names where a phone has no room for the full ones. */
   tabsShort: { plan: 'Plan' } as Record<string, string>,
   // the stages of the loading, named on the opening screen
-  stages: { sites: 'Reading the landing sites', terrain: 'Loading the terrain · NASA LRO LOLA', scene: 'Setting the scene', picture: 'Preparing the picture', ready: 'Ready' },
+  /** What the opening screen says while the app loads: the problem, in four short lines; the last is the question. */
+  opening: ['At the Moon’s south pole, the Sun never climbs.', 'It skims the horizon. One hill can hide it.', 'A launch slips. The shadows have moved.', 'Where can you still land?'],
   sun: 'Sun',
   earth: 'Earth',
   both: 'Both',
@@ -154,6 +155,7 @@ export const en = {
     view: 'View',
     nextEvents: 'Next events',
     nextStep: 'If the launch slips: plan the mission',
+    proof: 'Within 0.01° of NASA JPL Horizons · check it',
     custom: {
       group: 'Your own point',
       option: 'Custom coordinates…',
@@ -306,6 +308,8 @@ export const en = {
     daysShort: (n: number) => `${n} d`,
     summaryOnTime: (date: string, n: number, total: number) => `On ${date}, ${n} of ${total} south‑pole sites meet the requirements.`,
     summaryOnTimeHint: 'Drag the launch slip to see what a delay does.',
+    how: 'How we know: NASA’s terrain, and the Sun and the Earth within 0.01° of NASA JPL Horizons.',
+    howLink: 'See the measurements',
     summarySlip: (days: number, date: string) => `A ${days}‑day slip moves the landing to ${date}.`,
     summaryStill: (n: number, total: number, names: string) => (n ? `${n} of ${total} south‑pole sites still work: ${names}.` : `None of the ${total} south‑pole sites works on that day.`),
     summaryLost: (n: number) => (n === 1 ? '1 site that worked on the planned date no longer does.' : `${n} sites that worked on the planned date no longer do.`),
