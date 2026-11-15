@@ -2,13 +2,13 @@
 
     python tools/film_audio.py        writes video/audio.wav (48 kHz stereo, 30 s)
 
-The narration takes are video/voice/main.wav and video/voice/close.wav. They are an AI-generated
-voice (OpenAI text-to-speech) reading the script of the film; the project page says so. The music
-is not a recording: every tone below is computed.
+The narration is one take, video/voice/narration.wav: an AI-generated voice (OpenAI text-to-speech)
+reading the script of the film from the first word to the last; the project page says so. The
+music is not a recording: every tone below is computed.
 
-When video/voice/main.words.json exists (the word timings of the main take, from a transcription),
-each sentence is placed on its own mark of the film, so any take fits the cuts; the marks and the
-subtitle times are written to video/voice/marks.json, which tools/film.mjs reads.
+The film follows the voice, not the other way round. The word timings of the take
+(video/voice/narration.words.json, from a transcription) give the moment of every cut, of every
+subtitle and of the title; they are written to video/voice/marks.json, which tools/film.mjs reads.
 """
 import json
 import subprocess
@@ -24,15 +24,34 @@ ROOT = Path(__file__).resolve().parent.parent
 t = np.arange(N) / SR
 rng = np.random.default_rng(7)
 
-# ---------- when things happen (seconds of film); tools/film.mjs uses the same marks
-MAIN_AT = 0.70      # the main narration take starts
-MAIN_CUT = 22.53    # ... and is cut here, in the pause after "Horizons"
-CLOSE_AT = 24.10    # the closing line
-CUT_UI = 9.30       # first cut from the Moon to the tool
-CUT_B = 13.30
-CUT_C = 16.50
-CUT_D = 20.30
-TITLE = 23.70       # the title
+# ---------- when things happen (seconds of film), read from the voice
+VO_AT = 0.60  # the narration starts
+WORDS = json.loads((ROOT / 'video/voice/narration.words.json').read_text(encoding='utf-8'))['words']
+assert len(WORDS) == 66, f'{len(WORDS)} words in the take; the script has 66'
+at = lambda i: VO_AT + WORDS[i]['start']
+done = lambda i: VO_AT + WORDS[i]['end']
+# Word indices: sentence 1 from 0, sentence 2 from 9 ("and a single ridge" at 13), sentence 3 from 22,
+# sentence 4 from 33 ("and shows" at 41), sentence 5 from 51, the closing line from 56 ("When" at 58).
+RIDGE = round(at(13) - 0.12, 2)    # the ridge takes the Sun
+CUT_UI = round(at(22) - 0.35, 2)   # first cut from the Moon to the tool
+CUT_B = round(at(33) - 0.30, 2)    # standing on the terrain
+CUT_C = round(at(41) - 0.12, 2)    # the calendar
+CUT_D = round(at(51) - 0.35, 2)    # the proof
+TITLE = round(done(55) + 0.30, 2)  # the eclipse, and the title over it
+MARKS = {
+    'cuts': {'ridge': RIDGE, 'slip': CUT_UI, 'stand': CUT_B, 'days': CUT_C, 'proof': CUT_D, 'title': TITLE, 'end': SECONDS},
+    'closing': {'name': round(at(56), 2), 'line': round(at(58), 2), 'end': round(done(65), 2)},
+    'subtitles': [
+        [round(at(0), 2), round(done(8) + 0.3, 2), 'At the Moon’s south pole, the Sun never climbs.'],
+        [round(at(9), 2), round(done(21) + 0.3, 2), 'It circles the horizon, and a single ridge can hide it for days.'],
+        [round(at(22), 2), round(done(32) + 0.3, 2), 'When a launch slips, a good landing site can go dark.'],
+        [round(at(33), 2), round(at(41), 2), 'Lunar Window stands you on real NASA terrain,'],
+        [round(at(41), 2), round(done(50) + 0.3, 2), 'and shows every site, and every day, that still works.'],
+        [round(at(51), 2), round(done(55) + 0.25, 2), 'Verified against NASA’s JPL Horizons.'],
+    ],
+}
+(ROOT / 'video/voice/marks.json').write_text(json.dumps(MARKS, ensure_ascii=False, indent=1), encoding='utf-8')
+print('cuts', MARKS['cuts'], '| closing', MARKS['closing'])
 
 
 def read(path: Path) -> np.ndarray:
@@ -152,54 +171,12 @@ def room(x: np.ndarray, seconds: float, mix: float) -> np.ndarray:
     return x + wet * mix
 
 
-# ---------- narration
+# ---------- narration: the take exactly as it was spoken
 voice = np.zeros(N)
-main = read(ROOT / 'video/voice/main.wav')
-words_file = ROOT / 'video/voice/main.words.json'
-# The sentences of the script: how many words each has, when it starts in the film, and its subtitle
-# (the fourth sentence is shown in two parts; the second starts at its ninth word).
-SENTENCES = [
-    (9, 0.70, ['At the Moon’s south pole, the Sun never climbs.']),
-    (13, 5.00, ['It circles the horizon, and a single ridge can hide it for days.']),
-    (11, 9.60, ['When a launch slips, a good landing site can go dark.']),
-    (18, 13.55, ['Lunar Window stands you on real NASA terrain,', 'and shows every site, and every day, that still works.']),
-    (5, 20.55, ['Verified against NASA’s JPL Horizons.']),
-]
-SPLIT_AT_WORD = 8
-marks = []
-if words_file.exists():
-    words = json.loads(words_file.read_text(encoding='utf-8'))['words']
-    assert len(words) == sum(n for n, _, _ in SENTENCES), f'{len(words)} words in the take, {sum(n for n, _, _ in SENTENCES)} in the script'
-    k = 0
-    edge = int(0.012 * SR)
-    for n, at, lines in SENTENCES:
-        first, last = words[k], words[k + n - 1]
-        # from the middle of the pause before the sentence to the middle of the pause after it
-        a = 0.0 if k == 0 else (words[k - 1]['end'] + first['start']) / 2
-        b = len(main) / SR if k + n == len(words) else (last['end'] + words[k + n]['start']) / 2
-        piece = main[int(a * SR) : int(b * SR)].copy()
-        piece[:edge] *= np.linspace(0, 1, edge)
-        piece[-edge:] *= np.linspace(1, 0, edge)
-        i0 = int((at - (first['start'] - a)) * SR)
-        voice[i0 : i0 + len(piece)] += piece
-        end = at + (last['end'] - first['start'])
-        if len(lines) == 2:
-            cut = at + (words[k + SPLIT_AT_WORD]['start'] - first['start'])
-            marks += [[round(at, 2), round(cut, 2), lines[0]], [round(cut, 2), round(end + 0.3, 2), lines[1]]]
-        else:
-            marks.append([round(at, 2), round(end + 0.3, 2), lines[0]])
-        k += n
-    (ROOT / 'video/voice/marks.json').write_text(json.dumps(marks, ensure_ascii=False, indent=1), encoding='utf-8')
-    print('sentences placed:', ', '.join(f'{m[0]:.2f}-{m[1]:.2f}' for m in marks))
-else:
-    main = main[: int((MAIN_CUT - MAIN_AT) * SR)]
-    main[-int(0.05 * SR) :] *= np.linspace(1, 0, int(0.05 * SR))
-    i0 = int(MAIN_AT * SR)
-    voice[i0 : i0 + len(main)] += main
-close = read(ROOT / 'video/voice/close.wav')
-i0 = int(CLOSE_AT * SR)
-close = close[: N - i0]
-voice[i0 : i0 + len(close)] += close
+take = read(ROOT / 'video/voice/narration.wav')
+i0 = int(VO_AT * SR)
+take = take[: N - i0]
+voice[i0 : i0 + len(take)] += take
 voice /= np.max(np.abs(voice))
 voice = room(voice, 1.1, 0.085)
 level_voice = fast_smooth(np.abs(voice), 0.12)
@@ -211,9 +188,9 @@ duck = 1 - 0.58 * np.clip(fast_smooth(np.clip(level_voice * 6, 0, 1), 0.35), 0, 
 music = np.zeros((N, 2))
 # A: the pole. A dark D minor that opens slowly; it thins out when the ridge takes the Sun.
 bright_a = 0.15 + 0.35 * ramp(0.5, 6.0) - 0.3 * ramp(6.3, 8.0)
-music += pad(['D2', 'A2', 'D3', 'F3', 'A3', 'E4'], span(0.0, CUT_UI + 0.5, 3.0, 0.9) * (1 - 0.45 * ramp(6.3, 7.6)), bright_a, 0.9)
+music += pad(['D2', 'A2', 'D3', 'F3', 'A3', 'E4'], span(0.0, CUT_UI + 0.5, 3.0, 0.9) * (1 - 0.45 * ramp(RIDGE, RIDGE + 1.3)), bright_a, 0.9)
 music += pad(['D1', 'D2'], span(0.0, CUT_UI + 0.4, 2.0, 0.8), 0.0, 0.8)
-music += stars(6.6, CUT_UI + 1.2, 0.05)
+music += stars(RIDGE + 0.3, CUT_UI + 1.2, 0.05)
 # B: the launch slips. A hit, and the clock of the planner starts.
 music += boom(CUT_UI, 50, 2.4, 0.95)
 music += pad(['D2', 'A2', 'D3', 'F3', 'A3'], span(CUT_UI - 0.2, CUT_B + 0.5, 0.5, 0.9), 0.2, 0.75)
@@ -222,9 +199,9 @@ music += pad(['D1'], span(CUT_UI, CUT_B + 0.4, 0.3, 0.8), 0.0, 0.7)
 music += pad(['Bb1', 'Bb2', 'F3', 'A3', 'D4'], span(CUT_B - 0.3, CUT_C + 0.5, 0.7, 0.9), 0.42, 0.9)
 music += pad(['C2', 'C3', 'G3', 'D4', 'E4'], span(CUT_C - 0.3, CUT_D + 0.5, 0.7, 0.9), 0.52, 0.92)
 # E: verified. The dominant holds its breath, air rises, and everything stops for a moment.
-music += pad(['A1', 'A2', 'E3', 'A3', 'D4'], span(CUT_D - 0.3, 22.2, 0.7, 0.7), 0.5, 0.9)
-music += pad(['A1', 'A2', 'E3', 'A3', 'C#4'], span(21.6, TITLE - 0.12, 0.6, 0.18), 0.6, 0.95)
-music += riser(21.4, TITLE - 0.1, 0.5)
+music += pad(['A1', 'A2', 'E3', 'A3', 'D4'], span(CUT_D - 0.3, TITLE - 1.5, 0.7, 0.7), 0.5, 0.9)
+music += pad(['A1', 'A2', 'E3', 'A3', 'C#4'], span(TITLE - 2.1, TITLE - 0.12, 0.6, 0.18), 0.6, 0.95)
+music += riser(TITLE - 2.3, TITLE - 0.1, 0.5)
 beat = pulse(CUT_UI + 0.15, TITLE - 0.45, 0.15, note('D5'), 0.035 + 0.05 * ramp(CUT_B, CUT_D) + 0.03 * ramp(CUT_D, TITLE))
 music += beat
 # F: the title. D major, wide and bright, and a long way down to silence.

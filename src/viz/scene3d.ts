@@ -13,6 +13,7 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { triangleHeight } from './rest';
 import { createProps, PROP_LAYER, type Props } from './props';
 
 export const TERRAIN_N = 257;
@@ -285,6 +286,8 @@ uniform float uRegOn;
 uniform sampler2D tProp;
 uniform mat4 uPropMatrix;
 uniform float uPropOn;
+// Where the vehicle and the mast stand: east, north, radius (0: none).
+uniform vec3 uStand[2];
 uniform sampler2D tS0;
 uniform sampler2D tS1;
 uniform sampler2D tS2;
@@ -345,20 +348,26 @@ void main() {
   // Relief below the resolution of the data: illustrative, faded out before it can alias.
   vec2 micro = vec2(0.0);
   float craterLit = 1.0;
+  // Under a wheel or a footpad the ground is drawn as the data gives it: an invented bowl there would look
+  // like the wheel floating over it or sunk into it.
+  float plain = 1.0;
+  for (int k = 0; k < 2; k++) {
+    if (uStand[k].z > 0.0) plain *= smoothstep(uStand[k].z * 0.75, uStand[k].z * 1.5, distance(p, uStand[k].xy));
+  }
   // With a 5 m model the real craters down to about 15 m are in the geometry; only smaller ones are invented.
   float cell = m < HALF.x * 0.9 ? mix(46.0, 9.0, uFine) : 46.0;
   // Share of a bowl that its own rim shadows, for craters too small to resolve at this distance.
   float hidden = clamp(1.0 - 6.0 * max(tanSun, 0.0), 0.0, 1.0);
   for (int o = 0; o < 6; o++) {
     float density = o < 2 ? 0.2 : 0.36;
-    float w = smoothstep(0.42 * cell, 0.12 * cell, footprint);
+    float w = plain * smoothstep(0.42 * cell, 0.12 * cell, footprint);
     if (w > 0.002) craters(p, cell, density, w, tanSun, sunDir, micro, craterLit);
     craterLit *= 1.0 - (1.0 - w) * 0.05 * hidden;
     cell *= 0.4;
   }
   float block = 30.0;
   for (int o = 0; o < 4; o++) {
-    float w = smoothstep(0.03 * block, 0.008 * block, footprint);
+    float w = plain * smoothstep(0.03 * block, 0.008 * block, footprint);
     if (w > 0.002) boulders(p, block, w, tanSun, sunDir, micro, craterLit);
     block *= 0.34;
   }
@@ -684,7 +693,12 @@ export class LunarScene {
   private readonly propCam = new THREE.OrthographicCamera(-95, 95, 16, -8, 1, 700);
   private readonly propTarget = new THREE.WebGLRenderTarget(2048, 512, { minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter });
   private readonly propDepth = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking });
-  private readonly propUniforms = { tProp: { value: null as THREE.Texture | null }, uPropMatrix: { value: new THREE.Matrix4() }, uPropOn: { value: 0 } };
+  private readonly propUniforms = {
+    tProp: { value: null as THREE.Texture | null },
+    uPropMatrix: { value: new THREE.Matrix4() },
+    uPropOn: { value: 0 },
+    uStand: { value: [new THREE.Vector3(), new THREE.Vector3()] },
+  };
   private props: Props | null = null;
   private propsKey = '';
   private propsDirty = false;
@@ -973,6 +987,20 @@ void main() {
   }
 
   /**
+   * Height of the ground as it is drawn: the finest grid is a mesh of triangles, and between samples the picture
+   * follows those triangles. Things that stand on the ground are placed on this surface, so that what touches in
+   * the computation touches in the picture.
+   */
+  surfaceAt(east: number, north: number): number {
+    const half = TERRAIN_HALF_M[0];
+    if (Math.max(Math.abs(east), Math.abs(north)) >= half * 0.8) return this.groundAt(east, north);
+    const data = this.heightTex[0].image.data as Float32Array;
+    const fx = ((east / half) * 0.5 + 0.5) * (TERRAIN_N - 1);
+    const fy = ((north / half) * 0.5 + 0.5) * (TERRAIN_N - 1);
+    return triangleHeight((i, j) => data[j * TERRAIN_N + i], fx, fy);
+  }
+
+  /**
    * Places the rocks and the vehicle. Safe to call again with the same arguments.
    * @param key        identifies the arrangement (site and mast height)
    * @param vehicleAz  azimuth at which the lander stands, degrees
@@ -981,7 +1009,7 @@ void main() {
     if (key === this.propsKey) return;
     this.propsKey = key;
     try {
-      const made = await createProps((e, n) => this.groundAt(e, n), seed, vehicleAz, vehicleKind, mastM);
+      const made = await createProps((e, n) => this.surfaceAt(e, n), seed, vehicleAz, vehicleKind, mastM);
       if (this.propsKey !== key) {
         made.dispose();
         return;
@@ -991,6 +1019,12 @@ void main() {
         this.props.dispose();
       }
       this.props = made;
+      // No invented crater or boulder under a wheel or a footpad: the ground there is drawn as the data gives it.
+      this.propUniforms.uStand.value.forEach((v, i) => {
+        const at = made.stands[i];
+        if (at) v.set(at.e, at.n, at.r);
+        else v.set(0, 0, 0);
+      });
       this.scene.add(made.group);
       this.propsDirty = true;
       if (this.lastSky) this.setSky(this.lastSky);

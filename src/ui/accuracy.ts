@@ -200,6 +200,7 @@ export function createAccuracy(app: App): View {
         { class: 'panel doc-section' },
         h('h2', null, T.sources.title),
         h('p', null, T.sources.text, ' ', h('a', { href: 'https://github.com/machinedramon/lunar-window/blob/main/docs/REFERENCES.md', target: '_blank', rel: 'noopener' }, T.sources.link), '.'),
+        h('p', null, T.sources.code, ' ', h('a', { href: 'https://github.com/machinedramon/lunar-window', target: '_blank', rel: 'noopener' }, T.sources.repo), '.'),
       ),
     );
     const draw = () => scatter(canvas, v.regional.pointsSun, v.regional.pointsEarth);

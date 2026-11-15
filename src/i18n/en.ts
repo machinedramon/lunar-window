@@ -8,15 +8,6 @@ export const en = {
   tabs: { explore: 'Explore', plan: 'Plan a mission', compare: 'Compare', missions: 'Missions', accuracy: 'Accuracy' },
   /** Shorter names where a phone has no room for the full ones. */
   tabsShort: { plan: 'Plan' } as Record<string, string>,
-  footer: {
-    data: 'Terrain: NASA LRO LOLA. Positions checked against NASA JPL Horizons.',
-    notNasa: 'Independent NASA Space Apps Challenge 2026 project, not endorsed by NASA.',
-    // the same, for windows with no room for the full sentences
-    short: 'NASA Space Apps 2026 · not endorsed by NASA · terrain: NASA LRO LOLA · positions checked against JPL Horizons · UTC · MIT · code generated with an AI assistant',
-    license: 'MIT license.',
-    ai: 'Code generated with an AI assistant under human direction.',
-    utc: 'All times UTC.',
-  },
   sun: 'Sun',
   earth: 'Earth',
   both: 'Both',
@@ -393,13 +384,19 @@ export const en = {
     made: {
       title: 'How this project was made',
       items: [
-        'Built during the NASA Space Apps Challenge 2026 weekend (14 and 15 November 2026) by a team of one.',
+        'Built during the NASA Space Apps Challenge 2026 weekend (14 and 15 November 2026) by a team of one. It is an independent project and is not endorsed by NASA.',
         'An AI coding assistant (a large language model) generated most of the code, the tests and the documentation, and was used to research data sources and to propose design options. The team member chose among the options, set the direction, reviewed the work on screen at every step and decided what to keep.',
         'Nothing shown here is an AI-generated image, video or sound: the pictures are rendered in your browser from NASA data and open-licensed 3D assets, and the sounds are synthesised by code.',
         'Every number can be traced to a test or to the comparison with NASA data described above.',
       ],
     },
-    sources: { title: 'Sources', text: 'All data, 3D assets, code and reading are listed with their licenses in', link: 'the references' },
+    sources: {
+      title: 'Sources and code',
+      text: 'All data, 3D assets, code and reading are listed with their licenses in',
+      link: 'the references',
+      code: 'The terrain is from NASA LRO LOLA; the positions are checked against NASA JPL Horizons; all times are UTC. The code is open source under the MIT license, in',
+      repo: 'the repository on GitHub',
+    },
   },
   compare: {
     eyebrow: 'Side by side',

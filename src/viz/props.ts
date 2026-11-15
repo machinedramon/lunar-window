@@ -6,6 +6,7 @@ import * as THREE from 'three';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { createMast, type Mast } from './mast';
+import { restOn } from './rest';
 
 export const PROP_LAYER = 1;
 const base = import.meta.env.BASE_URL;
@@ -98,6 +99,10 @@ function loadModel(file: string): Promise<THREE.Group> {
 export interface Props {
   group: THREE.Group;
   mast: Mast | null;
+  /** Where the vehicle and the mast stand (metres east and north, radius): the invented small relief is kept away from them. */
+  stands: { e: number; n: number; r: number }[];
+  /** Height of each contact of the vehicle above the ground it rests on, metres (negative: pressed into the soil). */
+  vehicleGaps: number[];
   dispose(): void;
 }
 
@@ -112,13 +117,76 @@ function tag(o: THREE.Object3D): void {
   });
 }
 
-/** Puts a model on the ground at a point, wheels or feet down, whatever its own origin is. */
-function stand(model: THREE.Object3D, east: number, north: number, groundY: number, yaw: number): void {
-  model.rotation.y = yaw;
+/** Depth a wheel or a footpad presses into the regolith, metres. */
+const SINK = 0.02;
+const UP = new THREE.Vector3(0, 1, 0);
+
+interface Contacts {
+  /** Points that can touch the ground, in the model's own frame. */
+  points: THREE.Vector3[];
+  /** Middle of the model, at the level of its lowest point. */
+  pivot: THREE.Vector3;
+}
+const contactsOf = new Map<string, Contacts>();
+
+/**
+ * The parts of a model that touch the ground, read from its own geometry: the lowest vertices, gathered into
+ * patches (one per wheel or footpad), each at its own lowest level.
+ */
+function findContacts(file: string, model: THREE.Object3D): Contacts {
+  const known = contactsOf.get(file);
+  if (known) return known;
   model.position.set(0, 0, 0);
+  model.rotation.set(0, 0, 0);
   model.updateMatrixWorld(true);
   const box = new THREE.Box3().setFromObject(model);
-  model.position.set(east - (box.min.x + box.max.x) / 2, groundY - box.min.y, -north - (box.min.z + box.max.z) / 2);
+  const band = box.min.y + 0.12;
+  const CELL = 0.6;
+  const patches = new Map<string, { low: number; pts: THREE.Vector3[] }>();
+  const v = new THREE.Vector3();
+  model.traverse((o) => {
+    const mesh = o as THREE.Mesh;
+    if (!mesh.isMesh) return;
+    const pos = mesh.geometry.getAttribute('position');
+    for (let k = 0; k < pos.count; k++) {
+      v.fromBufferAttribute(pos, k).applyMatrix4(mesh.matrixWorld);
+      if (v.y > band) continue;
+      const key = `${Math.round(v.x / CELL)},${Math.round(v.z / CELL)}`;
+      let patch = patches.get(key);
+      if (!patch) patches.set(key, (patch = { low: v.y, pts: [] }));
+      patch.low = Math.min(patch.low, v.y);
+      patch.pts.push(v.clone());
+    }
+  });
+  const points: THREE.Vector3[] = [];
+  for (const patch of patches.values()) {
+    // the part of the patch that would touch first: within 2 cm of its lowest point
+    const touch = patch.pts.filter((q) => q.y <= patch.low + 0.02);
+    const c = touch.reduce((sum, q) => sum.add(q), new THREE.Vector3()).multiplyScalar(1 / touch.length);
+    points.push(new THREE.Vector3(c.x, patch.low, c.z));
+  }
+  const found = { points, pivot: new THREE.Vector3((box.min.x + box.max.x) / 2, box.min.y, (box.min.z + box.max.z) / 2) };
+  contactsOf.set(file, found);
+  return found;
+}
+
+/**
+ * Puts a model on the ground at a point, at rest: it leans with the terrain so that its wheels or footpads
+ * touch, and no part of them is below the surface. Returns how far each contact is from the ground.
+ */
+function stand(model: THREE.Object3D, file: string, east: number, north: number, ground: (east: number, north: number) => number, yaw: number): number[] {
+  const { points, pivot } = findContacts(file, model);
+  const turn = new THREE.Quaternion().setFromAxisAngle(UP, yaw);
+  const rest = restOn(
+    points.map((q) => q.clone().sub(pivot).applyQuaternion(turn)),
+    east,
+    north,
+    ground,
+    SINK,
+  );
+  model.quaternion.copy(rest.tilt).multiply(turn);
+  model.position.set(east, rest.y, -north).sub(pivot.clone().applyQuaternion(model.quaternion));
+  return rest.gaps;
 }
 
 /**
@@ -137,9 +205,11 @@ export async function createProps(ground: (east: number, north: number) => numbe
 
   // ----- the vehicle: NASA models, at their real size
   const [ve, vn] = at(vehicleAz, apollo ? 26 : 19);
+  let vehicleGaps: number[] = [];
   if (vehicleKind === 'rover' || apollo) try {
-    const vehicle = (await loadModel(apollo ? 'apollo-lm.glb' : 'sev.glb')).clone(true);
-    stand(vehicle, ve, vn, ground(ve, vn), ((vehicleAz + (apollo ? 40 : 205)) * Math.PI) / 180);
+    const file = apollo ? 'apollo-lm.glb' : 'sev.glb';
+    const vehicle = (await loadModel(file)).clone(true);
+    vehicleGaps = stand(vehicle, file, ve, vn, ground, ((vehicleAz + (apollo ? 40 : 205)) * Math.PI) / 180);
     group.add(vehicle);
     keepOut.push({ e: ve, n: vn, r: apollo ? 6.5 : 4.5 });
   } catch (err) {
@@ -150,9 +220,16 @@ export async function createProps(ground: (east: number, north: number) => numbe
   let mast: Mast | null = null;
   if (vehicleKind === 'rover' || vehicleKind === 'mast') {
     const [me, mn] = at(vehicleAz + 31, 12.5);
-    mast = createMast(mastM);
-    mast.group.position.set(me, ground(me, mn), -mn);
-    mast.group.rotation.y = rnd() * Math.PI * 2;
+    // The mast stays upright; each of its three legs reaches down to the ground under its own footpad.
+    const yaw = rnd() * Math.PI * 2;
+    const here = ground(me, mn);
+    mast = createMast(mastM, (x, z) => {
+      const dx = x * Math.cos(yaw) + z * Math.sin(yaw);
+      const dz = -x * Math.sin(yaw) + z * Math.cos(yaw);
+      return ground(me + dx, mn - dz) - here - SINK;
+    });
+    mast.group.position.set(me, here, -mn);
+    mast.group.rotation.y = yaw;
     group.add(mast.group);
     keepOut.push({ e: me, n: mn, r: 2.4 });
   }
@@ -204,6 +281,8 @@ export async function createProps(ground: (east: number, north: number) => numbe
   return {
     group,
     mast,
+    stands: keepOut,
+    vehicleGaps,
     dispose() {
       mast?.dispose();
       for (const m of meshes) m.dispose();

@@ -52,17 +52,6 @@ function shell(): void {
     h('a', { class: 'skip', href: '#main' }, S.skip),
     h('header', { class: 'top' }, brand, tabsEl, h('div', { class: 'top-tools' }, soundButton())),
     main,
-    h(
-      'footer',
-      { class: 'foot' },
-      h('span', { class: 'foot-long' }, S.footer.notNasa),
-      h('span', { class: 'foot-long' }, S.footer.data),
-      h('span', { class: 'foot-long' }, S.footer.utc),
-      h('span', { class: 'foot-long' }, S.footer.license),
-      h('span', { class: 'foot-long' }, S.footer.ai),
-      h('span', { class: 'foot-short' }, S.footer.short),
-      h('a', { href: 'https://github.com/machinedramon/lunar-window', target: '_blank', rel: 'noopener' }, 'GitHub'),
-    ),
   );
   main.append(h('div', { class: 'loading' }, h('div', { class: 'spinner', role: 'status', 'aria-label': S.loading }), h('p', null, S.loading)));
 }

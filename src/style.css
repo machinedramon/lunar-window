@@ -262,31 +262,6 @@ main {
   padding: 16px var(--gut) 40px;
   min-width: 0;
 }
-.foot {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 2px 20px;
-  padding: 7px var(--gut);
-  border-top: 1px solid var(--rule);
-  font: 400 11px/1.5 var(--sans);
-  color: var(--ink-3);
-  background: var(--bg);
-}
-.foot-short {
-  display: none;
-}
-.foot a {
-  margin-left: auto;
-  font: 500 10.5px var(--mono);
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--ink-2);
-  text-decoration: none;
-}
-.foot a:hover {
-  color: var(--ink);
-}
 
 /* ---------- motion: everything arrives, nothing jumps ---------- */
 .view-in {
@@ -2646,7 +2621,7 @@ table.compare tbody tr.cmp-actions td {
   }
   body {
     display: grid;
-    grid-template-rows: var(--bar) minmax(0, 1fr) auto;
+    grid-template-rows: var(--bar) minmax(0, 1fr);
   }
   main {
     min-height: 0;
@@ -2725,22 +2700,6 @@ table.compare tbody tr.cmp-actions td {
   }
   table.compare {
     font-size: clamp(12.5px, 1.3vh, 15px);
-  }
-}
-
-/* The footer stays on one line: below a wide monitor it says the same in fewer words. */
-@media (min-width: 1100px) and (min-height: 700px) and (max-width: 1599px) {
-  .foot-long {
-    display: none;
-  }
-  .foot-short {
-    display: inline;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-  .foot {
-    flex-wrap: nowrap;
   }
 }
 

@@ -116,7 +116,12 @@ void main() {
   #include <colorspace_fragment>
 }`;
 
-export function createMast(mastM: number): Mast {
+/**
+ * @param mastM  height of the middle of the array above the ground
+ * @param footY  height of the ground under a point of the base, relative to the ground under its centre:
+ *               each leg is as long as its own footing asks
+ */
+export function createMast(mastM: number, footY: (x: number, z: number) => number = () => 0): Mast {
   const group = new THREE.Group();
   const disposables: { dispose(): void }[] = [];
   const keep = <T extends { dispose(): void }>(x: T): T => {
@@ -154,8 +159,9 @@ export function createMast(mastM: number): Mast {
   add(new THREE.BoxGeometry(0.96, 0.04, 0.96), white, 0, DECK, 0);
   for (let i = 0; i < 3; i++) {
     const a = (i / 3) * Math.PI * 2 + 0.3;
-    const foot = new THREE.Vector3(Math.cos(a) * 1.45, 0.05, Math.sin(a) * 1.45);
-    add(new THREE.CylinderGeometry(0.17, 0.2, 0.06, 18), metal, foot.x, 0.04, foot.z);
+    const down = footY(Math.cos(a) * 1.45, Math.sin(a) * 1.45);
+    const foot = new THREE.Vector3(Math.cos(a) * 1.45, 0.05 + down, Math.sin(a) * 1.45);
+    add(new THREE.CylinderGeometry(0.17, 0.2, 0.06, 18), metal, foot.x, 0.03 + down, foot.z);
     beam(new THREE.Vector3(Math.cos(a) * 0.42, 0.44, Math.sin(a) * 0.42), foot, 0.03);
     beam(new THREE.Vector3(Math.cos(a) * 0.42, 0.24, Math.sin(a) * 0.42), foot, 0.018);
   }

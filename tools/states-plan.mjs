@@ -9,7 +9,7 @@ page.on('pageerror', (e) => problems.push(`pageerror: ${e.message}`));
 await page.goto('http://localhost:5700/#plan', { waitUntil: 'networkidle' });
 await page.waitForTimeout(6000);
 const boxes = () => page.evaluate(() => {
-  const pick = ['.reqs', '.slipbar', '.slip-read', '.summary', '.site-chips', '.map', '.plan-data', '.cal-foot', '.top', '.foot'];
+  const pick = ['.reqs', '.slipbar', '.slip-read', '.summary', '.site-chips', '.map', '.plan-data', '.cal-foot', '.top'];
   const o = {};
   for (const sel of pick) { const el = document.querySelector(sel); if (el) { const r = el.getBoundingClientRect(); o[sel] = [Math.round(r.left), Math.round(r.top), Math.round(r.width), Math.round(r.height)]; } }
   o.scroll = [document.documentElement.scrollWidth - innerWidth, document.documentElement.scrollHeight - innerHeight];
