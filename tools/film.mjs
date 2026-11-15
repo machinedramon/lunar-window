@@ -19,12 +19,53 @@ const SUB = 58; // subtitle bar under the interface shots
 const TEAM = process.env.TEAM ?? '';
 const only = process.env.SHOTS ? process.env.SHOTS.split(',').map(Number) : null;
 const every = Number(process.env.EVERY ?? 1);
-const out = process.env.OUT ?? 'video/frames';
+/** FILM_LANG=pt node tools/film.mjs records the film with the interface, the captions and the timing of that language. */
+const LANG = process.env.FILM_LANG ?? 'en';
+const out = process.env.OUT ?? (LANG === 'en' ? 'video/frames' : `video/frames-${LANG}`);
 mkdirSync(out, { recursive: true });
 
 // ---------- time marks, in seconds of film: written by tools/film_audio.py from the word timings of the narration.
 // The film follows the voice: every cut falls where she starts a thought.
-const MARKS = JSON.parse(readFileSync('video/voice/marks.json', 'utf8'));
+const MARKS = JSON.parse(readFileSync(`video/voice/${LANG}/marks.json`, 'utf8'));
+/** What the film itself writes on the picture, in the three languages. */
+const WORDS = {
+  en: {
+    months: ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'],
+    real: 'real NASA LOLA terrain',
+    place: 'Malapert Massif, lunar south pole',
+    lapse: 'time-lapse',
+    eclipsePlace: 'Blue Ghost Mission 1, Mare Crisium',
+    eclipseWhat: 'the Earth in front of the Sun, seen from the Moon',
+    eclipseNote: 'the eclipse the lander recorded',
+    challenge: 'NASA Space Apps Challenge 2026 · Lunar Landing Site Navigator',
+    credit1: 'Terrain: NASA LRO LOLA · Sun and Earth checked against NASA JPL Horizons · Milky Way: NASA SVS Deep Star Maps',
+    credit2: 'Narration: AI-generated voice · Music: synthesised · An independent project, not endorsed by NASA',
+  },
+  pt: {
+    months: ['JAN', 'FEV', 'MAR', 'ABR', 'MAI', 'JUN', 'JUL', 'AGO', 'SET', 'OUT', 'NOV', 'DEZ'],
+    real: 'terreno real NASA LOLA',
+    place: 'Malapert Massif, polo sul lunar',
+    lapse: 'tempo acelerado',
+    eclipsePlace: 'Blue Ghost Mission 1, Mare Crisium',
+    eclipseWhat: 'a Terra na frente do Sol, vista da Lua',
+    eclipseNote: 'o eclipse que o módulo registrou',
+    challenge: 'NASA Space Apps Challenge 2026 · Lunar Landing Site Navigator',
+    credit1: 'Terreno: NASA LRO LOLA · Sol e Terra conferidos com o NASA JPL Horizons · Via Láctea: NASA SVS Deep Star Maps',
+    credit2: 'Narração: voz gerada por IA · Música: sintetizada · Projeto independente, não endossado pela NASA',
+  },
+  es: {
+    months: ['ENE', 'FEB', 'MAR', 'ABR', 'MAY', 'JUN', 'JUL', 'AGO', 'SEP', 'OCT', 'NOV', 'DIC'],
+    real: 'terreno real NASA LOLA',
+    place: 'Malapert Massif, polo sur lunar',
+    lapse: 'tiempo acelerado',
+    eclipsePlace: 'Blue Ghost Mission 1, Mare Crisium',
+    eclipseWhat: 'la Tierra delante del Sol, vista desde la Luna',
+    eclipseNote: 'el eclipse que registró el módulo',
+    challenge: 'NASA Space Apps Challenge 2026 · Lunar Landing Site Navigator',
+    credit1: 'Terreno: NASA LRO LOLA · Sol y Tierra comprobados con NASA JPL Horizons · Vía Láctea: NASA SVS Deep Star Maps',
+    credit2: 'Narración: voz generada por IA · Música: sintetizada · Proyecto independiente, no avalado por la NASA',
+  },
+}[LANG];
 const CUT = MARKS.cuts;
 /** Subtitles: what the narrator says, when she says it. */
 const SUBTITLES = MARKS.subtitles;
@@ -39,7 +80,7 @@ await context.addInitScript(() => {
 });
 const page = await context.newPage();
 page.on('pageerror', (e) => console.log('pageerror', e.message));
-await page.goto('http://localhost:5700/#explore?site=malapert&t=2027-01-17T00:00', { waitUntil: 'networkidle' });
+await page.goto(`http://localhost:5700/?lang=${LANG}#explore?site=malapert&t=2027-01-17T00:00`, { waitUntil: 'networkidle' });
 await page.addStyleTag({
   content: `
   #f-top, #f-bot { position: fixed; left: 0; right: 0; height: 0; background: #000; z-index: 5000; pointer-events: none; }
@@ -152,7 +193,7 @@ const cell = (row, day) =>
   }, [row, day]);
 const stamp = (ms) => {
   const d = new Date(ms);
-  const mon = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'][d.getUTCMonth()];
+  const mon = WORDS.months[d.getUTCMonth()];
   return `${String(d.getUTCDate()).padStart(2, '0')} ${mon} ${d.getUTCFullYear()} · ${String(d.getUTCHours()).padStart(2, '0')}:${String(Math.floor(d.getUTCMinutes() / 10) * 10).padStart(2, '0')} UTC`;
 };
 
@@ -163,7 +204,7 @@ function fadeAt(sec) {
   // out of the tool and into the eclipse: a breath of black, shorter going out than coming in
   if (sec > CUT.title - 0.18 && sec < CUT.title) return (sec - (CUT.title - 0.18)) / 0.18;
   if (sec >= CUT.title && sec < CUT.title + 0.7) return 1 - ease((sec - CUT.title) / 0.7);
-  if (sec > 29.2) return ease((sec - 29.2) / 0.75);
+  if (sec > CUT.end - 0.8) return ease((sec - (CUT.end - 0.8)) / 0.75);
   return 0;
 }
 const subtitleAt = (sec) => SUBTITLES.find(([a, b]) => sec >= a && sec < b)?.[2] ?? '';
@@ -196,12 +237,13 @@ async function shot(n, from, to, prepare, each) {
   console.log(`shot ${n}: ${count} frames in ${((Date.now() - t0) / 1000).toFixed(0)} s`);
 }
 
-const SLATE = (site, right) => `<span><b>${site}</b> · real NASA LOLA terrain</span><span>${right}</span>`;
+const SLATE = (site, right) => `<span><b>${site}</b> · ${WORDS.real}</span><span>${right}</span>`;
 
 // ---------- 1. The pole: the Sun runs along the horizon (0 to 6.3 s)
 await shot(1, 0, CUT.ridge, async () => {
   await set({ tab: 'explore', siteId: 'malapert', timeMs: utc(2027, 1, 17), hero: '3d' });
   await dress({ film: true, plain: true });
+  await page.evaluate(() => window.__lwProps?.(true));
   await page.waitForTimeout(9000);
   await lookBy('sun', -11, 0.4, 37);
   await page.waitForTimeout(1500);
@@ -209,13 +251,15 @@ await shot(1, 0, CUT.ridge, async () => {
   const ms = utc(2027, 1, 17) + t * 5.2 * DAY;
   await set({ timeMs: ms });
   await lookBy('sun', lerp(-11, -6, t), lerp(0.4, 1.0, t), lerp(37, 31, out3(t)));
-  await dress({ slate: SLATE('Malapert Massif, lunar south pole', `${stamp(ms)} · time-lapse`) });
+  await dress({ slate: SLATE(WORDS.place, `${stamp(ms)} · ${WORDS.lapse}`) });
 });
 
 // ---------- 2. A ridge takes the Sun, and the night sky comes out (6.3 to 9.3 s)
 await shot(2, CUT.ridge, CUT.slip, async () => {
   await set({ timeMs: utc(2027, 2, 3, 0) });
   await dress({ film: true, plain: false });
+  // A long lens on the ridge and the Sun: the rocks and the vehicle (set dressing) are left out of this one shot.
+  await page.evaluate(() => window.__lwProps?.(false));
   await face('sun', 9, 0.6);
   await page.waitForTimeout(2500);
 }, async (t) => {
@@ -224,11 +268,12 @@ await shot(2, CUT.ridge, CUT.slip, async () => {
   // A long lens on the Sun as the ridge takes it; then the lens opens and tilts up to the sky.
   const open = ease(clamp((t - 0.42) / 0.58));
   await lookBy('sun', lerp(0, -30, open), lerp(0.7, 17, open), lerp(8.5, 54, open));
-  await dress({ slate: SLATE('Malapert Massif, lunar south pole', `${stamp(ms)} · time-lapse`) });
+  await dress({ slate: SLATE(WORDS.place, `${stamp(ms)} · ${WORDS.lapse}`) });
 });
 
 // ---------- 3. The launch slips: the planner (9.3 to 13.3 s)
 await shot(3, CUT.slip, CUT.stand, async () => {
+  await page.evaluate(() => window.__lwProps?.(true));
   await dress({ film: false });
   await set({ tab: 'plan', plannedMs: utc(2027, 1, 17), slipDays: 0, detail: null });
   await page.waitForTimeout(4500);
@@ -316,20 +361,23 @@ await shot(7, CUT.title, CUT.end, async () => {
   await page.waitForTimeout(10000);
   await lookBy('sun', -2.5, 0.42, 3.7);
   await page.waitForTimeout(1500);
-  await page.evaluate((team) => {
-    const title = document.getElementById('f-title');
-    title.innerHTML = `<div class="f-name">Lunar Window</div><div class="f-rule"></div><div class="f-line">When the launch slips, see what still works.</div><div class="f-meta">machinedramon.github.io/lunar-window<br>NASA Space Apps Challenge 2026 · Lunar Landing Site Navigator${team ? ` · ${team}` : ''}</div>`;
-    title.style.display = 'flex';
-    const credit = document.getElementById('f-credit');
-    credit.innerHTML = 'Terrain: NASA LRO LOLA · Sun and Earth checked against NASA JPL Horizons · Milky Way: NASA SVS Deep Star Maps<br>Narration: AI-generated voice · Music: synthesised · An independent project, not endorsed by NASA';
-    credit.style.display = 'flex';
-  }, TEAM);
+  await page.evaluate(
+    ([team, line, w]) => {
+      const title = document.getElementById('f-title');
+      title.innerHTML = `<div class="f-name">Lunar Window</div><div class="f-rule"></div><div class="f-line">${line}</div><div class="f-meta">machinedramon.github.io/lunar-window<br>${w.challenge}${team ? ` · ${team}` : ''}</div>`;
+      title.style.display = 'flex';
+      const credit = document.getElementById('f-credit');
+      credit.innerHTML = `${w.credit1}<br>${w.credit2}`;
+      credit.style.display = 'flex';
+    },
+    [TEAM, CLOSING.text, WORDS],
+  );
 }, async (t, sec) => {
   const ms = ECLIPSE_FROM + t * ECLIPSE_MIN * 60e3;
   await set({ timeMs: ms });
   // The Earth keeps the right of the frame; the lens closes on it very slowly.
   await lookBy('sun', lerp(-2.5, -2.2, t), lerp(0.42, 0.36, t), lerp(3.7, 3.2, ease(t)));
-  await dress({ slate: `<span><b>Blue Ghost Mission 1, Mare Crisium</b> · the Earth in front of the Sun, seen from the Moon</span><span>${stamp(ms)} · the eclipse the lander recorded</span>` });
+  await dress({ slate: `<span><b>${WORDS.eclipsePlace}</b> · ${WORDS.eclipseWhat}</span><span>${stamp(ms)} · ${WORDS.eclipseNote}</span>` });
   // The name as she says it; the line under it as she reaches it; the address once she has finished.
   await page.evaluate(([name, rule, tag, meta]) => {
     const q = (c) => document.querySelector(`#f-title .f-${c}`);

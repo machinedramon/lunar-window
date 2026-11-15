@@ -50,3 +50,33 @@ the maximum. Three observer heights are stored: 0, 2 and 10 m above the ground.
 Two published high-illumination points (Connecting Ridge and Shackleton rim) are given in the literature with
 two decimals and came from a 240 m model. For those, the site point is the best-lit spot within 1.5 km in
 NASA's 60 m illumination map; the published coordinates are kept in `sites.json`.
+
+## The demo film
+
+The film is a recording of the tool itself, one per language (English, Portuguese, Spanish). Nothing in it is
+drawn by hand: a headless browser opens the dev server, drives the interface and saves every frame.
+
+```bash
+npm run dev                                  # the film is recorded from http://localhost:5700
+python -X utf8 tools/film_audio.py en        # soundtrack + the time of every cut -> video/audio.en.wav, video/voice/en/marks.json
+FILM_LANG=en node tools/film.mjs             # the frames -> video/frames (video/frames-pt, video/frames-es)
+python -X utf8 tools/film_build.py en        # video/lunar-window-demo.en.mp4 and its .srt
+```
+
+- `film_audio.py` computes the music (no recording is used) and lays the narration over it. The narration is an
+  AI-generated voice (OpenAI text-to-speech), one take per language in `video/voice/<lang>/narration.wav`, with
+  the time of its nine segments in `segments.json`; the cuts, subtitles and the length of the film follow it.
+- `film.mjs` opens the page with `?lang=`, so the interface, the captions and the credits are in that language.
+  `SHOTS=7` records one shot again; `EVERY=30` records a sparse preview. Do not edit `src/` while it records:
+  the dev server would reload the page.
+- `film_build.py` needs ffmpeg. It writes the AI-voice notice into the file's metadata.
+
+The `video/` folder is not in the repository.
+
+## Checks that look at the screen
+
+Small Playwright scripts (Edge channel) used during development; each prints what it found and saves captures
+under `video/`: `wraps.mjs` (text that wraps or is cut, per language and window size), `states.mjs` (layout that
+moves between states), `flicker.mjs` (consecutive frames of a still screen), `hitch.mjs` and `fps.mjs` (stalls
+and frame rate), `wheels.mjs` (the vehicle resting on the terrain), `eclipse.mjs` (the Sun behind the Earth
+through a long lens).

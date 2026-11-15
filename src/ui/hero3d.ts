@@ -664,6 +664,10 @@ export function createHero3D(): Hero3D {
   if (import.meta.env.DEV) {
     // Lets the development screenshot tool aim the camera.
     (window as unknown as Record<string, unknown>).__lwScene = () => scene;
+    (window as unknown as Record<string, unknown>).__lwProps = (on: boolean) => {
+      scene?.showProps(on);
+      wake();
+    };
     /** Draws the current state at once: the recording tool grabs the frame right after. */
     (window as unknown as Record<string, unknown>).__lwDraw = () => {
       if (!scene || !terrainKey) return;

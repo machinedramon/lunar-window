@@ -27,6 +27,7 @@ it shows which sites survive, which fail, and why.
 - **Compare** — up to four options side by side.
 - **Missions** — three planning problems to play, scored on real quantities.
 - **Accuracy** — the measured errors against NASA data, and the limits of the model.
+- **Three languages** — English (the default), Portuguese and Spanish, one click apart in the top bar. Nothing reloads: the 3D view stays where it is and the words change around it.
 
 Built during the hackathon weekend (14–15 November 2026).
 
@@ -72,10 +73,12 @@ All numerical results were validated against NASA data (JPL Horizons tables and 
 the measured errors are published on the Accuracy page of the tool.
 
 In the tool itself nothing is an AI-generated image, video or sound: the visuals are rendered in real
-time from NASA data and open-licensed 3D assets, and the sounds are synthesised by code. The 30-second
-demo video is a recording of the tool; its narration is an AI-generated voice (OpenAI text-to-speech)
-reading a script, as its closing credits and file metadata state, and its music is synthesised by code
-(`tools/film_audio.py`).
+time from NASA data and open-licensed 3D assets, and the sounds are synthesised by code. The demo video
+(30 seconds in English; a few seconds longer in Portuguese and Spanish) is a recording of the tool; its
+narration is an AI-generated voice (OpenAI text-to-speech) reading a script in each language, as the
+closing credits and the file metadata state, and its music is synthesised by code (`tools/film_audio.py`).
+The Portuguese and Spanish texts of the interface were written with the same AI assistant and reviewed by
+the team member.
 
 ## License
 

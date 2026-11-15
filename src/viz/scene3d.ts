@@ -23,6 +23,17 @@ export const TERRAIN_HALF_M = [640, 6400, 51200, 307200];
 export const TERRAIN_UNIT_M = [0.0625, 0.25, 0.5, 2.5];
 const SHADOW_N = 512;
 const FAR_M = 400000;
+
+// The sky is drawn 340 to 380 km away and the far plane is at 400 km. In 32-bit floats the clip-space depth of
+// those vertices is within one rounding step of the far plane, so with a close near plane (the eye can be 0.5 m
+// above the ground) triangles of the Earth were clipped away at random and the Sun showed through it. The depth
+// that is compared comes from gl_FragDepth (logarithmic), so the clip-space depth only has to stay inside the
+// frustum: it is held just short of the far plane, in every material, for perspective cameras.
+THREE.ShaderChunk.logdepthbuf_vertex += `
+#ifdef USE_LOGARITHMIC_DEPTH_BUFFER
+	if ( isPerspectiveMatrix( projectionMatrix ) ) gl_Position.z = min( gl_Position.z, 0.999 * gl_Position.w );
+#endif
+`;
 const SKY_M = 380000;
 const D2R = Math.PI / 180;
 
@@ -1187,6 +1198,12 @@ void main() {
     this.version++;
     // The glare and the exposure follow what the eye sees of the Sun: set them again when that changed.
     if (changed && this.lastSky) this.setSky(this.lastSky);
+  }
+
+  /** Shows or hides the set dressing (vehicle, mast, rocks): the film's long-lens shot of the ridge is taken without it. */
+  showProps(on: boolean): void {
+    if (this.props) this.props.group.visible = on;
+    this.propsDirty = true;
   }
 
   /** Called when something loaded asynchronously and the picture should be redrawn. */

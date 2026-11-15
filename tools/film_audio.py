@@ -2,13 +2,18 @@
 
     python tools/film_audio.py        writes video/audio.wav (48 kHz stereo, 30 s)
 
-The narration is one take, video/voice/narration.wav: an AI-generated voice (OpenAI text-to-speech)
-reading the script of the film from the first word to the last; the project page says so. The
-music is not a recording: every tone below is computed.
+The narration is one take per language, video/voice/<lang>/narration.wav: an AI-generated voice
+(OpenAI text-to-speech) reading the script of the film from the first word to the last; the project
+page says so. The music is not a recording: every tone below is computed.
 
-The film follows the voice, not the other way round. The word timings of the take
-(video/voice/narration.words.json, from a transcription) give the moment of every cut, of every
-subtitle and of the title; they are written to video/voice/marks.json, which tools/film.mjs reads.
+The film follows the voice, not the other way round. The script has nine segments (the pole, the
+ridge in two parts, the slip, standing there, the calendar, the proof, the name, the line under it);
+the time of each in the take (video/voice/<lang>/segments.json, from a transcription) gives the
+moment of every cut, of every subtitle and of the title, and the length of the film: thirty seconds
+in English, a few more in Portuguese and Spanish, which take longer to say the same. They are written
+to video/voice/<lang>/marks.json, which tools/film.mjs reads.
+
+    python tools/film_audio.py [en|pt|es]      writes video/audio.<lang>.wav
 """
 import json
 import subprocess
@@ -17,41 +22,46 @@ from pathlib import Path
 
 import numpy as np
 
+import sys
+
 SR = 48000
-SECONDS = 30.0
-N = int(SR * SECONDS)
 ROOT = Path(__file__).resolve().parent.parent
-t = np.arange(N) / SR
-rng = np.random.default_rng(7)
+LANG = sys.argv[1] if len(sys.argv) > 1 else 'en'
+VOICE = ROOT / 'video/voice' / LANG
 
 # ---------- when things happen (seconds of film), read from the voice
 VO_AT = 0.60  # the narration starts
-WORDS = json.loads((ROOT / 'video/voice/narration.words.json').read_text(encoding='utf-8'))['words']
-assert len(WORDS) == 66, f'{len(WORDS)} words in the take; the script has 66'
-at = lambda i: VO_AT + WORDS[i]['start']
-done = lambda i: VO_AT + WORDS[i]['end']
-# Word indices: sentence 1 from 0, sentence 2 from 9 ("and a single ridge" at 13), sentence 3 from 22,
-# sentence 4 from 33 ("and shows" at 41), sentence 5 from 51, the closing line from 56 ("When" at 58).
-RIDGE = round(at(13) - 0.12, 2)    # the ridge takes the Sun
-CUT_UI = round(at(22) - 0.35, 2)   # first cut from the Moon to the tool
-CUT_B = round(at(33) - 0.30, 2)    # standing on the terrain
-CUT_C = round(at(41) - 0.12, 2)    # the calendar
-CUT_D = round(at(51) - 0.35, 2)    # the proof
-TITLE = round(done(55) + 0.30, 2)  # the eclipse, and the title over it
+SEG = json.loads((VOICE / 'segments.json').read_text(encoding='utf-8'))['segments']
+assert len(SEG) == 9, f'{len(SEG)} segments; the script has 9'
+at = lambda i: VO_AT + SEG[i]['start']
+done = lambda i: VO_AT + SEG[i]['end']
+said = lambda i: SEG[i]['text'].replace("'", '’')
+RIDGE = round(at(2) - 0.12, 2)    # the ridge takes the Sun
+CUT_UI = round(at(3) - 0.35, 2)   # first cut from the Moon to the tool
+CUT_B = round(at(4) - 0.30, 2)    # standing on the terrain
+CUT_C = round(at(5) - 0.12, 2)    # the calendar
+CUT_D = round(at(6) - 0.35, 2)    # the proof
+TITLE = round(done(6) + 0.30, 2)  # the eclipse, and the title over it
+# Thirty seconds when the voice leaves room for the title to stand; otherwise as long as it needs, to the half second.
+SECONDS = 30.0 if done(8) + 3.5 <= 30.0 else float(np.ceil((done(8) + 3.6) * 2) / 2)
+N = int(SR * SECONDS)
+t = np.arange(N) / SR
+rng = np.random.default_rng(7)
 MARKS = {
+    'lang': LANG,
     'cuts': {'ridge': RIDGE, 'slip': CUT_UI, 'stand': CUT_B, 'days': CUT_C, 'proof': CUT_D, 'title': TITLE, 'end': SECONDS},
-    'closing': {'name': round(at(56), 2), 'line': round(at(58), 2), 'end': round(done(65), 2)},
+    'closing': {'name': round(at(7), 2), 'line': round(at(8), 2), 'end': round(done(8), 2), 'text': said(8)},
     'subtitles': [
-        [round(at(0), 2), round(done(8) + 0.3, 2), 'At the Moon’s south pole, the Sun never climbs.'],
-        [round(at(9), 2), round(done(21) + 0.3, 2), 'It circles the horizon, and a single ridge can hide it for days.'],
-        [round(at(22), 2), round(done(32) + 0.3, 2), 'When a launch slips, a good landing site can go dark.'],
-        [round(at(33), 2), round(at(41), 2), 'Lunar Window stands you on real NASA terrain,'],
-        [round(at(41), 2), round(done(50) + 0.3, 2), 'and shows every site, and every day, that still works.'],
-        [round(at(51), 2), round(done(55) + 0.25, 2), 'Verified against NASA’s JPL Horizons.'],
+        [round(at(0), 2), round(done(0) + 0.3, 2), said(0)],
+        [round(at(1), 2), round(done(2) + 0.3, 2), said(1) + ' ' + said(2)],
+        [round(at(3), 2), round(done(3) + 0.3, 2), said(3)],
+        [round(at(4), 2), round(at(5), 2), said(4)],
+        [round(at(5), 2), round(done(5) + 0.3, 2), said(5)],
+        [round(at(6), 2), round(done(6) + 0.25, 2), said(6)],
     ],
 }
-(ROOT / 'video/voice/marks.json').write_text(json.dumps(MARKS, ensure_ascii=False, indent=1), encoding='utf-8')
-print('cuts', MARKS['cuts'], '| closing', MARKS['closing'])
+(VOICE / 'marks.json').write_text(json.dumps(MARKS, ensure_ascii=False, indent=1), encoding='utf-8')
+print(LANG, 'cuts', MARKS['cuts'], '| closing', {k: v for k, v in MARKS['closing'].items() if k != 'text'})
 
 
 def read(path: Path) -> np.ndarray:
@@ -173,7 +183,7 @@ def room(x: np.ndarray, seconds: float, mix: float) -> np.ndarray:
 
 # ---------- narration: the take exactly as it was spoken
 voice = np.zeros(N)
-take = read(ROOT / 'video/voice/narration.wav')
+take = read(VOICE / 'narration.wav')
 i0 = int(VO_AT * SR)
 take = take[: N - i0]
 voice[i0 : i0 + len(take)] += take
@@ -206,10 +216,10 @@ beat = pulse(CUT_UI + 0.15, TITLE - 0.45, 0.15, note('D5'), 0.035 + 0.05 * ramp(
 music += beat
 # F: the title. D major, wide and bright, and a long way down to silence.
 music += boom(TITLE, 55, 3.0, 1.1)
-bright_f = 0.55 + 0.25 * ramp(TITLE, TITLE + 2.0) - 0.4 * ramp(27.5, 30.0)
-music += pad(['D2', 'A2', 'D3', 'F#3', 'A3', 'E4', 'A4'], span(TITLE - 0.02, 30.2, 0.25, 2.4), bright_f, 1.25)
-music += pad(['D1', 'D2'], span(TITLE, 30.2, 0.1, 2.6), 0.0, 0.9)
-music += pad(['F#5', 'A5', 'D6'], span(TITLE + 0.4, 29.8, 1.6, 2.2), 0.0, 0.16)
+bright_f = 0.55 + 0.25 * ramp(TITLE, TITLE + 2.0) - 0.4 * ramp(SECONDS - 2.5, SECONDS)
+music += pad(['D2', 'A2', 'D3', 'F#3', 'A3', 'E4', 'A4'], span(TITLE - 0.02, SECONDS + 0.2, 0.25, 2.4), bright_f, 1.25)
+music += pad(['D1', 'D2'], span(TITLE, SECONDS + 0.2, 0.1, 2.6), 0.0, 0.9)
+music += pad(['F#5', 'A5', 'D6'], span(TITLE + 0.4, SECONDS - 0.2, 1.6, 2.2), 0.0, 0.16)
 
 music *= duck[:, None]
 music *= 0.30 / np.percentile(np.abs(music), 99.5)
@@ -228,7 +238,7 @@ def save(path: Path, x: np.ndarray) -> None:
         w.writeframes((np.clip(x, -1, 1) * 32767).astype('<i2').tobytes())
 
 
-out = ROOT / 'video/audio.wav'
+out = ROOT / f'video/audio.{LANG}.wav'
 save(out, mix)
 # The two layers apart, to measure their balance.
 save(ROOT / 'video/stem_music.wav', music)
@@ -236,4 +246,4 @@ save(ROOT / 'video/stem_voice.wav', np.stack([voice, voice], axis=1) * 0.86)
 speaking = level_voice > 0.12
 rms = lambda x: 20 * np.log10(np.sqrt(np.mean(x**2)) + 1e-12)
 print(f'while she speaks: voice {rms(voice[speaking] * 0.86):.1f} dB, music {rms(music[speaking].mean(axis=1)):.1f} dB; music alone in the pauses {rms(music[~speaking].mean(axis=1)):.1f} dB')
-print(out, f'{SECONDS:.0f} s; voice peak {np.max(np.abs(voice)) * 0.86:.2f}, music p99 {np.percentile(np.abs(music), 99):.2f}')
+print(out, f'{SECONDS:.1f} s; voice peak {np.max(np.abs(voice)) * 0.86:.2f}, music p99 {np.percentile(np.abs(music), 99):.2f}')
