@@ -90,6 +90,9 @@ export const es: Strings = {
       call: 'Alguien llama desde la Tierra.',
       skip: 'Saltar',
       begin: 'Haz clic en cualquier lugar para empezar',
+      beginTouch: 'Toca en cualquier lugar para empezar',
+      turn: 'Gira el teléfono de lado',
+      stay: 'Seguir en vertical',
       hint: 'Haz clic en cualquier lugar para tener sonido',
     },
     alerts: {

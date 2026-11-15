@@ -3959,6 +3959,58 @@ body.guide-cine .three-hint {
 .call-skip:focus-visible {
   color: var(--ink);
 }
+/* On a phone held upright: a phone that turns on its side, above the request to turn it; under it, the way to go on as it is. */
+.call-turn {
+  position: absolute;
+  left: 50%;
+  top: calc(50% + 34px);
+  width: 15px;
+  height: 26px;
+  margin-left: -7.5px;
+  border: 1.5px solid var(--ink-2);
+  border-radius: 3.5px;
+  display: none;
+  transform-origin: 50% 50%;
+  animation: call-turn 2.6s cubic-bezier(0.6, 0, 0.3, 1) infinite;
+}
+@keyframes call-turn {
+  0%,
+  22% {
+    transform: rotate(0deg);
+  }
+  55%,
+  88% {
+    transform: rotate(-90deg);
+  }
+  100% {
+    transform: rotate(0deg);
+  }
+}
+.briefing.turn .call-turn {
+  display: block;
+}
+.briefing.turn .call-hint {
+  top: calc(50% + 78px);
+  color: var(--ink);
+  /* it is there at once: it is the answer to the tap */
+  animation: call-breathe 3.2s ease-in-out 1s infinite;
+}
+.call-stay {
+  appearance: none;
+  position: absolute;
+  left: 50%;
+  top: calc(50% + 116px);
+  transform: translateX(-50%);
+  padding: 8px 10px;
+  border: 0;
+  background: none;
+  font: 500 9.5px/1 var(--mono);
+  letter-spacing: 0.26em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: var(--ink-3);
+  cursor: pointer;
+}
 /* the languages, small, at the foot */
 .call-lang {
   position: absolute;
@@ -4304,4 +4356,106 @@ body.guide-cine .three-planets {
   font-size: 11px;
   line-height: 1.4;
   color: var(--ink-3);
+}
+
+/* A phone on its side: little height, all of it wanted by the picture. The voice is a low strip at the foot of
+   the screen; the words of the opening sit closer to its line. */
+@media (max-height: 520px) and (orientation: landscape) {
+  .comm,
+  .comm[data-place='cine'],
+  .comm[data-place='low'],
+  .comm[data-place='top'] {
+    left: 50%;
+    top: auto;
+    bottom: 6px;
+    width: min(720px, calc(100vw - 16px));
+    grid-template-columns: 58px 1fr;
+    grid-template-areas: none;
+  }
+  .comm[data-place='low'] .guide-body {
+    display: flex;
+  }
+  .comm .guide-body {
+    padding: 6px 10px 7px;
+    gap: 3px;
+  }
+  .comm .guide-face {
+    min-height: 0;
+  }
+  .comm .guide-wave {
+    height: 12px;
+    padding: 1px 4px;
+  }
+  .comm .guide-head {
+    flex-wrap: nowrap;
+    font-size: 8.5px;
+  }
+  .comm .guide-id {
+    flex: 0 1 auto;
+  }
+  .comm .guide-state,
+  .comm[data-place='low'] .guide-state {
+    margin-left: auto;
+    margin-right: 0;
+  }
+  .comm .guide-words {
+    min-height: 0;
+    padding: 0;
+    font-size: 12.5px;
+    line-height: 1.28;
+  }
+  /* what is asked for and the buttons share one line */
+  .comm .guide-task {
+    min-height: 0;
+    padding: 0;
+    font-size: 9px;
+    float: left;
+  }
+  .comm .guide-task b {
+    padding: 3px 6px 2px;
+  }
+  .comm .guide-actions {
+    margin-top: 0;
+    padding: 0;
+  }
+  .comm .guide-actions .btn {
+    height: 21px;
+    padding: 0 7px;
+    font-size: 8.5px;
+  }
+  .comm::after {
+    inset: -4px;
+    --arm: 8px;
+  }
+  /* The 3D view takes the height of the screen (the rest of the page is under it), and while only the picture
+     and the voice are on, the strip of the voice keeps to its words. */
+  .three {
+    height: 100vh;
+    height: 100dvh;
+    min-height: 0;
+  }
+  .comm[data-place='cine'] .guide-task {
+    display: none;
+  }
+  .call-words {
+    bottom: calc(50% + 20px);
+    font-size: 19px;
+  }
+  .call-hint {
+    top: calc(50% + 20px);
+  }
+  .call-lang,
+  .call-skip {
+    bottom: 14px;
+  }
+  .travel-route {
+    top: 3%;
+  }
+  .travel-km {
+    top: calc(3% + 20px);
+  }
+  .guide-alert {
+    top: 26vh;
+    height: 70px;
+  }
 }

@@ -17,6 +17,11 @@
 // lets the voice be heard. Should a sound still be refused, the guide runs with its words written out, at
 // reading pace, and the first click brings the voice in.
 //
+// On a phone held upright the pictures of the opening (the Moon whole, the descent) would be a narrow strip. So
+// the click that starts the guide also asks the phone for the whole screen, turned sideways; where the phone
+// does not allow that (an iPhone), the dark asks the visitor to turn it, and goes on when it is turned, or, if
+// they would rather, as it is.
+//
 // From there on the guide wears the marks of a display: a sight that closes on what is asked for, a band across
 // the screen when something decisive happens (the Sun is lost, the launch is late, the Earth is in view). The
 // colours keep the meaning they have everywhere in the tool: blue is the link with Earth, red is a problem.
@@ -314,10 +319,13 @@ export function createGuide(store: Store, host: GuideHost): Guide {
   const callWords = h('p', { class: 'call-words', 'aria-live': 'polite' });
   const lineFill = h('i');
   const callHint = h('p', { class: 'call-hint', hidden: true });
+  /** On a phone held upright: a phone that turns on its side, and the way to go on without turning it. */
+  const turnGlyph = h('i', { class: 'call-turn', 'aria-hidden': 'true' });
+  const stayBtn = h('button', { class: 'call-stay', type: 'button', hidden: true });
   const langSeg = h('div', { class: 'call-lang', role: 'group' });
   for (const l of LANGS) langSeg.append(h('button', { type: 'button', lang: l.tag, title: l.name, 'aria-label': l.name, dataset: { code: l.code }, onclick: () => host.setLanguage(l.code) }, l.short));
   const skipBtn = h('button', { class: 'call-skip', type: 'button', onclick: () => finish() });
-  const brief = h('div', { class: 'briefing', hidden: true, role: 'dialog', 'aria-modal': 'true' }, callWords, h('div', { class: 'call-line', 'aria-hidden': 'true' }, lineFill), callHint, langSeg, skipBtn);
+  const brief = h('div', { class: 'briefing', hidden: true, role: 'dialog', 'aria-modal': 'true' }, callWords, h('div', { class: 'call-line', 'aria-hidden': 'true' }, lineFill), turnGlyph, callHint, stayBtn, langSeg, skipBtn);
   /** A band across the screen, when something decisive happens in the story. */
   const alertTitle = h('b', null);
   const alertSub = h('span', null);
@@ -374,7 +382,7 @@ export function createGuide(store: Store, host: GuideHost): Guide {
   /** The first click or key anywhere: sound is allowed from now on, and a line that was only written out is said aloud. */
   const gesture = (ev: Event): void => {
     // On the way out or on a language: that is what was meant, not "begin".
-    const aside = ev.target instanceof Element && !!ev.target.closest('.call-skip, .call-lang');
+    const aside = ev.target instanceof Element && !!ev.target.closest('.call-skip, .call-lang, .call-stay');
     if (begin && !aside) {
       const go = begin;
       begin = null;
@@ -566,7 +574,10 @@ export function createGuide(store: Store, host: GuideHost): Guide {
       }
       if (target && target !== aimed) {
         aimed = target;
-        if (box.top < 60 || box.bottom > window.innerHeight - 8) target.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        // Off the screen, or under the panel of the voice (on a small screen the two can meet): brought to the middle.
+        const p = panel.getBoundingClientRect();
+        const under = box.bottom > p.top && box.top < p.bottom && box.right > p.left && box.left < p.right;
+        if (under || box.top < 60 || box.bottom > window.innerHeight - 8) target.scrollIntoView({ block: 'center', behavior: 'smooth' });
       }
     } else ring.hidden = true;
 
@@ -692,6 +703,55 @@ export function createGuide(store: Store, host: GuideHost): Guide {
     }
   }
 
+  /** A phone held upright: narrow, taller than wide, worked with a finger. */
+  const upright = (): boolean => window.matchMedia('(orientation: portrait) and (max-width: 640px) and (pointer: coarse)').matches;
+  const byTouch = (): boolean => window.matchMedia('(pointer: coarse)').matches;
+
+  /**
+   * On a phone held upright: the whole screen is asked for, turned sideways (a click was just made, which is what
+   * allows it). Where that is refused, the visitor is asked to turn the phone; it goes on when they have, or when
+   * they say to go on as it is.
+   */
+  async function sideways(live: () => boolean): Promise<void> {
+    if (!upright()) return;
+    try {
+      await document.documentElement.requestFullscreen({ navigationUI: 'hide' });
+      await (screen.orientation as ScreenOrientation & { lock?: (o: string) => Promise<void> }).lock?.('landscape');
+      // the turn of the screen takes a moment to show
+      await wait(350);
+    } catch {
+      // not allowed here: the visitor is asked
+    }
+    if (!upright() || !live()) return;
+    brief.classList.add('turn');
+    setText(callHint, G().brief.turn);
+    callHint.hidden = false;
+    stayBtn.hidden = false;
+    await new Promise<void>((resolve) => {
+      const lying = window.matchMedia('(orientation: landscape)');
+      const done = () => {
+        lying.removeEventListener('change', turned);
+        window.clearInterval(watch);
+        stayBtn.onclick = null;
+        resolve();
+      };
+      const turned = () => {
+        if (lying.matches) done();
+      };
+      lying.addEventListener('change', turned);
+      // (called off meanwhile: nothing left to wait for)
+      const watch = window.setInterval(() => {
+        if (!live()) done();
+      }, 400);
+      stayBtn.onclick = done;
+    });
+    brief.classList.remove('turn');
+    callHint.hidden = true;
+    stayBtn.hidden = true;
+    // the page takes a moment to settle in its new shape
+    await wait(450);
+  }
+
   /** Resolves when enough of a line is read to play it through, or after `ms` at the latest. */
   const heard = (a: HTMLAudioElement, ms: number): Promise<void> =>
     new Promise((resolve) => {
@@ -720,15 +780,20 @@ export function createGuide(store: Store, host: GuideHost): Guide {
     stage(0);
     document.body.classList.add('guide-on', 'guide-cine');
     button.setAttribute('aria-pressed', 'true');
-    if (byItself && !soundFree()) {
+    if (byItself && (!soundFree() || upright())) {
       // What can be made ready meanwhile, is: the lines are read ahead.
       for (const step of steps.slice(0, 3)) clip(language(), step.id);
+      setText(callHint, byTouch() ? G().brief.beginTouch : G().brief.begin);
       callHint.hidden = false;
       await new Promise<void>((resolve) => (begin = resolve));
       callHint.hidden = true;
       if (!live()) return;
     }
     unlock();
+    await sideways(live);
+    if (!live()) return;
+    // On a phone on its side the 3D view is as tall as the screen: the page is brought to it.
+    if (window.matchMedia('(max-height: 520px) and (orientation: landscape)').matches) q('.three')?.scrollIntoView({ block: 'start' });
     const began = performance.now();
     // Behind the dark, the tool goes where the story starts.
     steps[0].enter?.(store.state);
@@ -789,6 +854,8 @@ export function createGuide(store: Store, host: GuideHost): Guide {
     opening = false;
     landing = false;
     begin = null;
+    brief.classList.remove('turn');
+    stayBtn.hidden = true;
     closeBrief();
     window.clearTimeout(silent);
     audio?.pause();
@@ -820,7 +887,8 @@ export function createGuide(store: Store, host: GuideHost): Guide {
     button.title = G().buttonTip;
     button.setAttribute('aria-label', G().buttonTip);
     setText(skipBtn, B.skip);
-    setText(callHint, B.begin);
+    setText(callHint, brief.classList.contains('turn') ? B.turn : byTouch() ? B.beginTouch : B.begin);
+    setText(stayBtn, B.stay);
     langSeg.setAttribute('aria-label', S.lang.label);
     langSeg.querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.code === language())));
     // The sentence of the call, in the new language.

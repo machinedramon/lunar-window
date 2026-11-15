@@ -90,6 +90,9 @@ export const pt: Strings = {
       call: 'Alguém está chamando da Terra.',
       skip: 'Pular',
       begin: 'Clique em qualquer lugar para começar',
+      beginTouch: 'Toque em qualquer lugar para começar',
+      turn: 'Vire o celular de lado',
+      stay: 'Continuar em pé',
       hint: 'Clique em qualquer lugar para ter som',
     },
     alerts: {
