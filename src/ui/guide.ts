@@ -596,15 +596,23 @@ export function createGuide(store: Store, host: GuideHost): Guide {
     }, 620);
   }
 
-  /** The dark comes up, with its sentence. */
-  function openBrief(): void {
+  /**
+   * The dark comes up, with its sentence. Under the opening screen, which is the same dark, it is there at once:
+   * a fade would let the tool show through for a moment while the one goes and the other comes.
+   */
+  function openBrief(atOnce = false): void {
     window.clearTimeout(closeTimer);
     brief.hidden = false;
     brief.classList.remove('open');
     say(G().brief.call, true);
     callHint.hidden = soundFree();
+    if (atOnce) brief.style.transition = 'none';
     void brief.offsetWidth;
     brief.classList.add('in');
+    if (atOnce) {
+      void brief.offsetWidth;
+      brief.style.transition = '';
+    }
   }
 
   function closeBrief(): void {
@@ -692,14 +700,14 @@ export function createGuide(store: Store, host: GuideHost): Guide {
    * @param grace  milliseconds before the tool is taken to where the story starts: when the guide opens by itself
    *               over a scenario that came with the address, skipping it at once leaves that scenario as it was
    */
-  async function start(grace = 0): Promise<void> {
+  async function start(grace = 0, atOnce = false): Promise<void> {
     if (opening) return;
     if (at >= 0) finish(true);
     const mine = ++run;
     const live = () => mine === run;
     opening = true;
     unlock();
-    openBrief();
+    openBrief(atOnce);
     stage(0);
     document.body.classList.add('guide-on', 'guide-cine');
     button.setAttribute('aria-pressed', 'true');
@@ -816,7 +824,7 @@ export function createGuide(store: Store, host: GuideHost): Guide {
   function auto(): void {
     if (!guideOpens(store.state.tab) || at >= 0 || opening) return;
     // Over a scenario that came with the address, a moment is left to skip before the tool is taken elsewhere.
-    void start(store.state.siteId === SITE ? 0 : 1700);
+    void start(store.state.siteId === SITE ? 0 : 1700, true);
   }
 
   return { button, relabel, auto };

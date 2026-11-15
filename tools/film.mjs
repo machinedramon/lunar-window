@@ -107,7 +107,7 @@ await page.addStyleTag({
   body.film .three { position: fixed !important; inset: 0 !important; z-index: 2000; }
   body.film .three-label, body.film .three-insets, body.film .three-tape, body.film .three-caption, body.film .three-controls, body.film .three-hint, body.film .three-title { display: none !important; }
   body.film.plain .three-sky { display: none !important; }
-  body.film .travel-caption { display: none !important; }
+  body.film .travel-route, body.film .travel-km { display: none !important; }
   `,
 });
 await page.evaluate(() => {
@@ -351,7 +351,7 @@ await shot(5, CUT.any, CUT.proof, async () => {
   await page.waitForTimeout(10000);
   await look(222, 5, 50);
   await page.evaluate(([from, to]) => window.__lwJourney.show(from, to, to), [FROM, TO]);
-  way = await page.evaluate(() => document.querySelector('.travel-caption')?.textContent.replace(/\s+/g, ' ').trim() ?? '');
+  way = await page.evaluate(() => document.querySelector('.travel-route')?.textContent.replace(/\s+/g, ' ').trim() ?? '');
   await page.waitForTimeout(800);
 }, async (t, sec) => {
   // The globe: already on its way up from the pole, across the Moon, and down.

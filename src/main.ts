@@ -23,7 +23,8 @@ const FLAGS: Record<Lang, string> = {
   es: '<svg viewBox="0 0 21 15" aria-hidden="true"><rect width="21" height="15" fill="#aa151b"/><rect y="3.75" width="21" height="7.5" fill="#f1bf00"/></svg>',
 };
 
-const LOGO = `<svg viewBox="0 0 40 40" aria-hidden="true"><defs><clipPath id="lw-c"><circle cx="20" cy="20" r="17"/></clipPath></defs><circle cx="20" cy="20" r="17" fill="#000" stroke="#fff" stroke-width="1.6"/><g clip-path="url(#lw-c)"><circle cx="24.5" cy="22" r="4.6" fill="#fff"/><path d="M0 27 L7 23.5 L12 25.5 L17 21 L22 24.5 L28 22 L33 25 L40 23 L40 40 L0 40 Z" fill="#8f8f96"/><path d="M0 31 L9 28 L15 30 L23 27.5 L31 30 L40 28 L40 40 L0 40 Z" fill="#2a2a2d"/></g></svg>`;
+/** The mark: a round window, the horizon of the Moon across it, and the Earth just above the horizon, the one thing in colour. */
+const LOGO = `<svg viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="16.5" fill="none" stroke="#fff" stroke-width="1.5"/><path d="M5.1 27H34.9" stroke="#fff" stroke-width="1.5"/><circle cx="25.5" cy="21.6" r="3.1" fill="#7db8ff"/></svg>`;
 
 const main = h('main', { id: 'main' });
 /** What rewrites the words of the frame when the language changes. */

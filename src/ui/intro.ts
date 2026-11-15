@@ -1,7 +1,7 @@
 // The opening screen (its markup and styles are in index.html, so that it is there before any script).
 // While the app loads, it says in a few lines what is about to be seen: the problem the tool answers. The lines
-// go at reading pace, whatever the speed of the loading (the thin bar under the name shows the real progress);
-// the last one is the question, and the opening lifts on it.
+// go at reading pace, whatever the speed of the loading (the thin line across the screen shows the real
+// progress, filling from its middle); the last one is the question, and the dark opens on it, along the line.
 import { S } from '../i18n';
 
 const el = document.getElementById('intro');
@@ -20,7 +20,7 @@ const PACE_MS = 2900;
 /** The question stays this long before the opening lifts. */
 const LAST_MS = 1700;
 /** One line fades out, the next fades in. */
-const SWAP_MS = 240;
+const SWAP_MS = 440;
 /** The name and the first line fade in once the typefaces are there. */
 const FADE_IN_MS = 500;
 
@@ -67,7 +67,7 @@ export function introStage(share: number): void {
 }
 
 /**
- * Lifts the opening: the screen opens like a window, from the mark outwards. Never before the line on screen has
+ * Lifts the opening: the dark opens along its line, like a visor. Never before the line on screen has
  * been read; and the last line, the question, is always seen. `then` runs as the window starts to open.
  */
 export function introLift(then: () => void): void {

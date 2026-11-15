@@ -19,40 +19,46 @@
     <title>Lunar Window — landing-window planner for the lunar south pole</title>
   </head>
   <body>
-    <!-- The opening: drawn by the page itself, before any script. The mark; then the name, a line that fills with
-         the real stages of the loading, and the name of the stage; and when the first view is whole the screen
-         opens like a window, from the mark outwards. It moves on the compositor, so it stays fluid while the
-         terrain and the models are being prepared. -->
+    <!-- The opening: drawn by the page itself, before any script. Black; across the middle a thin line that
+         fills, from its middle, with the real stages of the loading; above it, one after the other, the few
+         sentences of the problem the tool answers; under it, small, the mark and the name. When the first view
+         is whole the dark opens along the line, like a visor. The guide's own opening, which follows, is the
+         same dark with the same line: one runs into the other. It moves on the compositor, so it stays fluid
+         while the terrain and the models are being prepared.
+         The mark: a round window, the horizon of the Moon across it, and the Earth just above the horizon,
+         the one thing in colour. -->
     <div id="intro" role="status" aria-label="Loading Lunar Window">
-      <svg class="intro-mark" viewBox="0 0 40 40" aria-hidden="true"><defs><clipPath id="intro-c"><circle cx="20" cy="20" r="17" /></clipPath></defs><circle cx="20" cy="20" r="17" fill="#000" stroke="#fff" stroke-width="1.2" /><g clip-path="url(#intro-c)"><circle cx="24.5" cy="22" r="4.6" fill="#fff" /><path d="M0 27 L7 23.5 L12 25.5 L17 21 L22 24.5 L28 22 L33 25 L40 23 L40 40 L0 40 Z" fill="#8f8f96" /><path d="M0 31 L9 28 L15 30 L23 27.5 L31 30 L40 28 L40 40 L0 40 Z" fill="#2a2a2d" /></g></svg>
-      <div class="intro-text">
+      <p class="intro-stage"></p>
+      <span class="intro-bar" aria-hidden="true"><i></i></span>
+      <div class="intro-brand">
+        <svg class="intro-mark" viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="16.5" fill="none" stroke="#fff" stroke-width="1.5"/><path d="M5.1 27H34.9" stroke="#fff" stroke-width="1.5"/><circle cx="25.5" cy="21.6" r="3.1" fill="#7db8ff"/></svg>
         <b class="intro-name">Lunar Window</b>
-        <span class="intro-bar" aria-hidden="true"><i></i></span>
-        <span class="intro-stage"></span>
       </div>
     </div>
     <style>
-      @property --intro-hole { syntax: '<length>'; inherits: false; initial-value: 0px; }
-      html { background: #000; }
+      @property --intro-visor { syntax: '<percentage>'; inherits: false; initial-value: 50%; }
+      html, body { background: #000; }
       #intro { position: fixed; inset: 0; z-index: 9999; background: #000; color: #fff; overflow: hidden;
-        -webkit-mask: radial-gradient(circle at 50% 44%, transparent var(--intro-hole), #000 calc(var(--intro-hole) + 1.5px));
-        mask: radial-gradient(circle at 50% 44%, transparent var(--intro-hole), #000 calc(var(--intro-hole) + 1.5px));
-        transition: --intro-hole 1.25s cubic-bezier(0.7, 0, 0.2, 1), opacity 0.5s ease 0.85s, visibility 0s 1.4s; }
-      /* the window opens: from the mark outwards */
-      #intro.out { --intro-hole: 130vmax; opacity: 0; visibility: hidden; pointer-events: none; }
-      .intro-mark { position: absolute; left: 50%; top: 44%; width: 76px; height: 76px; margin: -38px 0 0 -38px; animation: intro-in 0.9s ease both; transition: transform 1.1s cubic-bezier(0.7, 0, 0.2, 1), opacity 0.5s ease; }
-      #intro.out .intro-mark { transform: scale(2.6); opacity: 0; }
+        -webkit-mask: linear-gradient(#000 0 0) top / 100% var(--intro-visor) no-repeat, linear-gradient(#000 0 0) bottom / 100% var(--intro-visor) no-repeat;
+        mask: linear-gradient(#000 0 0) top / 100% var(--intro-visor) no-repeat, linear-gradient(#000 0 0) bottom / 100% var(--intro-visor) no-repeat;
+        transition: --intro-visor 1.05s cubic-bezier(0.7, 0, 0.2, 1) 0.2s, opacity 0.3s ease 1.2s, visibility 0s 1.5s; }
+      /* The dark opens along its line: the two halves draw back to the top and the bottom edge; what is written goes first. */
+      #intro.out { --intro-visor: 0%; opacity: 0; visibility: hidden; pointer-events: none; }
+      #intro > * { transition: opacity 0.35s ease; }
+      #intro.out > * { opacity: 0; }
+      /* the line, at the middle of the screen: it fills from its middle as the loading goes */
+      .intro-bar { position: absolute; left: 50%; top: 50%; width: min(560px, 62vw); height: 1px; margin-left: calc(min(560px, 62vw) / -2); background: rgba(255, 255, 255, 0.2); overflow: hidden; animation: intro-in 1.2s ease both; }
+      .intro-bar i { display: block; width: 100%; height: 100%; background: rgba(255, 255, 255, 0.85); transform: scaleX(0.04); transition: transform 0.9s cubic-bezier(0.2, 0.7, 0.2, 1); }
       @keyframes intro-in { from { opacity: 0; } }
-      /* the name and the stages: they come in once the type is loaded, so that no letter changes shape on screen */
-      .intro-text { position: absolute; left: 0; right: 0; top: calc(44% + 78px); display: grid; justify-items: center; gap: 14px; opacity: 0; transform: translateY(8px); transition: opacity 0.9s ease, transform 0.9s cubic-bezier(0.2, 0.7, 0.2, 1); }
-      #intro.typed .intro-text { opacity: 1; transform: none; }
-      #intro.out .intro-text { opacity: 0; transition-duration: 0.35s; }
-      .intro-name { font: 500 30px/1 'Jost Variable', sans-serif; letter-spacing: 0.42em; margin-right: -0.42em; text-transform: uppercase; white-space: nowrap; }
-      .intro-bar { display: block; width: 168px; height: 1px; margin-top: 10px; background: rgba(255, 255, 255, 0.16); overflow: hidden; }
-      .intro-bar i { display: block; width: 100%; height: 100%; background: #fff; transform-origin: 0 50%; transform: scaleX(0.04); transition: transform 0.6s cubic-bezier(0.2, 0.7, 0.2, 1); }
-      .intro-stage { min-height: 22px; max-width: 86vw; font: 400 15px/22px 'Jost Variable', sans-serif; letter-spacing: 0.02em; color: rgba(255, 255, 255, 0.76); text-align: center; text-wrap: balance; transition: opacity 0.22s ease; }
-      .intro-stage.swap { opacity: 0; }
-      @media (max-width: 520px) { .intro-name { font-size: 21px; } }
+      /* the sentences, above the line; the mark and the name, under it. They come in once the typeface is there. */
+      .intro-stage { position: absolute; left: 24px; right: 24px; bottom: calc(50% + 34px); margin: 0; min-height: 1.25em; font: 300 clamp(21px, 2.5vw, 31px) / 1.25 'Jost Variable', sans-serif; letter-spacing: 0.035em; text-align: center; text-wrap: balance; color: rgba(255, 255, 255, 0.92); opacity: 0; }
+      .intro-brand { position: absolute; left: 0; right: 0; top: calc(50% + 30px); display: flex; align-items: center; justify-content: center; gap: 12px; opacity: 0; }
+      #intro.typed .intro-stage { opacity: 1; transition: opacity 0.9s ease; }
+      #intro.typed .intro-brand { opacity: 1; transition: opacity 1.2s ease 0.3s; }
+      #intro.typed .intro-stage.swap { opacity: 0; transition: opacity 0.42s ease; }
+      #intro.out .intro-stage, #intro.out .intro-brand { opacity: 0; transition: opacity 0.35s ease; }
+      .intro-mark { width: 17px; height: 17px; opacity: 0.9; }
+      .intro-name { font: 500 10.5px/1 'Jost Variable', sans-serif; letter-spacing: 0.46em; margin-right: -0.46em; text-transform: uppercase; white-space: nowrap; color: rgba(255, 255, 255, 0.62); }
       @media (prefers-reduced-motion: reduce) { #intro { transition: opacity 0.4s ease, visibility 0s 0.4s; } }
     </style>
     <script type="module" src="/src/main.ts"></script>
