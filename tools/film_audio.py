@@ -14,8 +14,16 @@ the proof (JPL Horizons), then the name and the line under it. The time of each 
 They are written to video/voice/<lang>/marks.json, which tools/film.mjs reads. The film is thirty seconds.
 
     python tools/film_audio.py [en|pt|es]      writes video/audio.<lang>.wav
+
+In the English film (version 11) the story is told by Mission Control over the radio, as in the guide of the tool:
+segments 1 to 9 of the take went through the same radio link as the guide's voice (tools/guide_voice.py), with
+its two tones; the name and the line under it are the same voice without the radio.
+
+    CHOIR=1 python tools/film_audio.py en      the same, with a choir under the score: video/audio.en.choir.wav
+The choir is not a recording either: every voice is a series of harmonics shaped by the resonances of a vowel.
 """
 import json
+import os
 import subprocess
 import wave
 from pathlib import Path
@@ -226,6 +234,49 @@ music += pad(['D2', 'A2', 'D3', 'F#3', 'A3', 'E4', 'A4'], span(TITLE - 0.02, SEC
 music += pad(['D1', 'D2'], span(TITLE, SECONDS + 0.2, 0.1, 2.6), 0.0, 0.9)
 music += pad(['F#5', 'A5', 'D6'], span(TITLE + 0.4, SECONDS - 0.2, 1.6, 2.2), 0.0, 0.16)
 
+
+
+def choir(notes: list[str], t0: float, t1: float, attack: float, release: float, vowel: np.ndarray | float, voices: int = 3) -> np.ndarray:
+    """Sung tones: each voice is a series of harmonics shaped by the resonances of a vowel ('oo' at 0, 'ah' at 1), with its own vibrato."""
+    formants = {'oo': [(320, 70, 1.0), (800, 90, 0.28), (2500, 150, 0.05)], 'ah': [(700, 110, 1.0), (1150, 120, 0.5), (2700, 170, 0.2)]}
+    shape = lambda f, v: sum(g / (1 + ((f - c) / bw) ** 2) for c, bw, g in formants[v])
+    i0, i1 = max(0, int(t0 * SR)), min(N, int(t1 * SR))
+    tt = t[i0:i1]
+    vow = np.broadcast_to(vowel, (N,))[i0:i1]
+    out = np.zeros((N, 2))
+    for name in notes:
+        f0 = note(name)
+        for side in (0, 1):
+            for _ in range(voices):
+                detune = 2 ** (rng.uniform(-8, 8) / 1200)
+                drift = 1 + 0.0036 * np.sin(2 * np.pi * rng.uniform(4.6, 5.8) * tt + rng.uniform(0, 6)) + 0.0012 * np.sin(2 * np.pi * rng.uniform(0.1, 0.3) * tt + rng.uniform(0, 6))
+                ph = 2 * np.pi * f0 * detune * np.cumsum(drift) / SR
+                voice = np.zeros(i1 - i0)
+                h = 1
+                while h * f0 < 4200:
+                    voice += np.sin(h * ph + rng.uniform(0, 6)) * (shape(h * f0, 'oo') * (1 - vow) + shape(h * f0, 'ah') * vow) / h**1.2
+                    h += 1
+                out[i0:i1, side] += voice
+    out *= span(t0, t1, attack, release)[:, None]
+    # a large room around the singers
+    for side in (0, 1):
+        out[:, side] = room(out[:, side], 2.6, 0.55)
+    return out
+
+
+def under(layer: np.ndarray, t0: float, t1: float, share: float) -> np.ndarray:
+    """A layer set at a share of the level the score has over the same seconds."""
+    i0, i1 = int(t0 * SR), min(N, int(t1 * SR))
+    level = lambda x: np.sqrt(np.mean(x[i0:i1] ** 2)) + 1e-12
+    return layer * share * level(music) / level(layer)
+
+
+CHOIR = os.environ.get('CHOIR') == '1'
+if CHOIR:
+    # The pole: low voices in open fifths, closed vowel. The title: the full chord, the vowel opening as it swells.
+    music += under(choir(['D2', 'A2', 'D3'], 0.2, CUT_UI + 0.6, 2.2, 1.2, 0.0), 1.0, CUT_UI, 0.62)
+    music += under(choir(['D3', 'A3', 'D4', 'F#4', 'A4'], TITLE - 0.1, SECONDS, 0.9, 2.6, 0.35 + 0.65 * ramp(TITLE, TITLE + 2.5)), TITLE + 0.5, SECONDS - 2.5, 0.7)
+
 music *= duck[:, None]
 music *= 0.30 / np.percentile(np.abs(music), 99.5)
 
@@ -243,7 +294,7 @@ def save(path: Path, x: np.ndarray) -> None:
         w.writeframes((np.clip(x, -1, 1) * 32767).astype('<i2').tobytes())
 
 
-out = ROOT / f'video/audio.{LANG}.wav'
+out = ROOT / (f'video/audio.{LANG}.choir.wav' if CHOIR else f'video/audio.{LANG}.wav')
 save(out, mix)
 # The two layers apart, to measure their balance.
 save(ROOT / 'video/stem_music.wav', music)

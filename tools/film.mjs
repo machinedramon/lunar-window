@@ -351,7 +351,7 @@ await shot(5, CUT.any, CUT.proof, async () => {
   await page.waitForTimeout(10000);
   await look(222, 5, 50);
   await page.evaluate(([from, to]) => window.__lwJourney.show(from, to, to), [FROM, TO]);
-  way = await page.evaluate(() => document.querySelector('.travel-route')?.textContent.replace(/\s+/g, ' ').trim() ?? '');
+  way = `${FROM.name} → ${TO.name}`;
   await page.waitForTimeout(800);
 }, async (t, sec) => {
   // The globe: already on its way up from the pole, across the Moon, and down.
@@ -361,6 +361,8 @@ await shot(5, CUT.any, CUT.proof, async () => {
     // (Further back than in the tool: between the black bars the whole Moon must fit.)
     window.__lwJourney.pose(p, 2.3);
     const el = document.querySelector('.travel');
+    // (In the tool the end of this move goes into the dark; in the film the globe dissolves into the place.)
+    el.querySelector('canvas').style.opacity = '1';
     el.style.opacity = String(o);
     el.style.visibility = o > 0 ? 'visible' : 'hidden';
   }, [lerp(0.3, 1, 1 - Math.pow(1 - g, 1.7)), 1 - gone]);

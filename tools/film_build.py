@@ -8,6 +8,7 @@ A frame that film_check.py reports as a one-frame dip is rebuilt from its two ne
 kept in video/replaced/). Needs ffmpeg, numpy and Pillow.
 """
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -33,8 +34,10 @@ for f in files:
     levels.append([a.mean(), a[:54, :96].mean(), a[:54, 96:].mean(), a[54:, :96].mean(), a[54:, 96:].mean()])
 m = np.array(levels)
 fixed = []
+# KEEP=515,516 leaves those frames as they were recorded: a fast zoom can look like a dip to this test.
+keep = {int(x) for x in os.environ.get('KEEP', '').split(',') if x}
 for i in range(1, len(m) - 1):
-    if any(abs(m[i, k] - m[i - 1, k]) > 4 and abs(m[i, k] - m[i + 1, k]) > 4 and abs(m[i - 1, k] - m[i + 1, k]) < 2 for k in range(m.shape[1])):
+    if i not in keep and any(abs(m[i, k] - m[i - 1, k]) > 4 and abs(m[i, k] - m[i + 1, k]) > 4 and abs(m[i - 1, k] - m[i + 1, k]) < 2 for k in range(m.shape[1])):
         (ROOT / 'video/replaced').mkdir(exist_ok=True)
         shutil.copy(files[i], ROOT / f'video/replaced/{lang}_{i:05d}_original.jpg')
         Image.blend(Image.open(files[i - 1]), Image.open(files[i + 1]), 0.5).save(files[i], quality=95)
@@ -43,7 +46,7 @@ print(f'{lang}: {count} frames, {seconds} s; frames rebuilt from their neighbour
 
 # ----- the film
 note = {
-    'en': 'Narration: AI-generated voice (OpenAI text-to-speech). Music synthesised by code. Every picture is the tool itself running.',
+    'en': 'Narration: AI-generated voice (OpenAI text-to-speech); its radio effect and tones are added by code. Music synthesised by code. Every picture is the tool itself running.',
     'pt': 'Narração: voz gerada por IA (OpenAI text-to-speech). Música sintetizada por código. Toda imagem é a própria ferramenta em funcionamento.',
     'es': 'Narración: voz generada por IA (OpenAI text-to-speech). Música sintetizada por código. Toda imagen es la propia herramienta en funcionamiento.',
 }[lang]

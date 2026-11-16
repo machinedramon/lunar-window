@@ -95,8 +95,8 @@ AI-generated voice (OpenAI text-to-speech) reading a script written for the proj
 clip says so in its metadata, and the Accuracy page of the tool says so too. Every other sound is
 synthesised by code. The demo video
 (30 seconds, in English) is a recording of the tool; its narration is an AI-generated voice (OpenAI
-text-to-speech) reading a script, as the file metadata and the video description state, and its music is
-synthesised by code (`tools/film_audio.py`). The tool itself runs no AI model: every figure is computed by
+text-to-speech) reading a script, with the radio effect of the guide added by code, as the file metadata and
+the video description state, and its music is synthesised by code (`tools/film_audio.py`). The tool itself runs no AI model: every figure is computed by
 deterministic code from NASA data.
 The Portuguese and Spanish texts of the interface were written with the same AI assistant and reviewed by
 the team member.
