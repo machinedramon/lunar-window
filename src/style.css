@@ -4016,30 +4016,60 @@ body.guide-cine .three-hint {
   position: absolute;
   left: 0;
   right: 0;
-  bottom: 34px;
+  bottom: 30px;
   display: flex;
   justify-content: center;
-  gap: 22px;
+  gap: 10px;
   pointer-events: none;
 }
 .briefing.in .call-lang {
   animation: call-in 1.4s ease 1.2s both;
 }
+/* each language by its flag and its own name; the one in use is lit and framed */
 .call-lang button {
-  padding: 6px 2px 5px;
-  color: var(--ink-4);
-  border-bottom: 1px solid transparent;
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  height: 34px;
+  padding: 0 13px 0 11px;
+  color: var(--ink-3);
+  border: 1px solid transparent;
+  letter-spacing: 0.2em;
   pointer-events: auto;
   transition:
     color 0.2s,
     border-color 0.2s;
 }
-.call-lang button:hover {
-  color: var(--ink-2);
+.call-lang .flag {
+  flex: none;
+  opacity: 0.55;
+  transition: opacity 0.2s;
+}
+.call-lang button:hover,
+.call-lang button:focus-visible {
+  color: var(--ink);
+}
+.call-lang button:hover .flag,
+.call-lang button:focus-visible .flag,
+.call-lang button[aria-pressed='true'] .flag {
+  opacity: 1;
 }
 .call-lang button[aria-pressed='true'] {
   color: var(--ink);
-  border-bottom-color: rgb(255 255 255 / 0.5);
+  border-color: rgb(255 255 255 / 0.28);
+}
+/* a narrow screen: the flags stay, the names shorten to what fits */
+@media (max-width: 520px) {
+  /* (above the way out, which keeps the corner) */
+  .call-lang {
+    gap: 2px;
+    bottom: 84px;
+  }
+  .call-lang button {
+    gap: 7px;
+    padding: 0 8px;
+    letter-spacing: 0.12em;
+  }
 }
 
 /* A band across the picture when something decisive happens: a title set large, a line under it, warning

@@ -28,6 +28,7 @@
 import { PROFILES } from '../core/requirements';
 import { LANGS, language, S, type Lang } from '../i18n';
 import { clear, h, reducedMotion, setText } from './dom';
+import { FLAGS } from './flags';
 import { DAY_MS } from './format';
 import lines from './guide.lines.json';
 import { heroView, preloadJourney, preloadTerrain } from './hero3d';
@@ -323,7 +324,12 @@ export function createGuide(store: Store, host: GuideHost): Guide {
   const turnGlyph = h('i', { class: 'call-turn', 'aria-hidden': 'true' });
   const stayBtn = h('button', { class: 'call-stay', type: 'button', hidden: true });
   const langSeg = h('div', { class: 'call-lang', role: 'group' });
-  for (const l of LANGS) langSeg.append(h('button', { type: 'button', lang: l.tag, title: l.name, 'aria-label': l.name, dataset: { code: l.code }, onclick: () => host.setLanguage(l.code) }, l.short));
+  // Each language by its flag and its own name: it is found at a glance, in whatever language the visitor reads.
+  for (const l of LANGS) {
+    const flag = h('span', { class: 'flag' });
+    flag.innerHTML = FLAGS[l.code];
+    langSeg.append(h('button', { type: 'button', lang: l.tag, dataset: { code: l.code }, onclick: () => host.setLanguage(l.code) }, flag, h('span', null, l.name)));
+  }
   const skipBtn = h('button', { class: 'call-skip', type: 'button', onclick: () => finish() });
   const brief = h('div', { class: 'briefing', hidden: true, role: 'dialog', 'aria-modal': 'true' }, callWords, h('div', { class: 'call-line', 'aria-hidden': 'true' }, lineFill), turnGlyph, callHint, stayBtn, langSeg, skipBtn);
   /** A band across the screen, when something decisive happens in the story. */

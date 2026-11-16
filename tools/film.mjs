@@ -75,15 +75,18 @@ const SUBTITLES = MARKS.subtitles;
 /** When she says the name, and then the line under it. */
 const CLOSING = MARKS.closing;
 
-const browser = await chromium.launch({ channel: 'msedge', args: ['--use-angle=d3d11', '--enable-gpu', '--ignore-gpu-blocklist'] });
+/** SCALE=2.5 records 3840 x 2160 frames (the default, 1.25, gives 1920 x 1080); PORT is that of the development server. */
+const SCALE = Number(process.env.SCALE ?? 1.25);
+const PORT = process.env.PORT ?? '5700';
+const browser = await chromium.launch({ channel: 'msedge', args: ['--use-angle=d3d11', '--enable-gpu', '--ignore-gpu-blocklist', ...(process.env.FAST_GPU ? ['--force_high_performance_gpu'] : [])] });
 // A 1536 x 864 page drawn at 1.25 gives 1920 x 1080 frames with an interface large enough to read.
-const context = await browser.newContext({ viewport: { width: W, height: H }, deviceScaleFactor: 1.25, reducedMotion: 'reduce' });
+const context = await browser.newContext({ viewport: { width: W, height: H }, deviceScaleFactor: SCALE, reducedMotion: 'reduce' });
 await context.addInitScript(() => {
   window.__lwPreserve = true;
 });
 const page = await context.newPage();
 page.on('pageerror', (e) => console.log('pageerror', e.message));
-await page.goto(`http://localhost:5700/?lang=${LANG}#explore?site=malapert&t=2027-01-17T00:00`, { waitUntil: 'networkidle' });
+await page.goto(`http://localhost:${PORT}/?lang=${LANG}#explore?site=malapert&t=2027-01-17T00:00`, { waitUntil: 'networkidle' });
 await page.addStyleTag({
   content: `
   #f-top, #f-bot { position: fixed; left: 0; right: 0; height: 0; background: #000; z-index: 5000; pointer-events: none; }
