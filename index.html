@@ -3,6 +3,43 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <script>
+      // A phone on its side shows the tool as a desk screen does: the page is laid out as wide as it takes for the
+      // one-screen console to fit the height of the phone, and the browser scales it down. Upright, and on every
+      // other device, the page keeps the width of the device.
+      (function () {
+        var meta = document.querySelector('meta[name="viewport"]');
+        var phone = matchMedia('(pointer: coarse)').matches && Math.min(screen.width, screen.height) <= 540;
+        if (!meta || !phone) return;
+        var side = matchMedia('(orientation: landscape)');
+        var wide = 0;
+        var set = function () {
+          var content = 'width=device-width, initial-scale=1';
+          if (side.matches) {
+            // (While something is being typed the keyboard takes half the screen: the page stays as it is.)
+            var at = document.activeElement;
+            if (wide && at && /^(INPUT|TEXTAREA|SELECT)$/.test(at.tagName)) return;
+            // As wide as it takes for 730 px of height to fit what is seen of the screen, bars of the browser included.
+            var shape = Math.min(2.9, Math.max(innerWidth / Math.max(1, innerHeight), Math.max(screen.width, screen.height) / Math.min(screen.width, screen.height)));
+            var w = Math.max(1280, Math.ceil(730 * shape));
+            if (wide && Math.abs(w - wide) < 40) return;
+            wide = w;
+            content = 'width=' + w;
+          } else wide = 0;
+          if (meta.getAttribute('content') !== content) meta.setAttribute('content', content);
+        };
+        set();
+        var soon = 0;
+        var later = function () {
+          clearTimeout(soon);
+          soon = setTimeout(set, 140);
+        };
+        if (side.addEventListener) side.addEventListener('change', set);
+        else side.addListener(set);
+        window.addEventListener('orientationchange', later);
+        window.addEventListener('resize', later);
+      })();
+    </script>
     <meta name="color-scheme" content="dark" />
     <meta name="theme-color" content="#000000" />
     <meta
